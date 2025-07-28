@@ -301,6 +301,16 @@ export const leaveAPI = {
       body: JSON.stringify({ reason }),
     })
   },
+
+  // Tambahkan fungsi untuk mendapatkan informasi cuti karyawan
+  getEmployeeLeaveInfo: async (karyawanId: string) => {
+    return apiRequest(`/api/cuti/karyawan/${karyawanId}/jumlah-tahun-ini`)
+  },
+
+  // Tambahkan fungsi untuk mendapatkan cuti berdasarkan karyawan dan tahun
+  getByEmployeeAndYear: async (karyawanId: string, tahun: number) => {
+    return apiRequest(`/api/cuti/karyawan/${karyawanId}/tahun/${tahun}`)
+  },
 }
 
 export const getAllViolations = async () => {

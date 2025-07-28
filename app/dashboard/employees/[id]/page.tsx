@@ -25,8 +25,16 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@/components/ui/display/avatar";
-import { ArrowLeft, Edit, Phone, Mail, Calendar, Building } from "lucide-react";
-import { employeeAPI } from "@/lib/api";
+import {
+  ArrowLeft,
+  Edit,
+  Phone,
+  Mail,
+  Calendar,
+  Building,
+  Clock,
+} from "lucide-react";
+import { employeeAPI, leaveAPI } from "@/lib/api";
 
 export default function EmployeeDetailPage() {
   const params = useParams();
@@ -38,6 +46,7 @@ export default function EmployeeDetailPage() {
   const [attendanceHistory, setAttendanceHistory] = useState<any[]>([]);
   const [leaveHistory, setLeaveHistory] = useState<any[]>([]);
   const [violationHistory, setViolationHistory] = useState<any[]>([]);
+  const [leaveInfo, setLeaveInfo] = useState<any>(null);
 
   useEffect(() => {
     const fetchEmployee = async () => {
@@ -112,7 +121,7 @@ export default function EmployeeDetailPage() {
         setLeaveHistory(
           cuti.map((c: any) => ({
             ...c,
-            karyawan: undefined, 
+            karyawan: undefined,
           }))
         );
         setViolationHistory(
@@ -121,6 +130,15 @@ export default function EmployeeDetailPage() {
             karyawan: undefined,
           }))
         );
+
+        // Ambil informasi cuti karyawan
+        try {
+          const leaveInfoData = await leaveAPI.getEmployeeLeaveInfo(id);
+          setLeaveInfo(leaveInfoData);
+        } catch (err) {
+          console.error("Gagal mengambil informasi cuti:", err);
+          setLeaveInfo(null);
+        }
       } catch (err) {
         setError("Gagal memuat data karyawan");
       } finally {
@@ -239,7 +257,7 @@ export default function EmployeeDetailPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="flex items-center space-x-2">
                   <Building className="h-4 w-4 text-gray-400" />
                   <span className="text-sm text-gray-600">
@@ -265,6 +283,14 @@ export default function EmployeeDetailPage() {
                     {new Date(employee.joinDate).toLocaleDateString("id-ID")}
                   </span>
                 </div>
+                {leaveInfo && (
+                  <div className="flex items-center space-x-2">
+                    <Clock className="h-4 w-4 text-gray-400" />
+                    <span className="text-sm text-gray-600">
+                      Sisa Cuti: {leaveInfo.sisaCuti}/12 hari
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -286,7 +312,7 @@ export default function EmployeeDetailPage() {
         </TabsList>
 
         <TabsContent value="personal" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card>
               <CardHeader>
                 <CardTitle>Informasi Pribadi</CardTitle>
@@ -346,6 +372,67 @@ export default function EmployeeDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {leaveInfo && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Clock className="h-5 w-5" />
+                    Informasi Cuti
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Cuti Tahun Ini
+                    </label>
+                    <p className="text-gray-900">
+                      {leaveInfo.jumlahCutiTahunIni} hari kerja
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Sisa Cuti
+                    </label>
+                    <p className="text-gray-900">
+                      {leaveInfo.sisaCuti} hari kerja
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Batas Maksimal
+                    </label>
+                    <p className="text-gray-900">
+                      {leaveInfo.batasMaksimal} hari kerja per tahun
+                    </p>
+                  </div>
+                  <div className="mt-4">
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full ${
+                          leaveInfo.sisaCuti > 6
+                            ? "bg-green-500"
+                            : leaveInfo.sisaCuti > 3
+                            ? "bg-yellow-500"
+                            : "bg-red-500"
+                        }`}
+                        style={{
+                          width: `${
+                            (leaveInfo.sisaCuti / leaveInfo.batasMaksimal) * 100
+                          }%`,
+                        }}
+                      ></div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {Math.round(
+                        (leaveInfo.sisaCuti / leaveInfo.batasMaksimal) * 100
+                      )}
+                      % tersisa
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Tambahan: Tabel JSON Data Pribadi Lengkap */}
@@ -493,7 +580,20 @@ export default function EmployeeDetailPage() {
         <TabsContent value="leave">
           <Card>
             <CardHeader>
-              <CardTitle>Riwayat Cuti</CardTitle>
+              <CardTitle className="flex items-center justify-between">
+                <span>Riwayat Cuti</span>
+                {leaveInfo && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-gray-500">Sisa Cuti:</span>
+                    <Badge
+                      variant="outline"
+                      className="bg-green-50 text-green-700"
+                    >
+                      {leaveInfo.sisaCuti}/12 hari
+                    </Badge>
+                  </div>
+                )}
+              </CardTitle>
               <CardDescription>
                 Histori pengajuan dan persetujuan cuti
               </CardDescription>

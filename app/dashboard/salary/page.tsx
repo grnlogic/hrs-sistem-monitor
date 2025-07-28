@@ -46,7 +46,8 @@ export default function SalaryPage() {
             } else {
               grouped[id].totalHariMasuk += item.totalHariMasuk || 0;
               grouped[id].bonus += item.bonus || 0;
-              grouped[id].gajiPokok += item.gajiPokok || 0;
+              // Gaji pokok TIDAK dijumlahkan - gunakan nilai dari record pertama
+              // grouped[id].gajiPokok += item.gajiPokok || 0;
               grouped[id].totalGaji += item.totalGaji || 0;
               grouped[id].potongan += item.potongan || 0;
               grouped[id].pajakPph21 += item.pajakPph21 || 0;

@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/form/select";
 import { Textarea } from "@/components/ui/form/textarea";
-import { ArrowLeft, Save, Calendar } from "lucide-react";
+import { ArrowLeft, Save, Calendar, Clock } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
 import { leaveAPI, employeeAPI } from "@/lib/api";
 
@@ -32,6 +32,8 @@ export default function NewLeavePage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [leaveDays, setLeaveDays] = useState(0);
+  const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
+  const [leaveInfo, setLeaveInfo] = useState<any>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -40,6 +42,25 @@ export default function NewLeavePage() {
       .then((data) => setEmployees(data))
       .catch(() => setEmployees([]));
   }, []);
+
+  const handleEmployeeChange = async (employeeNik: string) => {
+    const employee = employees.find((emp) => emp.nik === employeeNik);
+    setSelectedEmployee(employee);
+
+    if (employee && employee.id) {
+      try {
+        const info = await leaveAPI.getEmployeeLeaveInfo(
+          employee.id.toString()
+        );
+        setLeaveInfo(info);
+      } catch (err) {
+        console.error("Gagal mengambil informasi cuti:", err);
+        setLeaveInfo(null);
+      }
+    } else {
+      setLeaveInfo(null);
+    }
+  };
 
   const calculateLeaveDays = (start: string, end: string) => {
     if (start && end) {
@@ -145,6 +166,7 @@ export default function NewLeavePage() {
                   required
                   className="w-full border rounded px-3 py-2"
                   defaultValue=""
+                  onChange={(e) => handleEmployeeChange(e.target.value)}
                 >
                   <option value="">Pilih karyawan</option>
                   {employees.map((employee) => (
@@ -213,12 +235,89 @@ export default function NewLeavePage() {
           </CardContent>
         </Card>
 
+        {/* Informasi Sisa Cuti */}
+        {leaveInfo && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Informasi Sisa Cuti
+              </CardTitle>
+              <CardDescription>
+                Status cuti karyawan untuk tahun ini
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="text-center p-4 bg-blue-50 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {leaveInfo.jumlahCutiTahunIni}
+                  </div>
+                  <div className="text-sm text-blue-600">Hari Cuti Diambil</div>
+                </div>
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">
+                    {leaveInfo.sisaCuti}
+                  </div>
+                  <div className="text-sm text-green-600">Sisa Hari Cuti</div>
+                </div>
+                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                  <div className="text-2xl font-bold text-gray-600">
+                    {leaveInfo.batasMaksimal}
+                  </div>
+                  <div className="text-sm text-gray-600">Batas Maksimal</div>
+                </div>
+              </div>
+              <div className="mt-4">
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div
+                    className={`h-3 rounded-full ${
+                      leaveInfo.sisaCuti > 6
+                        ? "bg-green-500"
+                        : leaveInfo.sisaCuti > 3
+                        ? "bg-yellow-500"
+                        : "bg-red-500"
+                    }`}
+                    style={{
+                      width: `${
+                        (leaveInfo.sisaCuti / leaveInfo.batasMaksimal) * 100
+                      }%`,
+                    }}
+                  ></div>
+                </div>
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  {Math.round(
+                    (leaveInfo.sisaCuti / leaveInfo.batasMaksimal) * 100
+                  )}
+                  % sisa hari cuti tersedia
+                </p>
+              </div>
+              {leaveInfo.sisaCuti === 0 && (
+                <Alert variant="destructive" className="mt-4">
+                  <AlertDescription>
+                    Karyawan ini telah mencapai batas maksimal cuti tahunan (12
+                    hari kerja). Tidak dapat mengajukan cuti lagi untuk tahun
+                    ini.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Submit Button */}
         <div className="flex justify-end gap-4">
           <Button type="button" variant="outline" onClick={() => router.back()}>
             Batal
           </Button>
-          <Button type="submit" disabled={isLoading || leaveDays === 0}>
+          <Button
+            type="submit"
+            disabled={
+              isLoading ||
+              leaveDays === 0 ||
+              (leaveInfo && leaveInfo.sisaCuti === 0)
+            }
+          >
             {isLoading ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />

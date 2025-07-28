@@ -40,6 +40,7 @@ import {
   X,
   Calendar,
   Users,
+  Clock,
 } from "lucide-react";
 import {
   Select,
@@ -59,14 +60,36 @@ export default function LeavePage() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [filteredData, setFilteredData] = useState<any[]>([]);
+  const [employeeLeaveInfo, setEmployeeLeaveInfo] = useState<{
+    [key: string]: any;
+  }>({});
 
   useEffect(() => {
     setLoading(true);
     leaveAPI
       .getAll()
-      .then((data) => {
+      .then(async (data) => {
         setLeaveData(data);
         setFilteredData(data);
+
+        // Ambil informasi cuti untuk setiap karyawan
+        const leaveInfoMap: { [key: string]: any } = {};
+        for (const leave of data) {
+          if (leave.karyawan?.id && !leaveInfoMap[leave.karyawan.id]) {
+            try {
+              const info = await leaveAPI.getEmployeeLeaveInfo(
+                leave.karyawan.id.toString()
+              );
+              leaveInfoMap[leave.karyawan.id] = info;
+            } catch (err) {
+              console.error(
+                "Gagal mengambil informasi cuti untuk karyawan:",
+                leave.karyawan.id
+              );
+            }
+          }
+        }
+        setEmployeeLeaveInfo(leaveInfoMap);
       })
       .catch(() => setError("Gagal memuat data cuti"))
       .finally(() => setLoading(false));
@@ -210,7 +233,7 @@ export default function LeavePage() {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -269,6 +292,20 @@ export default function LeavePage() {
           <CardContent>
             <div className="text-2xl font-bold">{leaveStats.totalDays}</div>
             <p className="text-xs text-muted-foreground">Hari kerja</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Batas Cuti/Tahun
+            </CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">12</div>
+            <p className="text-xs text-muted-foreground">
+              Hari kerja per karyawan
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -338,6 +375,7 @@ export default function LeavePage() {
                     <TableHead>Durasi</TableHead>
                     <TableHead>Alasan</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Sisa Hari</TableHead>
                     <TableHead className="text-right">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -377,6 +415,39 @@ export default function LeavePage() {
                         {leave.alasan}
                       </TableCell>
                       <TableCell>{getStatusBadge(leave.status)}</TableCell>
+                      <TableCell>
+                        {employeeLeaveInfo[leave.karyawan?.id] ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">
+                              {employeeLeaveInfo[leave.karyawan?.id].sisaCuti}
+                              /12 hari
+                            </span>
+                            <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                              <div
+                                className={`h-1.5 rounded-full ${
+                                  employeeLeaveInfo[leave.karyawan?.id]
+                                    .sisaCuti > 6
+                                    ? "bg-green-500"
+                                    : employeeLeaveInfo[leave.karyawan?.id]
+                                        .sisaCuti > 3
+                                    ? "bg-yellow-500"
+                                    : "bg-red-500"
+                                }`}
+                                style={{
+                                  width: `${
+                                    (employeeLeaveInfo[leave.karyawan?.id]
+                                      .sisaCuti /
+                                      12) *
+                                    100
+                                  }%`,
+                                }}
+                              ></div>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">-</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -419,11 +490,11 @@ export default function LeavePage() {
           )}
 
           {filteredData.length === 0 && (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">
+            <TableRow>
+              <TableCell colSpan={9} className="text-center">
                 Tidak ada data cuti yang ditemukan
-              </p>
-            </div>
+              </TableCell>
+            </TableRow>
           )}
         </CardContent>
       </Card>
