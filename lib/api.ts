@@ -1,4 +1,6 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"
+const API_TIMEOUT = parseInt(process.env.NEXT_PUBLIC_API_TIMEOUT || "30000")
+const API_RETRY_ATTEMPTS = parseInt(process.env.NEXT_PUBLIC_API_RETRY_ATTEMPTS || "3")
 
 // Auth token management
 let authToken: string | null = null
@@ -39,14 +41,31 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
     ...options,
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, config)
+  // Add timeout to fetch request
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}))
-    throw new Error(errorData.message || `HTTP error! status: ${response.status}`)
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...config,
+      signal: controller.signal,
+    })
+
+    clearTimeout(timeoutId)
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`)
+    }
+
+    return response.json()
+  } catch (error) {
+    clearTimeout(timeoutId)
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${API_TIMEOUT}ms`)
+    }
+    throw error
   }
-
-  return response.json()
 }
 
 // Auth API
@@ -211,21 +230,35 @@ export const generateSalaryAPI = {
     formData.append('periode', periode)
     
     const token = getAuthToken()
-    const response = await fetch(`${API_BASE_URL}/api/gaji/generate-staff-bulanan`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
-      body: formData.toString(),
-    })
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
 
-    if (!response.ok) {
-      const errorData = await response.text()
-      throw new Error(errorData || `HTTP error! status: ${response.status}`)
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/gaji/generate-staff-bulanan`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: formData.toString(),
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        throw new Error(errorData || `HTTP error! status: ${response.status}`)
+      }
+
+      return response.text()
+    } catch (error) {
+      clearTimeout(timeoutId)
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Request timeout after ${API_TIMEOUT}ms`)
+      }
+      throw error
     }
-
-    return response.text()
   },
 
   // Generate gaji non-STAFF per minggu
@@ -235,21 +268,35 @@ export const generateSalaryAPI = {
     formData.append('periodeAkhir', periodeAkhir)
     
     const token = getAuthToken()
-    const response = await fetch(`${API_BASE_URL}/api/gaji/generate-nonstaff-mingguan`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
-      body: formData.toString(),
-    })
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
 
-    if (!response.ok) {
-      const errorData = await response.text()
-      throw new Error(errorData || `HTTP error! status: ${response.status}`)
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/gaji/generate-nonstaff-mingguan`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: formData.toString(),
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        throw new Error(errorData || `HTTP error! status: ${response.status}`)
+      }
+
+      return response.text()
+    } catch (error) {
+      clearTimeout(timeoutId)
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Request timeout after ${API_TIMEOUT}ms`)
+      }
+      throw error
     }
-
-    return response.text()
   },
 
   // Update gaji per bulan karyawan STAFF
@@ -259,20 +306,34 @@ export const generateSalaryAPI = {
     formData.append('gajiPerBulan', gajiPerBulan.toString())
     
     const token = getAuthToken()
-    const response = await fetch(`${API_BASE_URL}/api/gaji/update-staff-salary`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
-      body: formData.toString(),
-    })
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
 
-    if (!response.ok) {
-      const errorData = await response.text()
-      throw new Error(errorData || `HTTP error! status: ${response.status}`)
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/gaji/update-staff-salary`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: formData.toString(),
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        throw new Error(errorData || `HTTP error! status: ${response.status}`)
+      }
+      return response.text()
+    } catch (error) {
+      clearTimeout(timeoutId)
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Request timeout after ${API_TIMEOUT}ms`)
+      }
+      throw error
     }
-    return response.text()
   },
 }
 
