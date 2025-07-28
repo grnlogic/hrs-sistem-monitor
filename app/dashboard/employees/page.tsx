@@ -52,6 +52,7 @@ import {
 import { employeeAPI } from "@/lib/api";
 import type { Employee } from "@/lib/types";
 import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
+import { useState as useConfirmState } from "react";
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -61,6 +62,8 @@ export default function EmployeesPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     fetchEmployees();
@@ -149,6 +152,20 @@ export default function EmployeesPage() {
     departments: [...new Set(employees.map((emp) => emp.department))].length,
   };
 
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Yakin ingin menghapus karyawan ini?")) return;
+    setDeleteLoading(id);
+    setDeleteError("");
+    try {
+      await employeeAPI.deleteEmployee(id);
+      await fetchEmployees();
+    } catch (err) {
+      setDeleteError("Gagal menghapus karyawan");
+    } finally {
+      setDeleteLoading(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-1 flex-col gap-4 p-4">
@@ -182,6 +199,12 @@ export default function EmployeesPage() {
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {deleteError && (
+        <Alert variant="destructive">
+          <AlertDescription>{deleteError}</AlertDescription>
         </Alert>
       )}
 
@@ -355,6 +378,15 @@ export default function EmployeesPage() {
                           <DropdownMenuItem>
                             <Edit className="mr-2 h-4 w-4" />
                             Edit Karyawan
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDelete(employee.id)}
+                            disabled={deleteLoading === employee.id}
+                            className="text-red-600"
+                          >
+                            {deleteLoading === employee.id
+                              ? "Menghapus..."
+                              : "Hapus Karyawan"}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

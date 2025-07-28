@@ -1,323 +1,413 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/form/button"
-import { Input } from "@/components/ui/form/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/display/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/display/table"
-import { Badge } from "@/components/ui/display/badge"
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/form/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/overlay/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/display/avatar"
-import { Search, Plus, MoreHorizontal, Eye, Download, DollarSign, TrendingUp, Calculator } from "lucide-react"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/form/select"
-
-// Mock salary data
-const salaryData = [
-  {
-    id: 1,
-    employee: { name: "John Doe", nip: "EMP001", avatar: "/placeholder.svg?height=40&width=40" },
-    period: "2024-01",
-    basicSalary: 8500000,
-    allowances: 1000000,
-    bonus: 500000,
-    overtime: 300000,
-    deductions: 200000,
-    tax: 850000,
-    netSalary: 9250000,
-    workDays: 22,
-    attendanceDays: 22,
-    status: "Dibayar",
-    paymentDate: "2024-01-31",
-  },
-  {
-    id: 2,
-    employee: { name: "Sarah Wilson", nip: "EMP002", avatar: "/placeholder.svg?height=40&width=40" },
-    period: "2024-01",
-    basicSalary: 7500000,
-    allowances: 800000,
-    bonus: 0,
-    overtime: 150000,
-    deductions: 100000,
-    tax: 750000,
-    netSalary: 7600000,
-    workDays: 22,
-    attendanceDays: 21,
-    status: "Pending",
-    paymentDate: null,
-  },
-  {
-    id: 3,
-    employee: { name: "Mike Johnson", nip: "EMP003", avatar: "/placeholder.svg?height=40&width=40" },
-    period: "2024-01",
-    basicSalary: 6500000,
-    allowances: 600000,
-    bonus: 200000,
-    overtime: 0,
-    deductions: 50000,
-    tax: 650000,
-    netSalary: 6600000,
-    workDays: 22,
-    attendanceDays: 20,
-    status: "Dibayar",
-    paymentDate: "2024-01-31",
-  },
-]
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/display/table";
+import { Badge } from "@/components/ui/display/badge";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/navigation/tabs";
+import { salaryAPI } from "@/lib/api";
+import { downloadSalaryPDF, printSalaryPDF, formatCurrency } from "@/lib/utils";
 
 export default function SalaryPage() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [periodFilter, setPeriodFilter] = useState("2024-01")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [filteredData, setFilteredData] = useState(salaryData)
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [period, setPeriod] = useState("all");
+  const [status, setStatus] = useState("all");
+  const [viewMode, setViewMode] = useState<"minggu" | "bulan">("minggu");
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [exporting, setExporting] = useState(false);
+  const [activeTab, setActiveTab] = useState<"all" | "staff">("all");
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(amount)
-  }
+  useEffect(() => {
+    setLoading(true);
+    import("@/lib/api").then(({ getAllSalaries }) => {
+      getAllSalaries()
+        .then((res) => {
+          // Gabungkan data per karyawan
+          const grouped: { [karyawanId: string]: any } = {};
+          res.forEach((item: any) => {
+            const id = item.karyawan?.id;
+            if (!grouped[id]) {
+              grouped[id] = { ...item };
+            } else {
+              grouped[id].totalHariMasuk += item.totalHariMasuk || 0;
+              grouped[id].bonus += item.bonus || 0;
+              grouped[id].gajiPokok += item.gajiPokok || 0;
+              grouped[id].totalGaji += item.totalGaji || 0;
+              grouped[id].potongan += item.potongan || 0;
+              grouped[id].pajakPph21 += item.pajakPph21 || 0;
+              grouped[id].potonganKeterlambatan +=
+                item.potonganKeterlambatan || 0;
+              grouped[id].potonganPinjaman += item.potonganPinjaman || 0;
+              grouped[id].potonganSumbangan += item.potonganSumbangan || 0;
+              grouped[id].potonganBpjs += item.potonganBpjs || 0;
+              grouped[id].potonganUndangan += item.potonganUndangan || 0;
+              grouped[id].totalGajiBersih += item.totalGajiBersih || 0;
+              // Status pembayaran: prioritas Belum Dibayar > Pending > Dibayar
+              const statusOrder = ["Belum Dibayar", "Pending", "Dibayar"];
+              const currStatus = grouped[id].statusPembayaran || "";
+              const newStatus = item.statusPembayaran || "";
+              if (
+                statusOrder.indexOf(newStatus) < statusOrder.indexOf(currStatus)
+              ) {
+                grouped[id].statusPembayaran = newStatus;
+              }
+            }
+          });
+          const merged = Object.values(grouped);
+          console.log("Data gaji semua karyawan (merged):", merged);
+          setData(merged);
+        })
+        .catch(() => setError("Gagal memuat data gaji"))
+        .finally(() => setLoading(false));
+    });
+  }, []);
 
-  const handleSearch = (term: string) => {
-    setSearchTerm(term)
-    filterData(term, periodFilter, statusFilter)
-  }
+  const handleStatusChange = async (gajiId: string, newStatus: string) => {
+    setUpdatingStatus(gajiId);
+    try {
+      await salaryAPI.updateStatusPembayaran({
+        gajiId,
+        statusPembayaran: newStatus,
+      });
+      // Refresh data setelah update
+      const { getAllSalaries } = await import("@/lib/api");
+      const updatedData = await getAllSalaries();
+      setData(updatedData);
+    } catch (error) {
+      console.error("Gagal mengupdate status:", error);
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
 
-  const filterData = (search: string, period: string, status: string) => {
-    let filtered = salaryData
+  const handleSelectAll = () => {
+    if (selectedItems.length === filtered.length) {
+      setSelectedItems([]);
+    } else {
+      setSelectedItems(filtered.map((item) => item.id));
+    }
+  };
 
-    if (search) {
-      filtered = filtered.filter(
-        (item) =>
-          item.employee.name.toLowerCase().includes(search.toLowerCase()) ||
-          item.employee.nip.toLowerCase().includes(search.toLowerCase()),
-      )
+  const handleSelectItem = (id: string) => {
+    if (selectedItems.includes(id)) {
+      setSelectedItems(selectedItems.filter((item) => item !== id));
+    } else {
+      setSelectedItems([...selectedItems, id]);
+    }
+  };
+
+  const handleExportPDF = async (action: "download" | "print") => {
+    if (selectedItems.length === 0) {
+      alert("Pilih minimal satu data untuk di-export");
+      return;
     }
 
-    if (period !== "all") {
-      filtered = filtered.filter((item) => item.period === period)
+    setExporting(true);
+    try {
+      const selectedData = filtered.filter((item) =>
+        selectedItems.includes(item.id)
+      );
+
+      if (action === "download") {
+        downloadSalaryPDF(selectedData);
+      } else {
+        printSalaryPDF(selectedData);
+      }
+    } catch (error) {
+      console.error("Gagal export PDF:", error);
+      alert("Gagal export PDF");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Filter data berdasarkan tab aktif
+  const getFilteredData = () => {
+    let filteredData = data;
+
+    // Filter berdasarkan departemen STAFF
+    if (activeTab === "staff") {
+      filteredData = data.filter((item) =>
+        item.karyawan?.departemen?.toLowerCase().includes("staff")
+      );
     }
 
-    if (status !== "all") {
-      filtered = filtered.filter((item) => item.status.toLowerCase() === status.toLowerCase())
-    }
+    // Filter berdasarkan periode dan status
+    return filteredData.filter((item) => {
+      let match = true;
+      if (period !== "all") {
+        match = match && item.periodeAwal?.slice(0, 7) === period;
+      }
+      if (status !== "all") {
+        match =
+          match &&
+          (item.statusPembayaran || "").toLowerCase() === status.toLowerCase();
+      }
+      return match;
+    });
+  };
 
-    setFilteredData(filtered)
-  }
+  const filtered = getFilteredData();
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "Dibayar":
-        return <Badge className="bg-green-100 text-green-800">Dibayar</Badge>
-      case "Pending":
-        return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>
-      case "Ditolak":
-        return <Badge variant="destructive">Ditolak</Badge>
-      default:
-        return <Badge variant="outline">{status}</Badge>
-    }
-  }
-
-  const salaryStats = {
-    totalPayroll: salaryData.reduce((sum, item) => sum + item.netSalary, 0),
-    totalEmployees: salaryData.length,
-    paid: salaryData.filter((item) => item.status === "Dibayar").length,
-    pending: salaryData.filter((item) => item.status === "Pending").length,
-  }
+  // Reset selected items ketika tab berubah
+  useEffect(() => {
+    setSelectedItems([]);
+  }, [activeTab]);
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Manajemen Gaji</h1>
-          <p className="text-muted-foreground">Kelola penggajian karyawan</p>
+    <div className="p-4">
+      <h1 className="text-2xl font-bold mb-2">Rekap Gaji Karyawan</h1>
+
+      {/* Tab Navigation */}
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as "all" | "staff")}
+        className="mb-4"
+      >
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="all">
+            Karyawan Belakang ({data.length})
+          </TabsTrigger>
+          <TabsTrigger value="staff">
+            STAFF (
+            {
+              data.filter((item) =>
+                item.karyawan?.departemen?.toLowerCase().includes("staff")
+              ).length
+            }
+            )
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {selectedItems.length > 0 && (
+        <div className="mb-2 text-sm text-blue-600">
+          {selectedItems.length} dari {filtered.length} data dipilih
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" asChild>
-            <a href="/dashboard/salary/process">
-              <Calculator className="h-4 w-4 mr-2" />
-              Proses Gaji
-            </a>
-          </Button>
-          <Button asChild>
-            <a href="/dashboard/salary/bonus">
-              <Plus className="h-4 w-4 mr-2" />
-              Input Bonus
-            </a>
-          </Button>
+      )}
+
+      {activeTab === "staff" && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+          <p className="text-sm text-blue-800">
+            <strong>Info:</strong> Tab STAFF menampilkan data gaji khusus untuk
+            karyawan dengan departemen yang mengandung kata "STAFF". Perhitungan
+            gaji untuk STAFF mungkin berbeda dengan karyawan lainnya.
+          </p>
         </div>
+      )}
+      <div className="flex gap-2 mb-4 items-center">
+        <select
+          value={period}
+          onChange={(e) => setPeriod(e.target.value)}
+          className="border rounded px-2 py-1"
+        >
+          <option value="all">Semua Periode</option>
+          {Array.from(new Set(data.map((d) => d.periodeAwal?.slice(0, 7)))).map(
+            (p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            )
+          )}
+        </select>
+        <select
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          className="border rounded px-2 py-1"
+        >
+          <option value="all">Semua Status</option>
+          <option value="dibayar">Dibayar</option>
+          <option value="pending">Pending</option>
+        </select>
+        <select
+          value={viewMode}
+          onChange={(e) => setViewMode(e.target.value as "minggu" | "bulan")}
+          className="border rounded px-2 py-1"
+        >
+          <option value="minggu">Per Minggu</option>
+          <option value="bulan">Per Bulan</option>
+        </select>
+        <Button asChild>
+          <a href="/dashboard/salary/process">Proses Gaji</a>
+        </Button>
+        <Button asChild>
+          <a href="/dashboard/salary/bonus">Tambah Bonus</a>
+        </Button>
+        <Button asChild>
+          <a href="/dashboard/salary/potongan">Kelola Potongan</a>
+        </Button>
+        <Button
+          onClick={() => handleExportPDF("download")}
+          variant="outline"
+          disabled={exporting || selectedItems.length === 0}
+        >
+          {exporting
+            ? "Exporting..."
+            : `Download PDF (${selectedItems.length})`}
+        </Button>
+        <Button
+          onClick={() => handleExportPDF("print")}
+          variant="outline"
+          disabled={exporting || selectedItems.length === 0}
+        >
+          {exporting ? "Printing..." : `Print PDF (${selectedItems.length})`}
+        </Button>
       </div>
-
-      {/* Statistics Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Payroll</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(salaryStats.totalPayroll)}</div>
-            <p className="text-xs text-muted-foreground">Periode Januari 2024</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Karyawan</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{salaryStats.totalEmployees}</div>
-            <p className="text-xs text-muted-foreground">Karyawan aktif</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sudah Dibayar</CardTitle>
-            <div className="h-2 w-2 rounded-full bg-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{salaryStats.paid}</div>
-            <p className="text-xs text-muted-foreground">Karyawan</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <div className="h-2 w-2 rounded-full bg-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{salaryStats.pending}</div>
-            <p className="text-xs text-muted-foreground">Karyawan</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Main Content */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Rekap Gaji Karyawan</CardTitle>
-          <CardDescription>Daftar penggajian karyawan per periode</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4 mb-6">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Cari berdasarkan nama atau NIP..."
-                value={searchTerm}
-                onChange={(e) => handleSearch(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Select value={periodFilter} onValueChange={setPeriodFilter}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Periode" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua Periode</SelectItem>
-                <SelectItem value="2024-01">Januari 2024</SelectItem>
-                <SelectItem value="2023-12">Desember 2023</SelectItem>
-                <SelectItem value="2023-11">November 2023</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua Status</SelectItem>
-                <SelectItem value="dibayar">Dibayar</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Table */}
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Karyawan</TableHead>
-                  <TableHead>Periode</TableHead>
-                  <TableHead>Gaji Pokok</TableHead>
-                  <TableHead>Tunjangan</TableHead>
-                  <TableHead>Bonus</TableHead>
-                  <TableHead>Potongan</TableHead>
-                  <TableHead>Gaji Bersih</TableHead>
-                  <TableHead>Hari Kerja</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Aksi</TableHead>
-                </TableRow>
-              </TableHeader>
+      {loading ? (
+        <div>Memuat data...</div>
+      ) : error ? (
+        <div className="text-red-500">{error}</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>
+                  <input
+                    type="checkbox"
+                    checked={
+                      selectedItems.length === filtered.length &&
+                      filtered.length > 0
+                    }
+                    onChange={handleSelectAll}
+                    className="w-4 h-4"
+                  />
+                </TableHead>
+                <TableHead>Nama</TableHead>
+                <TableHead>NIK</TableHead>
+                <TableHead>Departemen</TableHead>
+                <TableHead>Periode</TableHead>
+                <TableHead>Gaji Pokok</TableHead>
+                <TableHead>Bonus</TableHead>
+                <TableHead>Total Potongan</TableHead>
+                <TableHead>Total Gaji Bersih</TableHead>
+                <TableHead>Total Absensi</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            {viewMode === "minggu" ? (
               <TableBody>
-                {filteredData.map((salary) => (
-                  <TableRow key={salary.id}>
-                    <TableCell>
-                      <div className="flex items-center space-x-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src={salary.employee.avatar || "/placeholder.svg"} alt={salary.employee.name} />
-                          <AvatarFallback>
-                            {salary.employee.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <div className="font-medium">{salary.employee.name}</div>
-                          <div className="text-sm text-muted-foreground">{salary.employee.nip}</div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono">{salary.period}</TableCell>
-                    <TableCell>{formatCurrency(salary.basicSalary)}</TableCell>
-                    <TableCell>{formatCurrency(salary.allowances)}</TableCell>
-                    <TableCell>{formatCurrency(salary.bonus)}</TableCell>
-                    <TableCell>{formatCurrency(salary.deductions)}</TableCell>
-                    <TableCell className="font-semibold">{formatCurrency(salary.netSalary)}</TableCell>
-                    <TableCell>
-                      {salary.attendanceDays}/{salary.workDays}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(salary.status)}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Aksi</DropdownMenuLabel>
-                          <DropdownMenuItem>
-                            <Eye className="mr-2 h-4 w-4" />
-                            Lihat Detail
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Download className="mr-2 h-4 w-4" />
-                            Download Slip
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                {filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={11} className="text-center">
+                      Tidak ada data
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filtered.map((gaji) => (
+                    <TableRow key={gaji.id}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          checked={selectedItems.includes(gaji.id)}
+                          onChange={() => handleSelectItem(gaji.id)}
+                          className="w-4 h-4"
+                        />
+                      </TableCell>
+                      <TableCell>{gaji.karyawan?.namaLengkap}</TableCell>
+                      <TableCell>{gaji.karyawan?.nik}</TableCell>
+                      <TableCell>{gaji.karyawan?.departemen || "-"}</TableCell>
+                      <TableCell>
+                        {gaji.periodeAwal} - {gaji.periodeAkhir}
+                      </TableCell>
+                      <TableCell>
+                        {formatCurrency(gaji.gajiPokok || 0)}
+                      </TableCell>
+                      <TableCell>{formatCurrency(gaji.bonus || 0)}</TableCell>
+                      <TableCell>
+                        {formatCurrency(gaji.potongan || 0)}
+                      </TableCell>
+                      <TableCell>
+                        {formatCurrency(gaji.totalGajiBersih || 0)}
+                      </TableCell>
+                      <TableCell>{gaji.totalHariMasuk || 0}</TableCell>
+                      <TableCell>
+                        <select
+                          value={gaji.statusPembayaran || "Belum Dibayar"}
+                          onChange={(e) =>
+                            handleStatusChange(gaji.id, e.target.value)
+                          }
+                          disabled={updatingStatus === gaji.id}
+                          className="border rounded px-2 py-1 text-sm"
+                        >
+                          <option value="Belum Dibayar">Belum Dibayar</option>
+                          <option value="Dibayar">Dibayar</option>
+                          <option value="Pending">Pending</option>
+                        </select>
+                        {updatingStatus === gaji.id && (
+                          <span className="text-xs text-gray-500 ml-1">
+                            Updating...
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
-            </Table>
-          </div>
-
-          {filteredData.length === 0 && (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">Tidak ada data gaji yang ditemukan</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            ) : (
+              <TableBody>
+                {(() => {
+                  // Group by bulan
+                  const grouped: { [bulan: string]: any[] } = {};
+                  filtered.forEach((gaji) => {
+                    const bulan = gaji.periodeAwal?.slice(0, 7) || "-";
+                    if (!grouped[bulan]) grouped[bulan] = [];
+                    grouped[bulan].push(gaji);
+                  });
+                  const rows = Object.entries(grouped).map(([bulan, gajis]) => {
+                    const totalGaji = gajis.reduce(
+                      (sum, g) => sum + (g.totalGaji || 0),
+                      0
+                    );
+                    const totalBonus = gajis.reduce(
+                      (sum, g) => sum + (g.bonus || 0),
+                      0
+                    );
+                    const totalPokok = gajis.reduce(
+                      (sum, g) => sum + (g.gajiPokok || 0),
+                      0
+                    );
+                    return (
+                      <TableRow key={bulan}>
+                        <TableCell colSpan={3}>-</TableCell>
+                        <TableCell>{bulan}</TableCell>
+                        <TableCell>{formatCurrency(totalPokok)}</TableCell>
+                        <TableCell>{formatCurrency(totalBonus)}</TableCell>
+                        <TableCell>{formatCurrency(totalGaji)}</TableCell>
+                        <TableCell>-</TableCell>
+                      </TableRow>
+                    );
+                  });
+                  return rows.length > 0 ? (
+                    rows
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={11} className="text-center">
+                        Tidak ada data
+                      </TableCell>
+                    </TableRow>
+                  );
+                })()}
+              </TableBody>
+            )}
+          </Table>
+        </div>
+      )}
     </div>
-  )
+  );
 }

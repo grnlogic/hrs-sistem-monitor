@@ -111,7 +111,7 @@ export default function HomePage() {
             <span>Industrial Management Solutions</span>
           </div>
           <div className="flex items-center justify-center space-x-4 text-slate-500">
-            <span>v2.1.0</span>
+            <span>v1.0.0</span>
             <div className="w-1 h-1 bg-slate-500 rounded-full"></div>
             <span>Build 2025.01</span>
           </div>

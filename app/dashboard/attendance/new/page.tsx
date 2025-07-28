@@ -1,72 +1,94 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/form/button"
-import { Input } from "@/components/ui/form/input"
-import { Label } from "@/components/ui/form/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/display/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/form/select"
-import { Textarea } from "@/components/ui/form/textarea"
-import { ArrowLeft, Save, Clock } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/feedback/alert"
-import { attendanceAPI, employeeAPI } from "@/lib/api"
-import type { Employee } from "@/lib/types"
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/form/button";
+import { Input } from "@/components/ui/form/input";
+import { Label } from "@/components/ui/form/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/display/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/form/select";
+import { Textarea } from "@/components/ui/form/textarea";
+import { Checkbox } from "@/components/ui/form/checkbox";
+import { ArrowLeft, Save, Clock } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
+import { attendanceAPI, employeeAPI } from "@/lib/api";
+// Tipe lokal agar nik dan namaLengkap tidak error
+type EmployeeOption = {
+  id: string;
+  nik: string;
+  namaLengkap: string;
+};
 
 export default function NewAttendancePage() {
-  const router = useRouter()
-  const [employees, setEmployees] = useState<Employee[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [isLoadingEmployees, setIsLoadingEmployees] = useState(true)
-  const [error, setError] = useState("")
-  const [success, setSuccess] = useState("")
+  const router = useRouter();
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState(true);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    fetchEmployees()
-  }, [])
+    fetchEmployees();
+  }, []);
 
   const fetchEmployees = async () => {
     try {
-      setIsLoadingEmployees(true)
-      const data = await employeeAPI.getAll()
-      setEmployees(data)
+      setIsLoadingEmployees(true);
+      const data = await employeeAPI.getAll();
+      // Mapping agar field namaLengkap dan nik selalu ada
+      const mappedEmployees = data.map((emp: any) => ({
+        ...emp,
+        namaLengkap: emp.namaLengkap || emp.name || "(Tanpa Nama)",
+        nik: emp.nik || emp.nip || "(Tanpa NIK)",
+      }));
+      console.log("Mapped Employees:", mappedEmployees); // Debug
+      setEmployees(mappedEmployees);
     } catch (err) {
-      setError("Gagal memuat data karyawan")
+      setError("Gagal memuat data karyawan");
     } finally {
-      setIsLoadingEmployees(false)
+      setIsLoadingEmployees(false);
     }
-  }
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError("")
-    setSuccess("")
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+    setSuccess("");
 
-    const formData = new FormData(e.currentTarget)
+    const formData = new FormData(e.currentTarget);
     const attendanceData = {
       karyawanId: formData.get("karyawanId") as string,
-      date: formData.get("date") as string,
-      checkIn: formData.get("checkIn") as string,
-      checkOut: formData.get("checkOut") as string,
-      status: formData.get("status") as string,
-      notes: formData.get("notes") as string,
-    }
+      tanggal: formData.get("tanggal") as string, // gunakan 'tanggal', bukan 'date'
+      status: (formData.get("status") as string) || "Hadir",
+    };
 
     try {
-      await attendanceAPI.create(attendanceData)
-      setSuccess("Absensi berhasil dicatat!")
+      await attendanceAPI.create(attendanceData);
+      setSuccess("Absensi berhasil dicatat!");
       setTimeout(() => {
-        router.push("/dashboard/attendance")
-      }, 2000)
+        router.push("/dashboard/attendance");
+      }, 2000);
     } catch (err) {
-      setError("Gagal mencatat absensi. Silakan coba lagi.")
+      setError("Gagal mencatat absensi. Silakan coba lagi.");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   if (isLoadingEmployees) {
     return (
@@ -75,7 +97,7 @@ export default function NewAttendancePage() {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -100,7 +122,9 @@ export default function NewAttendancePage() {
 
         {success && (
           <Alert className="border-green-200 bg-green-50">
-            <AlertDescription className="text-green-800">{success}</AlertDescription>
+            <AlertDescription className="text-green-800">
+              {success}
+            </AlertDescription>
           </Alert>
         )}
 
@@ -124,29 +148,23 @@ export default function NewAttendancePage() {
                   <SelectContent>
                     {employees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id}>
-                        {employee.nip} - {employee.name}
+                        {(employee.nik || "(Tanpa NIK)") +
+                          " - " +
+                          (employee.namaLengkap || "(Tanpa Nama)")}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="date">Tanggal *</Label>
+                <Label htmlFor="tanggal">Tanggal *</Label>
                 <Input
-                  id="date"
-                  name="date"
+                  id="tanggal"
+                  name="tanggal"
                   type="date"
                   defaultValue={new Date().toISOString().split("T")[0]}
                   required
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="checkIn">Jam Masuk</Label>
-                <Input id="checkIn" name="checkIn" type="time" placeholder="08:00" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="checkOut">Jam Keluar</Label>
-                <Input id="checkOut" name="checkOut" type="time" placeholder="17:00" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="status">Status Kehadiran *</Label>
@@ -163,10 +181,6 @@ export default function NewAttendancePage() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="notes">Keterangan</Label>
-              <Textarea id="notes" name="notes" placeholder="Catatan tambahan (opsional)" rows={3} />
             </div>
           </CardContent>
         </Card>
@@ -192,5 +206,5 @@ export default function NewAttendancePage() {
         </div>
       </form>
     </div>
-  )
+  );
 }

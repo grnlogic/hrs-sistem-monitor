@@ -100,14 +100,19 @@ export default function EmployeeDetailPage() {
             relation: karyawan.kontakDaruratHubungan || "-",
             phone: karyawan.kontakDaruratNoHp || "-",
           },
+          _rawKaryawan: karyawan,
         };
         setEmployee(mapped);
-        setSalaryHistory(gaji);
+        setSalaryHistory(
+          (data.gaji || []).filter(
+            (g: any) => String(g.karyawan?.id) === String(id)
+          )
+        );
         setAttendanceHistory(absensi);
         setLeaveHistory(
           cuti.map((c: any) => ({
             ...c,
-            karyawan: undefined, // Hilangkan field karyawan agar tidak error di table
+            karyawan: undefined, 
           }))
         );
         setViolationHistory(
@@ -342,6 +347,43 @@ export default function EmployeeDetailPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Tambahan: Tabel JSON Data Pribadi Lengkap */}
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Tabel Data Pribadi </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm border">
+                  <thead>
+                    <tr>
+                      <th className="border px-2 py-1 text-left">Field</th>
+                      <th className="border px-2 py-1 text-left">Nilai</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {employee &&
+                      employee._rawKaryawan &&
+                      Object.entries(employee._rawKaryawan).map(
+                        ([key, value]) => (
+                          <tr key={key}>
+                            <td className="border px-2 py-1 font-mono text-xs">
+                              {key}
+                            </td>
+                            <td className="border px-2 py-1 font-mono text-xs">
+                              {value === null || value === undefined
+                                ? "-"
+                                : String(value)}
+                            </td>
+                          </tr>
+                        )
+                      )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="salary">
@@ -375,22 +417,24 @@ export default function EmployeeDetailPage() {
                     salaryHistory.map((salary, idx) => (
                       <TableRow key={idx}>
                         <TableCell className="font-medium">
-                          {salary.periode || "-"}
+                          {salary.periodeAwal && salary.periodeAkhir
+                            ? `${salary.periodeAwal} - ${salary.periodeAkhir}`
+                            : "-"}
                         </TableCell>
                         <TableCell>
-                          {formatCurrency(salary.gajiPokok || 0)}
+                          {formatCurrency(Number(salary.gajiPokok) || 0)}
                         </TableCell>
                         <TableCell>
-                          {formatCurrency(salary.bonus || 0)}
+                          {formatCurrency(Number(salary.bonus) || 0)}
                         </TableCell>
                         <TableCell>
-                          {formatCurrency(salary.potongan || 0)}
+                          {formatCurrency(Number(salary.potongan) || 0)}
                         </TableCell>
                         <TableCell className="font-medium">
-                          {formatCurrency(salary.gajiBersih || 0)}
+                          {formatCurrency(Number(salary.totalGajiBersih) || 0)}
                         </TableCell>
                         <TableCell>
-                          {getStatusBadge(salary.status || "-")}
+                          {getStatusBadge(salary.statusPembayaran || "-")}
                         </TableCell>
                       </TableRow>
                     ))
