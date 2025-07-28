@@ -1,4 +1,19 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"
+// Perbaiki konfigurasi API_BASE_URL
+const getApiBaseUrl = () => {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL
+  if (envUrl) {
+    // Pastikan URL tidak memiliki trailing slash dan tambahkan /api jika belum ada
+    let cleanUrl = envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl
+    if (!cleanUrl.endsWith('/api')) {
+      cleanUrl = cleanUrl + '/api'
+    }
+    return cleanUrl
+  }
+  // Fallback untuk development
+  return "http://localhost:8080/api"
+}
+
+const API_BASE_URL = getApiBaseUrl()
 const API_TIMEOUT = parseInt(process.env.NEXT_PUBLIC_API_TIMEOUT || "30000")
 const API_RETRY_ATTEMPTS = parseInt(process.env.NEXT_PUBLIC_API_RETRY_ATTEMPTS || "3")
 
@@ -71,53 +86,53 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
 // Auth API
 export const authAPI = {
   login: async (credentials: { username: string; password: string }) => {
-    return apiRequest("/api/auth/login", {
+    return apiRequest("/auth/login", {
       method: "POST",
       body: JSON.stringify(credentials),
     })
   },
 
   logout: async () => {
-    return apiRequest("/api/auth/logout", {
+    return apiRequest("/auth/logout", {
       method: "POST",
     })
   },
 
   getProfile: async () => {
-    return apiRequest("/api/auth/profile")
+    return apiRequest("/auth/profile")
   },
 }
 
 // Employee API
 export const employeeAPI = {
   getAll: async () => {
-    return apiRequest("/api/karyawan")
+    return apiRequest("/karyawan")
   },
 
-  getById: (id: string) => apiRequest(`/api/karyawan/${id}/detail`),
+  getById: (id: string) => apiRequest(`/karyawan/${id}/detail`),
 
   create: async (data: any) => {
-    return apiRequest("/api/karyawan", {
+    return apiRequest("/karyawan", {
       method: "POST",
       body: JSON.stringify(data),
     })
   },
 
   update: async (id: string, data: any) => {
-    return apiRequest(`/api/karyawan/${id}`, {
+    return apiRequest(`/karyawan/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     })
   },
 
   delete: async (id: string) => {
-    return apiRequest(`/api/karyawan/${id}`, {
+    return apiRequest(`/karyawan/${id}`, {
       method: "DELETE",
     })
   },
 
   deleteEmployee: async (id: string) => {
-    return apiRequest(`/api/karyawan/${id}`, {
+    return apiRequest(`/karyawan/${id}`, {
       method: "DELETE",
     })
   },
@@ -126,7 +141,7 @@ export const employeeAPI = {
 // Attendance API
 export const attendanceAPI = {
   getAll: async () => {
-    return apiRequest("/api/absensi/rekap")
+    return apiRequest("/absensi/rekap")
   },
 
   create: async (data: any) => {
@@ -136,26 +151,26 @@ export const attendanceAPI = {
       hadir: data.status === "Hadir",
       status: data.status,
     }
-    return apiRequest("/api/absensi/json", {
+    return apiRequest("/absensi/json", {
       method: "POST",
       body: JSON.stringify(mapped),
     })
   },
 
   createJson: async (data: any) => {
-    return apiRequest("/api/absensi/json", {
+    return apiRequest("/absensi/json", {
       method: "POST",
       body: JSON.stringify(data),
     })
   },
 
   getByEmployee: async (employeeId: string) => {
-    return apiRequest(`/api/absensi/karyawan/${employeeId}`)
+    return apiRequest(`/absensi/karyawan/${employeeId}`)
   },
 
   // Tambahkan fungsi delete absensi
   delete: async (id: string) => {
-    return apiRequest(`/api/absensi/${id}`, {
+    return apiRequest(`/absensi/${id}`, {
       method: "DELETE",
     });
   },
@@ -164,54 +179,54 @@ export const attendanceAPI = {
 // Salary API
 export const salaryAPI = {
   getAll: async (karyawanId: string) => {
-    return apiRequest(`/api/gaji/rekap?karyawanId=${karyawanId}`)
+    return apiRequest(`/gaji/rekap?karyawanId=${karyawanId}`)
   },
 
   addBonus: async (data: { gajiId: string, bonus: number }) => {
-    return apiRequest(`/api/gaji/bonus?gajiId=${data.gajiId}&bonus=${data.bonus}`, {
+    return apiRequest(`/gaji/bonus?gajiId=${data.gajiId}&bonus=${data.bonus}`, {
       method: "POST",
     })
   },
 
   updateStatusPembayaran: async (data: { gajiId: string, statusPembayaran: string }) => {
-    return apiRequest(`/api/gaji/status?gajiId=${data.gajiId}&statusPembayaran=${data.statusPembayaran}`, {
+    return apiRequest(`/gaji/status?gajiId=${data.gajiId}&statusPembayaran=${data.statusPembayaran}`, {
       method: "PUT",
     })
   },
 
   // Potongan API
   addPajakPph21: async (data: { gajiId: string, pajakPph21: number }) => {
-    return apiRequest(`/api/gaji/potongan/pph21?gajiId=${data.gajiId}&pajakPph21=${data.pajakPph21}`, {
+    return apiRequest(`/gaji/potongan/pph21?gajiId=${data.gajiId}&pajakPph21=${data.pajakPph21}`, {
       method: "POST",
     })
   },
 
   addPotonganKeterlambatan: async (data: { gajiId: string, potonganKeterlambatan: number }) => {
-    return apiRequest(`/api/gaji/potongan/keterlambatan?gajiId=${data.gajiId}&potonganKeterlambatan=${data.potonganKeterlambatan}`, {
+    return apiRequest(`/gaji/potongan/keterlambatan?gajiId=${data.gajiId}&potonganKeterlambatan=${data.potonganKeterlambatan}`, {
       method: "POST",
     })
   },
 
   addPotonganPinjaman: async (data: { gajiId: string, potonganPinjaman: number }) => {
-    return apiRequest(`/api/gaji/potongan/pinjaman?gajiId=${data.gajiId}&potonganPinjaman=${data.potonganPinjaman}`, {
+    return apiRequest(`/gaji/potongan/pinjaman?gajiId=${data.gajiId}&potonganPinjaman=${data.potonganPinjaman}`, {
       method: "POST",
     })
   },
 
   addPotonganSumbangan: async (data: { gajiId: string, potonganSumbangan: number }) => {
-    return apiRequest(`/api/gaji/potongan/sumbangan?gajiId=${data.gajiId}&potonganSumbangan=${data.potonganSumbangan}`, {
+    return apiRequest(`/gaji/potongan/sumbangan?gajiId=${data.gajiId}&potonganSumbangan=${data.potonganSumbangan}`, {
       method: "POST",
     })
   },
 
   addPotonganBpjs: async (data: { gajiId: string, potonganBpjs: number }) => {
-    return apiRequest(`/api/gaji/potongan/bpjs?gajiId=${data.gajiId}&potonganBpjs=${data.potonganBpjs}`, {
+    return apiRequest(`/gaji/potongan/bpjs?gajiId=${data.gajiId}&potonganBpjs=${data.potonganBpjs}`, {
       method: "POST",
     })
   },
 
   addPotonganUndangan: async (data: { gajiId: string, potonganUndangan: number }) => {
-    return apiRequest(`/api/gaji/potongan/undangan?gajiId=${data.gajiId}&potonganUndangan=${data.potonganUndangan}`, {
+    return apiRequest(`/gaji/potongan/undangan?gajiId=${data.gajiId}&potonganUndangan=${data.potonganUndangan}`, {
       method: "POST",
     })
   },
@@ -219,7 +234,7 @@ export const salaryAPI = {
 
 // Tambahkan fungsi untuk rekap gaji semua karyawan
 export const getAllSalaries = async () => {
-  return apiRequest("/api/gaji/rekap-all")
+  return apiRequest("/gaji/rekap-all")
 }
 
 // Generate gaji API
@@ -234,7 +249,7 @@ export const generateSalaryAPI = {
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/gaji/generate-staff-bulanan`, {
+        const response = await fetch(`${API_BASE_URL}/gaji/generate-staff-bulanan`, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -272,7 +287,7 @@ export const generateSalaryAPI = {
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/gaji/generate-nonstaff-mingguan`, {
+      const response = await fetch(`${API_BASE_URL}/gaji/generate-nonstaff-mingguan`, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -310,7 +325,7 @@ export const generateSalaryAPI = {
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/gaji/update-staff-salary`, {
+      const response = await fetch(`${API_BASE_URL}/gaji/update-staff-salary`, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -340,24 +355,24 @@ export const generateSalaryAPI = {
 // Leave API
 export const leaveAPI = {
   getAll: async () => {
-    return apiRequest("/api/cuti")
+    return apiRequest("/cuti")
   },
 
   create: async (data: any) => {
-    return apiRequest("/api/cuti", {
+    return apiRequest("/cuti", {
       method: "POST",
       body: JSON.stringify(data),
     })
   },
 
   approve: async (id: string) => {
-    return apiRequest(`/api/cuti/${id}/approve`, {
+    return apiRequest(`/cuti/${id}/approve`, {
       method: "PUT",
     })
   },
 
   reject: async (id: string, reason: string) => {
-    return apiRequest(`/api/cuti/${id}/reject`, {
+    return apiRequest(`/cuti/${id}/reject`, {
       method: "PUT",
       body: JSON.stringify({ reason }),
     })
@@ -365,21 +380,21 @@ export const leaveAPI = {
 
   // Tambahkan fungsi untuk mendapatkan informasi cuti karyawan
   getEmployeeLeaveInfo: async (karyawanId: string) => {
-    return apiRequest(`/api/cuti/karyawan/${karyawanId}/jumlah-tahun-ini`)
+    return apiRequest(`/cuti/karyawan/${karyawanId}/jumlah-tahun-ini`)
   },
 
   // Tambahkan fungsi untuk mendapatkan cuti berdasarkan karyawan dan tahun
   getByEmployeeAndYear: async (karyawanId: string, tahun: number) => {
-    return apiRequest(`/api/cuti/karyawan/${karyawanId}/tahun/${tahun}`)
+    return apiRequest(`/cuti/karyawan/${karyawanId}/tahun/${tahun}`)
   },
 }
 
 export const getAllViolations = async () => {
-  return apiRequest("/api/pelanggaran")
+  return apiRequest("/pelanggaran")
 }
 
 export const addViolation = async (data: any) => {
-  return apiRequest("/api/pelanggaran", {
+  return apiRequest("/pelanggaran", {
     method: "POST",
     body: JSON.stringify(data),
   })
