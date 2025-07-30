@@ -61,6 +61,7 @@ export default function EmployeesPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [avatarUrls, setAvatarUrls] = useState<{ [key: string]: string }>({});
 
   useEffect(() => {
     fetchEmployees();
@@ -69,6 +70,31 @@ export default function EmployeesPage() {
   useEffect(() => {
     filterEmployees();
   }, [employees, searchTerm, departmentFilter, statusFilter]);
+
+  // Function untuk load foto dengan authentication
+  const loadAvatarWithAuth = async (employeeId: string, avatarUrl: string) => {
+    const token = localStorage.getItem("token");
+    if (!token || !avatarUrl) return;
+
+    try {
+      const response = await fetch(avatarUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const imageUrl = URL.createObjectURL(blob);
+        setAvatarUrls((prev) => ({
+          ...prev,
+          [employeeId]: imageUrl,
+        }));
+      }
+    } catch (error) {
+      console.error(`Gagal memuat foto untuk karyawan ${employeeId}:`, error);
+    }
+  };
 
   const fetchEmployees = async () => {
     try {
@@ -91,8 +117,17 @@ export default function EmployeesPage() {
             : emp.statusKaryawan || emp.status || "-",
         joinDate: emp.tanggalMasuk || emp.joinDate || null,
         email: emp.email || "-",
-        avatar: emp.fotoProfil || emp.avatar || null,
+        // Jika ada foto profil, gunakan endpoint foto dari backend
+        // Endpoint: GET /api/karyawan/{id}/foto
+        avatar: emp.fotoProfil
+          ? employeeAPI.getFotoUrl(emp.id.toString())
+          : null,
         // tambahkan field lain jika perlu
+        emergencyContact: {
+          name: emp.namaKontakDarurat || "-",
+          relation: emp.hubunganKontakDarurat || "-",
+          phone: emp.noTeleponKontakDarurat || "-",
+        },
       }));
       setEmployees(mapped);
     } catch (err) {
@@ -101,6 +136,17 @@ export default function EmployeesPage() {
       setIsLoading(false);
     }
   };
+
+  // Load foto untuk semua karyawan setelah data dimuat
+  useEffect(() => {
+    if (employees.length > 0) {
+      employees.forEach((employee) => {
+        if (employee.avatar) {
+          loadAvatarWithAuth(employee.id.toString(), employee.avatar);
+        }
+      });
+    }
+  }, [employees]);
 
   const filterEmployees = () => {
     let filtered = employees;
@@ -295,7 +341,7 @@ export default function EmployeesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Karyawan</TableHead>
-                  <TableHead>NIP</TableHead>
+                  <TableHead>NIK</TableHead>
                   <TableHead>Posisi</TableHead>
                   <TableHead>Departemen</TableHead>
                   <TableHead>Tanggal Masuk</TableHead>
@@ -310,8 +356,13 @@ export default function EmployeesPage() {
                       <div className="flex items-center space-x-3">
                         <Avatar className="h-8 w-8">
                           <AvatarImage
-                            src={employee.avatar || "/placeholder.svg"}
+                            src={avatarUrls[employee.id] || "/placeholder.svg"}
                             alt={employee.name}
+                            onError={(e) => {
+                              // Jika gambar gagal dimuat, gunakan fallback
+                              const target = e.target as HTMLImageElement;
+                              target.src = "/placeholder.svg";
+                            }}
                           />
                           <AvatarFallback>
                             {employee.name
@@ -352,9 +403,13 @@ export default function EmployeesPage() {
                               Lihat Detail
                             </a>
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Edit className="mr-2 h-4 w-4" />
-                            Edit Karyawan
+                          <DropdownMenuItem asChild>
+                            <a
+                              href={`/dashboard/employees/${employee.id}/edit`}
+                            >
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit Karyawan
+                            </a>
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

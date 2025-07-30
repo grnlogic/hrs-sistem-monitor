@@ -112,16 +112,30 @@ export const employeeAPI = {
   getById: (id: string) => apiRequest(`/karyawan/${id}/detail`),
 
   create: async (data: any) => {
+    // Pastikan field kontak darurat terkirim dengan benar
+    const karyawanData = {
+      ...data,
+      namaKontakDarurat: data.namaKontakDarurat || null,
+      hubunganKontakDarurat: data.hubunganKontakDarurat || null,
+      noTeleponKontakDarurat: data.noTeleponKontakDarurat || null,
+    };
     return apiRequest("/karyawan", {
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify(karyawanData),
     })
   },
 
   update: async (id: string, data: any) => {
+    // Pastikan field kontak darurat terkirim dengan benar
+    const karyawanData = {
+      ...data,
+      namaKontakDarurat: data.namaKontakDarurat || null,
+      hubunganKontakDarurat: data.hubunganKontakDarurat || null,
+      noTeleponKontakDarurat: data.noTeleponKontakDarurat || null,
+    };
     return apiRequest(`/karyawan/${id}`, {
       method: "PUT",
-      body: JSON.stringify(data),
+      body: JSON.stringify(karyawanData),
     })
   },
 
@@ -136,6 +150,54 @@ export const employeeAPI = {
       method: "DELETE",
     })
   },
+
+  // Upload foto karyawan
+  uploadFoto: async (id: string, file: File) => {
+    const token = getAuthToken()
+    const formData = new FormData()
+    formData.append('foto', file)
+    
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
+
+    try {
+      console.log('Uploading foto for karyawan ID:', id)
+      console.log('File name:', file.name)
+      console.log('File size:', file.size)
+      console.log('File type:', file.type)
+      
+      const response = await fetch(`${API_BASE_URL}/karyawan/${id}/upload-foto`, {
+        method: "POST",
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: formData,
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        console.error('Upload foto error response:', errorData)
+        throw new Error(errorData || `HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.text()
+      console.log('Upload foto success:', result)
+      return result
+    } catch (error) {
+      clearTimeout(timeoutId)
+      console.error('Upload foto error:', error)
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Request timeout after ${API_TIMEOUT}ms`)
+      }
+      throw error
+    }
+  },
+
+  // Get foto URL
+  getFotoUrl: (id: string) => `${API_BASE_URL}/karyawan/${id}/foto`,
 }
 
 // Attendance API
@@ -186,6 +248,63 @@ export const salaryAPI = {
     return apiRequest(`/gaji/bonus?gajiId=${data.gajiId}&bonus=${data.bonus}`, {
       method: "POST",
     })
+  },
+
+  // Bonus berdasarkan departemen (sama rata)
+  addBonusByDepartmentEqual: async (data: { departemen: string, bonus: number }) => {
+    return apiRequest(`/gaji/bonus/department/equal?departemen=${encodeURIComponent(data.departemen)}&bonus=${data.bonus}`, {
+      method: "POST",
+    })
+  },
+
+  // Bonus berdasarkan departemen (berbeda per karyawan)
+  addBonusByDepartmentDifferent: async (data: { departemen: string, bonuses: { [key: string]: number } }) => {
+    const params = new URLSearchParams()
+    params.append('departemen', data.departemen)
+    
+    // Convert bonuses object to query parameters
+    Object.entries(data.bonuses).forEach(([gajiId, bonus]) => {
+      params.append(`bonuses[${gajiId}]`, bonus.toString())
+    })
+    
+    console.log('Sending request with params:', params.toString())
+    
+    const token = getAuthToken()
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/gaji/bonus/department/different?${params.toString()}`, {
+        method: "POST",
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        console.error('API Error:', errorData)
+        throw new Error(errorData || `HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
+      console.log('API Response:', result)
+      return result
+    } catch (error) {
+      clearTimeout(timeoutId)
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Request timeout after ${API_TIMEOUT}ms`)
+      }
+      throw error
+    }
+  },
+
+  // Get gaji berdasarkan departemen
+  getGajiByDepartment: async (departemen: string) => {
+    return apiRequest(`/gaji/department?departemen=${encodeURIComponent(departemen)}`)
   },
 
   updateStatusPembayaran: async (data: { gajiId: string, statusPembayaran: string }) => {

@@ -321,7 +321,7 @@ export default function DashboardPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Nama</TableHead>
-                <TableHead>NIP</TableHead>
+                <TableHead>NIK</TableHead>
                 <TableHead>Jabatan</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Aksi</TableHead>
@@ -538,7 +538,7 @@ export default function DashboardPage() {
                   {selectedEmployee.position || selectedEmployee.jabatan || "-"}
                 </div>
                 <div className="text-xs text-gray-400">
-                  NIP: {selectedEmployee.nip || selectedEmployee.nik || "-"}
+                  NIK: {selectedEmployee.nip || selectedEmployee.nik || "-"}
                 </div>
               </div>
             </div>

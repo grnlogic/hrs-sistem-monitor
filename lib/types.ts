@@ -21,5 +21,10 @@ export type Employee = {
   department: string;
   position: string;
   avatar?: string;
+  emergencyContact?: {
+    name: string;
+    relation: string;
+    phone: string;
+  };
   // tambahkan field lain sesuai kebutuhan
 } 

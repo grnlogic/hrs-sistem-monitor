@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/form/button";
 import {
@@ -33,8 +33,44 @@ import {
   Calendar,
   Building,
   Clock,
+  Upload,
+  Camera,
+  Crop,
+  RotateCcw,
+  Check,
 } from "lucide-react";
 import { employeeAPI, leaveAPI } from "@/lib/api";
+import ReactCrop, {
+  Crop as CropType,
+  PixelCrop,
+  centerCrop,
+  makeAspectCrop,
+} from "react-image-crop";
+import "react-image-crop/dist/ReactCrop.css";
+
+// Aspect ratio untuk foto profil (1:1 square)
+const ASPECT_RATIO = 1;
+const MIN_DIMENSION = 150;
+
+function centerAspectCrop(
+  mediaWidth: number,
+  mediaHeight: number,
+  aspect: number
+) {
+  return centerCrop(
+    makeAspectCrop(
+      {
+        unit: "%",
+        width: 90,
+      },
+      aspect,
+      mediaWidth,
+      mediaHeight
+    ),
+    mediaWidth,
+    mediaHeight
+  );
+}
 
 export default function EmployeeDetailPage() {
   const params = useParams();
@@ -47,6 +83,176 @@ export default function EmployeeDetailPage() {
   const [leaveHistory, setLeaveHistory] = useState<any[]>([]);
   const [violationHistory, setViolationHistory] = useState<any[]>([]);
   const [leaveInfo, setLeaveInfo] = useState<any>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [showCrop, setShowCrop] = useState(false);
+  const [crop, setCrop] = useState<CropType>();
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
+  const [imgSrc, setImgSrc] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  // Function untuk mendapatkan URL foto
+  const getFotoUrl = (employeeId: string) => {
+    const url = employeeAPI.getFotoUrl(employeeId);
+    console.log("Foto URL:", url); // Debug
+    return url;
+  };
+
+  // Function untuk menampilkan foto dengan authentication
+  const [avatarSrc, setAvatarSrc] = useState<string>("/placeholder.svg");
+
+  useEffect(() => {
+    if (employee?.avatar) {
+      const token = localStorage.getItem("token");
+      if (token) {
+        // Load foto dengan fetch dan token
+        fetch(employee.avatar, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+          .then((response) => {
+            if (response.ok) {
+              return response.blob();
+            }
+            throw new Error(`HTTP ${response.status}`);
+          })
+          .then((blob) => {
+            const imageUrl = URL.createObjectURL(blob);
+            setAvatarSrc(imageUrl);
+            console.log("Foto berhasil dimuat dengan authentication");
+          })
+          .catch((error) => {
+            console.error("Gagal memuat foto:", error);
+            setAvatarSrc("/placeholder.svg");
+          });
+      } else {
+        setAvatarSrc("/placeholder.svg");
+      }
+    }
+  }, [employee?.avatar]);
+
+  // Function untuk crop foto
+  const getCroppedImg = (
+    image: HTMLImageElement,
+    crop: PixelCrop
+  ): Promise<Blob> => {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+      throw new Error("No 2d context");
+    }
+
+    const scaleX = image.naturalWidth / image.width;
+    const scaleY = image.naturalHeight / image.height;
+
+    canvas.width = crop.width;
+    canvas.height = crop.height;
+
+    ctx.imageSmoothingQuality = "high";
+
+    ctx.drawImage(
+      image,
+      crop.x * scaleX,
+      crop.y * scaleY,
+      crop.width * scaleX,
+      crop.height * scaleY,
+      0,
+      0,
+      crop.width,
+      crop.height
+    );
+
+    return new Promise((resolve) => {
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(blob);
+          }
+        },
+        "image/jpeg",
+        0.9
+      );
+    });
+  };
+
+  const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const { width, height } = e.currentTarget;
+    const crop = centerAspectCrop(width, height, ASPECT_RATIO);
+    setCrop(crop);
+  };
+
+  const handleCropComplete = async () => {
+    if (!imgRef.current || !completedCrop) return;
+
+    try {
+      const croppedBlob = await getCroppedImg(imgRef.current, completedCrop);
+      const croppedFile = new File(
+        [croppedBlob],
+        selectedFile?.name || "cropped.jpg",
+        {
+          type: "image/jpeg",
+        }
+      );
+
+      setSelectedFile(croppedFile);
+      setShowCrop(false);
+      setImgSrc("");
+
+      // Upload foto yang sudah di-crop
+      if (employee) {
+        setUploading(true);
+        setUploadError("");
+
+        try {
+          await employeeAPI.uploadFoto(employee.id.toString(), croppedFile);
+          window.location.reload();
+        } catch (err) {
+          setUploadError("Gagal upload foto. Silakan coba lagi.");
+        } finally {
+          setUploading(false);
+        }
+      }
+    } catch (error) {
+      setUploadError("Gagal memproses foto. Silakan coba lagi.");
+    }
+  };
+
+  const handleCancelCrop = () => {
+    setShowCrop(false);
+    setImgSrc("");
+    setSelectedFile(null);
+    if (imgSrc) {
+      URL.revokeObjectURL(imgSrc);
+    }
+  };
+
+  // Function untuk upload foto
+  const handleUploadFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !employee) return;
+
+    // Validasi file
+    if (!file.type.startsWith("image/")) {
+      setUploadError("File harus berupa gambar");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError("Ukuran file maksimal 10MB");
+      return;
+    }
+
+    setSelectedFile(file);
+    setUploadError("");
+
+    // Buat preview untuk crop
+    const url = URL.createObjectURL(file);
+    setImgSrc(url);
+    setShowCrop(true);
+  };
 
   useEffect(() => {
     const fetchEmployee = async () => {
@@ -100,14 +306,24 @@ export default function EmployeeDetailPage() {
           email: karyawan.email || "-",
           address: karyawan.alamat || karyawan.address || "-",
           birthDate: karyawan.tanggalLahir || karyawan.birthDate || null,
-          avatar: karyawan.fotoProfil || karyawan.avatar || null,
+          // Debug: log foto profil dari database
+          avatar: (() => {
+            console.log("Foto profil dari DB:", karyawan.fotoProfil);
+            if (karyawan.fotoProfil) {
+              const fotoUrl = getFotoUrl(karyawan.id.toString());
+              console.log("Generated foto URL:", fotoUrl);
+              return fotoUrl;
+            }
+            console.log("Tidak ada foto profil");
+            return null;
+          })(),
           salary: karyawan.gajiPerHari
             ? `Rp ${Number(karyawan.gajiPerHari).toLocaleString("id-ID")}`
             : karyawan.salary || "-",
           emergencyContact: {
-            name: karyawan.kontakDaruratNama || "-",
-            relation: karyawan.kontakDaruratHubungan || "-",
-            phone: karyawan.kontakDaruratNoHp || "-",
+            name: karyawan.namaKontakDarurat || "-",
+            relation: karyawan.hubunganKontakDarurat || "-",
+            phone: karyawan.noTeleponKontakDarurat || "-",
           },
           _rawKaryawan: karyawan,
         };
@@ -226,22 +442,102 @@ export default function EmployeeDetailPage() {
         </Button>
       </div>
 
+      {/* Crop Modal */}
+      {showCrop && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Crop Foto Profil</h3>
+              <div className="flex space-x-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCancelCrop}
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Batal
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleCropComplete}
+                  disabled={!completedCrop}
+                >
+                  <Check className="h-4 w-4 mr-2" />
+                  Selesai & Upload
+                </Button>
+              </div>
+            </div>
+            <div className="max-h-96 overflow-auto">
+              <ReactCrop
+                crop={crop}
+                onChange={(_, percentCrop) => setCrop(percentCrop)}
+                onComplete={(c) => setCompletedCrop(c)}
+                aspect={ASPECT_RATIO}
+                minWidth={MIN_DIMENSION}
+                minHeight={MIN_DIMENSION}
+              >
+                <img
+                  ref={imgRef}
+                  alt="Crop me"
+                  src={imgSrc}
+                  onLoad={onImageLoad}
+                  className="max-w-full h-auto"
+                />
+              </ReactCrop>
+            </div>
+            <p className="text-sm text-gray-600 mt-2">
+              Drag untuk mengatur area crop. Foto akan dipotong menjadi bentuk
+              persegi.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Employee Profile Card */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-start space-x-6">
-            <Avatar className="h-24 w-24">
-              <AvatarImage
-                src={employee.avatar || "/placeholder.svg"}
-                alt={employee.name}
-              />
-              <AvatarFallback className="text-2xl">
-                {employee.name
-                  .split(" ")
-                  .map((n: string) => n[0])
-                  .join("")}
-              </AvatarFallback>
-            </Avatar>
+            <div className="relative">
+              <Avatar className="h-24 w-24">
+                <AvatarImage
+                  src={avatarSrc}
+                  alt={employee.name}
+                  onError={(e) => {
+                    // Jika gambar gagal dimuat, gunakan fallback
+                    const target = e.target as HTMLImageElement;
+                    target.src = "/placeholder.svg";
+                  }}
+                  onLoad={() => {
+                    // Tidak perlu log apa-apa di sini
+                  }}
+                />
+                <AvatarFallback className="text-2xl">
+                  {employee.name
+                    .split(" ")
+                    .map((n: string) => n[0])
+                    .join("")}
+                </AvatarFallback>
+              </Avatar>
+
+              {/* Upload Foto Button */}
+              <div className="absolute -bottom-2 -right-2">
+                <label htmlFor="upload-foto" className="cursor-pointer">
+                  <div className="bg-blue-600 hover:bg-blue-700 text-white rounded-full p-2 shadow-lg">
+                    <Crop className="h-4 w-4" />
+                  </div>
+                </label>
+                <input
+                  id="upload-foto"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleUploadFoto}
+                  className="hidden"
+                  disabled={uploading}
+                />
+              </div>
+            </div>
 
             <div className="flex-1 space-y-4">
               <div>
@@ -251,11 +547,24 @@ export default function EmployeeDetailPage() {
                 <p className="text-lg text-gray-600">{employee.position}</p>
                 <div className="flex items-center space-x-4 mt-2">
                   <span className="text-sm text-gray-500">
-                    NIP: {employee.nip}
+                    NIK: {employee.nip}
                   </span>
                   {getStatusBadge(employee.status)}
                 </div>
               </div>
+
+              {uploadError && (
+                <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
+                  {uploadError}
+                </div>
+              )}
+
+              {uploading && (
+                <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                  Mengupload foto...
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="flex items-center space-x-2">

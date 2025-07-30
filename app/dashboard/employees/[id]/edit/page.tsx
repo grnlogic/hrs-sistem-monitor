@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useRef, useEffect } from "react";
+import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/form/button";
 import { Input } from "@/components/ui/form/input";
 import { Label } from "@/components/ui/form/label";
@@ -25,7 +25,7 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@/components/ui/display/avatar";
-import { Upload, X, Crop, RotateCcw, Check } from "lucide-react";
+import { Upload, X, Crop, RotateCcw, Check, ArrowLeft } from "lucide-react";
 import { employeeAPI } from "@/lib/api";
 import ReactCrop, {
   Crop as CropType,
@@ -49,6 +49,11 @@ const departmentOptions = [
   { label: "BLANDING PJP", value: "BLANDING PJP" },
   { label: "PACKING PJP", value: "PACKING PJP" },
   { label: "MARKET PJP", value: "MARKET PJP" },
+  { label: "PACKING CPD", value: "PACKING CPD" },
+  { label: "MARKET CPD", value: "MARKET CPD" },
+  { label: "STAFF CMS", value: "STAFF CMS" },
+  { label: "PACKING CMS", value: "PACKING CMS" },
+  { label: "MARKET CMS", value: "MARKET CMS" },
 ];
 
 // Aspect ratio untuk foto profil (1:1 square)
@@ -75,9 +80,13 @@ function centerAspectCrop(
   );
 }
 
-export default function NewEmployeePage() {
+export default function EditEmployeePage() {
   const router = useRouter();
+  const params = useParams();
+  const employeeId = params.id as string;
+
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -87,17 +96,48 @@ export default function NewEmployeePage() {
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
   const [imgSrc, setImgSrc] = useState("");
   const imgRef = useRef<HTMLImageElement>(null);
+  const [employeeData, setEmployeeData] = useState<any>(null);
+  const [currentFotoUrl, setCurrentFotoUrl] = useState<string | null>(null);
+
+  // Load employee data on component mount
+  useEffect(() => {
+    if (employeeId) {
+      fetchEmployeeData();
+    }
+  }, [employeeId]);
+
+  const fetchEmployeeData = async () => {
+    try {
+      setIsLoadingData(true);
+      const data = await employeeAPI.getById(employeeId);
+
+      // Extract karyawan data from the response
+      const karyawan = data.karyawan;
+      if (!karyawan || String(karyawan.id) !== String(employeeId)) {
+        throw new Error("Karyawan tidak ditemukan");
+      }
+
+      setEmployeeData(karyawan);
+
+      // Set current foto URL if exists
+      if (karyawan.fotoProfil) {
+        setCurrentFotoUrl(employeeAPI.getFotoUrl(employeeId));
+      }
+    } catch (err) {
+      setError("Gagal memuat data karyawan");
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validasi tipe file
       if (!file.type.startsWith("image/")) {
         setError("File harus berupa gambar (JPG, PNG, GIF, dll)");
         return;
       }
 
-      // Validasi ukuran file (max 10MB)
       if (file.size > 10 * 1024 * 1024) {
         setError("Ukuran file maksimal 10MB");
         return;
@@ -106,7 +146,6 @@ export default function NewEmployeePage() {
       setSelectedFile(file);
       setError("");
 
-      // Buat preview untuk crop
       const url = URL.createObjectURL(file);
       setImgSrc(url);
       setShowCrop(true);
@@ -216,7 +255,7 @@ export default function NewEmployeePage() {
     setSuccess("");
 
     const formData = new FormData(e.currentTarget);
-    const employeeData = {
+    const updateData = {
       nik: formData.get("nik") as string,
       namaLengkap: formData.get("namaLengkap") as string,
       email: formData.get("email") as string,
@@ -226,7 +265,6 @@ export default function NewEmployeePage() {
       tanggalMasuk: formData.get("tanggalMasuk") as string,
       gajiPerHari: Number(formData.get("gajiPerHari")),
       statusKaryawan: formData.get("statusKaryawan") as string,
-      // Field opsional
       tempatLahir: formData.get("tempatLahir") || null,
       tanggalLahir: formData.get("tanggalLahir") || null,
       jenisKelamin: formData.get("jenisKelamin") || null,
@@ -239,50 +277,74 @@ export default function NewEmployeePage() {
       jumlahTanggungan: formData.get("jumlahTanggungan") || null,
       tanggalKontrak: formData.get("tanggalKontrak") || null,
       batasKontrak: formData.get("batasKontrak") || null,
-      fotoProfil: formData.get("fotoProfil") || null,
       pendidikanTerakhir: formData.get("pendidikanTerakhir") || null,
       atasanLangsung: formData.get("atasanLangsung") || null,
       lokasiKerja: formData.get("lokasiKerja") || null,
       tanggalKeluar: formData.get("tanggalKeluar") || null,
-      namaKontakDarurat: formData.get("namaKontakDarurat") as string,
-      hubunganKontakDarurat: formData.get("hubunganKontakDarurat") as string,
-      noTeleponKontakDarurat: formData.get("noTeleponKontakDarurat") as string,
+      namaKontakDarurat: formData.get("namaKontakDarurat") || null,
+      hubunganKontakDarurat: formData.get("hubunganKontakDarurat") || null,
+      noTeleponKontakDarurat: formData.get("noTeleponKontakDarurat") || null,
     };
 
     try {
-      // Buat karyawan terlebih dahulu
-      const newEmployee = await employeeAPI.create(employeeData);
+      await employeeAPI.update(employeeId, updateData);
 
-      // Jika ada file foto, upload foto
-      if (selectedFile && newEmployee.id) {
+      if (selectedFile) {
         try {
-          await employeeAPI.uploadFoto(newEmployee.id.toString(), selectedFile);
-          setSuccess("Karyawan berhasil ditambahkan dengan foto!");
+          await employeeAPI.uploadFoto(employeeId, selectedFile);
+          setSuccess("Data karyawan berhasil diperbarui dengan foto!");
         } catch (uploadError) {
           setSuccess(
-            "Karyawan berhasil ditambahkan, tetapi gagal upload foto."
+            "Data karyawan berhasil diperbarui, tetapi gagal upload foto."
           );
           console.error("Upload foto error:", uploadError);
         }
       } else {
-        setSuccess("Karyawan berhasil ditambahkan!");
+        setSuccess("Data karyawan berhasil diperbarui!");
       }
 
       setTimeout(() => {
-        router.push("/dashboard/employees");
+        router.push(`/dashboard/employees/${employeeId}`);
       }, 2000);
     } catch (err) {
-      setError("Gagal menambahkan karyawan. Silakan coba lagi.");
+      setError("Gagal memperbarui data karyawan. Silakan coba lagi.");
     } finally {
       setIsLoading(false);
     }
   };
 
+  if (isLoadingData) {
+    return (
+      <div className="flex flex-1 flex-col gap-4 p-4">
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!employeeData) {
+    return (
+      <div className="flex flex-1 flex-col gap-4 p-4">
+        <Alert variant="destructive">
+          <AlertDescription>Karyawan tidak ditemukan</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
-      <h1 className="text-3xl font-bold tracking-tight mb-4">
-        Tambah Karyawan Baru
-      </h1>
+      <div className="flex items-center gap-4 mb-4">
+        <Button variant="outline" size="sm" onClick={() => router.back()}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Kembali
+        </Button>
+        <h1 className="text-3xl font-bold tracking-tight">
+          Edit Data Karyawan
+        </h1>
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {error && (
           <Alert variant="destructive">
@@ -364,16 +426,15 @@ export default function NewEmployeePage() {
               <div className="flex-shrink-0">
                 <Avatar className="h-24 w-24">
                   <AvatarImage
-                    src={previewUrl || "/placeholder.svg"}
+                    src={previewUrl || currentFotoUrl || "/placeholder.svg"}
                     alt="Preview"
                     onError={(e) => {
-                      // Jika gambar gagal dimuat, gunakan fallback
                       const target = e.target as HTMLImageElement;
                       target.src = "/placeholder.svg";
                     }}
                   />
                   <AvatarFallback className="text-lg">
-                    {previewUrl ? "Foto" : "Upload"}
+                    {previewUrl || currentFotoUrl ? "Foto" : "Upload"}
                   </AvatarFallback>
                 </Avatar>
               </div>
@@ -388,7 +449,7 @@ export default function NewEmployeePage() {
                       }
                     >
                       <Crop className="h-4 w-4 mr-2" />
-                      Pilih & Crop Foto
+                      {currentFotoUrl ? "Ganti Foto" : "Pilih & Crop Foto"}
                     </Button>
                     <span className="text-sm text-gray-500">
                       JPG, PNG, GIF (max 10MB) - Akan di-crop menjadi persegi
@@ -433,7 +494,7 @@ export default function NewEmployeePage() {
           <CardHeader>
             <CardTitle>Data Karyawan</CardTitle>
             <CardDescription>
-              Isi data sesuai dengan identitas karyawan
+              Edit data sesuai dengan identitas karyawan
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -446,15 +507,29 @@ export default function NewEmployeePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="nik">NIK *</Label>
-                <Input id="nik" name="nik" required />
+                <Input
+                  id="nik"
+                  name="nik"
+                  required
+                  defaultValue={employeeData.nik || ""}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="namaLengkap">Nama Lengkap *</Label>
-                <Input id="namaLengkap" name="namaLengkap" required />
+                <Input
+                  id="namaLengkap"
+                  name="namaLengkap"
+                  required
+                  defaultValue={employeeData.namaLengkap || ""}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="departemen">Departemen *</Label>
-                <Select name="departemen" required>
+                <Select
+                  name="departemen"
+                  required
+                  defaultValue={employeeData.departemen || ""}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Pilih departemen" />
                   </SelectTrigger>
@@ -474,6 +549,11 @@ export default function NewEmployeePage() {
                   name="tanggalMasuk"
                   type="date"
                   required
+                  defaultValue={
+                    employeeData.tanggalMasuk
+                      ? employeeData.tanggalMasuk.split("T")[0]
+                      : ""
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -483,11 +563,16 @@ export default function NewEmployeePage() {
                   name="gajiPerHari"
                   type="number"
                   required
+                  defaultValue={employeeData.gajiPerHari || ""}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="statusKaryawan">Status Karyawan *</Label>
-                <Select name="statusKaryawan" required defaultValue="AKTIF">
+                <Select
+                  name="statusKaryawan"
+                  required
+                  defaultValue={employeeData.statusKaryawan || "AKTIF"}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Pilih status" />
                   </SelectTrigger>
@@ -501,39 +586,6 @@ export default function NewEmployeePage() {
                 </Select>
               </div>
             </div>
-
-            {/* Kontak Darurat Section - Data Wajib */}
-            <div className="mt-6 mb-2">
-              <h2 className="text-lg font-semibold mb-2 text-orange-700">
-                Kontak Darurat *
-              </h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="namaKontakDarurat">Nama Kontak Darurat *</Label>
-                <Input
-                  id="namaKontakDarurat"
-                  name="namaKontakDarurat"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="hubunganKontakDarurat">Hubungan *</Label>
-                <Input
-                  id="hubunganKontakDarurat"
-                  name="hubunganKontakDarurat"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="noTeleponKontakDarurat">Nomor Telepon *</Label>
-                <Input
-                  id="noTeleponKontakDarurat"
-                  name="noTeleponKontakDarurat"
-                  required
-                />
-              </div>
-            </div>
             {/* Bagian Opsional */}
             <div className="mt-6 mb-2">
               <h2 className="text-lg font-semibold mb-2 text-blue-700">
@@ -543,49 +595,99 @@ export default function NewEmployeePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="noHp">Nomor HP</Label>
-                <Input id="noHp" name="noHp" />
+                <Input
+                  id="noHp"
+                  name="noHp"
+                  defaultValue={employeeData.noHp || ""}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" name="email" type="email" />
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  defaultValue={employeeData.email || ""}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="tempatLahir">Tempat Lahir</Label>
-                <Input id="tempatLahir" name="tempatLahir" />
+                <Input
+                  id="tempatLahir"
+                  name="tempatLahir"
+                  defaultValue={employeeData.tempatLahir || ""}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="tanggalLahir">Tanggal Lahir</Label>
-                <Input id="tanggalLahir" name="tanggalLahir" type="date" />
+                <Input
+                  id="tanggalLahir"
+                  name="tanggalLahir"
+                  type="date"
+                  defaultValue={
+                    employeeData.tanggalLahir
+                      ? employeeData.tanggalLahir.split("T")[0]
+                      : ""
+                  }
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="jenisKelamin">Jenis Kelamin</Label>
-                <Input id="jenisKelamin" name="jenisKelamin" />
+                <Input
+                  id="jenisKelamin"
+                  name="jenisKelamin"
+                  defaultValue={employeeData.jenisKelamin || ""}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="alamat">Alamat</Label>
-                <Input id="alamat" name="alamat" />
+                <Input
+                  id="alamat"
+                  name="alamat"
+                  defaultValue={employeeData.alamat || ""}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="noKtp">No KTP</Label>
-                <Input id="noKtp" name="noKtp" />
+                <Input
+                  id="noKtp"
+                  name="noKtp"
+                  defaultValue={employeeData.noKtp || ""}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="npwp">NPWP</Label>
-                <Input id="npwp" name="npwp" />
+                <Input
+                  id="npwp"
+                  name="npwp"
+                  defaultValue={employeeData.npwp || ""}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="bpjsKesehatan">BPJS Kesehatan</Label>
-                <Input id="bpjsKesehatan" name="bpjsKesehatan" />
+                <Input
+                  id="bpjsKesehatan"
+                  name="bpjsKesehatan"
+                  defaultValue={employeeData.bpjsKesehatan || ""}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="bpjsKetenagakerjaan">
                   BPJS Ketenagakerjaan
                 </Label>
-                <Input id="bpjsKetenagakerjaan" name="bpjsKetenagakerjaan" />
+                <Input
+                  id="bpjsKetenagakerjaan"
+                  name="bpjsKetenagakerjaan"
+                  defaultValue={employeeData.bpjsKetenagakerjaan || ""}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="statusPernikahan">Status Pernikahan</Label>
-                <Input id="statusPernikahan" name="statusPernikahan" />
+                <Input
+                  id="statusPernikahan"
+                  name="statusPernikahan"
+                  defaultValue={employeeData.statusPernikahan || ""}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="jumlahTanggungan">Jumlah Tanggungan</Label>
@@ -593,35 +695,112 @@ export default function NewEmployeePage() {
                   id="jumlahTanggungan"
                   name="jumlahTanggungan"
                   type="number"
+                  defaultValue={employeeData.jumlahTanggungan || ""}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="tanggalKontrak">Tanggal Kontrak</Label>
-                <Input id="tanggalKontrak" name="tanggalKontrak" type="date" />
+                <Input
+                  id="tanggalKontrak"
+                  name="tanggalKontrak"
+                  type="date"
+                  defaultValue={
+                    employeeData.tanggalKontrak
+                      ? employeeData.tanggalKontrak.split("T")[0]
+                      : ""
+                  }
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="batasKontrak">Batas Kontrak</Label>
-                <Input id="batasKontrak" name="batasKontrak" type="date" />
+                <Input
+                  id="batasKontrak"
+                  name="batasKontrak"
+                  type="date"
+                  defaultValue={
+                    employeeData.batasKontrak
+                      ? employeeData.batasKontrak.split("T")[0]
+                      : ""
+                  }
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="jabatan">Jabatan</Label>
-                <Input id="jabatan" name="jabatan" />
+                <Input
+                  id="jabatan"
+                  name="jabatan"
+                  defaultValue={employeeData.jabatan || ""}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="pendidikanTerakhir">Pendidikan Terakhir</Label>
-                <Input id="pendidikanTerakhir" name="pendidikanTerakhir" />
+                <Input
+                  id="pendidikanTerakhir"
+                  name="pendidikanTerakhir"
+                  defaultValue={employeeData.pendidikanTerakhir || ""}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="atasanLangsung">Atasan Langsung</Label>
-                <Input id="atasanLangsung" name="atasanLangsung" />
+                <Input
+                  id="atasanLangsung"
+                  name="atasanLangsung"
+                  defaultValue={employeeData.atasanLangsung || ""}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="lokasiKerja">Lokasi Kerja</Label>
-                <Input id="lokasiKerja" name="lokasiKerja" />
+                <Input
+                  id="lokasiKerja"
+                  name="lokasiKerja"
+                  defaultValue={employeeData.lokasiKerja || ""}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="tanggalKeluar">Tanggal Keluar</Label>
-                <Input id="tanggalKeluar" name="tanggalKeluar" type="date" />
+                <Input
+                  id="tanggalKeluar"
+                  name="tanggalKeluar"
+                  type="date"
+                  defaultValue={
+                    employeeData.tanggalKeluar
+                      ? employeeData.tanggalKeluar.split("T")[0]
+                      : ""
+                  }
+                />
+              </div>
+            </div>
+
+            {/* Kontak Darurat Section */}
+            <div className="mt-6 mb-2">
+              <h2 className="text-lg font-semibold mb-2 text-orange-700">
+                Kontak Darurat
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="namaKontakDarurat">Nama Kontak Darurat</Label>
+                <Input
+                  id="namaKontakDarurat"
+                  name="namaKontakDarurat"
+                  defaultValue={employeeData.namaKontakDarurat || ""}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="hubunganKontakDarurat">Hubungan</Label>
+                <Input
+                  id="hubunganKontakDarurat"
+                  name="hubunganKontakDarurat"
+                  defaultValue={employeeData.hubunganKontakDarurat || ""}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="noTeleponKontakDarurat">Nomor Telepon</Label>
+                <Input
+                  id="noTeleponKontakDarurat"
+                  name="noTeleponKontakDarurat"
+                  defaultValue={employeeData.noTeleponKontakDarurat || ""}
+                />
               </div>
             </div>
           </CardContent>
@@ -637,7 +816,7 @@ export default function NewEmployeePage() {
                 Menyimpan...
               </>
             ) : (
-              <>Tambah Karyawan</>
+              <>Simpan Perubahan</>
             )}
           </Button>
         </div>
