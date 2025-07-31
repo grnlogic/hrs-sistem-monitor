@@ -115,6 +115,10 @@ export const employeeAPI = {
     // Pastikan field kontak darurat terkirim dengan benar
     const karyawanData = {
       ...data,
+      // Pastikan field yang required tidak null
+      namaLengkap: data.namaLengkap || '',
+      nik: data.nik || '',
+      // Field kontak darurat
       namaKontakDarurat: data.namaKontakDarurat || null,
       hubunganKontakDarurat: data.hubunganKontakDarurat || null,
       noTeleponKontakDarurat: data.noTeleponKontakDarurat || null,
@@ -129,6 +133,10 @@ export const employeeAPI = {
     // Pastikan field kontak darurat terkirim dengan benar
     const karyawanData = {
       ...data,
+      // Pastikan field yang required tidak null
+      namaLengkap: data.namaLengkap || '',
+      nik: data.nik || '',
+      // Field kontak darurat
       namaKontakDarurat: data.namaKontakDarurat || null,
       hubunganKontakDarurat: data.hubunganKontakDarurat || null,
       noTeleponKontakDarurat: data.noTeleponKontakDarurat || null,

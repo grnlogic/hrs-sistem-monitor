@@ -244,9 +244,9 @@ export default function NewEmployeePage() {
       atasanLangsung: formData.get("atasanLangsung") || null,
       lokasiKerja: formData.get("lokasiKerja") || null,
       tanggalKeluar: formData.get("tanggalKeluar") || null,
-      namaKontakDarurat: formData.get("namaKontakDarurat") as string,
-      hubunganKontakDarurat: formData.get("hubunganKontakDarurat") as string,
-      noTeleponKontakDarurat: formData.get("noTeleponKontakDarurat") as string,
+      namaKontakDarurat: formData.get("namaKontakDarurat") || null,
+      hubunganKontakDarurat: formData.get("hubunganKontakDarurat") || null,
+      noTeleponKontakDarurat: formData.get("noTeleponKontakDarurat") || null,
     };
 
     try {
@@ -502,38 +502,6 @@ export default function NewEmployeePage() {
               </div>
             </div>
 
-            {/* Kontak Darurat Section - Data Wajib */}
-            <div className="mt-6 mb-2">
-              <h2 className="text-lg font-semibold mb-2 text-orange-700">
-                Kontak Darurat *
-              </h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="namaKontakDarurat">Nama Kontak Darurat *</Label>
-                <Input
-                  id="namaKontakDarurat"
-                  name="namaKontakDarurat"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="hubunganKontakDarurat">Hubungan *</Label>
-                <Input
-                  id="hubunganKontakDarurat"
-                  name="hubunganKontakDarurat"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="noTeleponKontakDarurat">Nomor Telepon *</Label>
-                <Input
-                  id="noTeleponKontakDarurat"
-                  name="noTeleponKontakDarurat"
-                  required
-                />
-              </div>
-            </div>
             {/* Bagian Opsional */}
             <div className="mt-6 mb-2">
               <h2 className="text-lg font-semibold mb-2 text-blue-700">
@@ -548,6 +516,28 @@ export default function NewEmployeePage() {
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" name="email" type="email" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="namaKontakDarurat">Nama Kontak Darurat</Label>
+                <Input id="namaKontakDarurat" name="namaKontakDarurat" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="hubunganKontakDarurat">
+                  Hubungan Kontak Darurat
+                </Label>
+                <Input
+                  id="hubunganKontakDarurat"
+                  name="hubunganKontakDarurat"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="noTeleponKontakDarurat">
+                  Nomor Telepon Kontak Darurat
+                </Label>
+                <Input
+                  id="noTeleponKontakDarurat"
+                  name="noTeleponKontakDarurat"
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="tempatLahir">Tempat Lahir</Label>
