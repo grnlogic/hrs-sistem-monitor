@@ -747,36 +747,108 @@ export default function EmployeeDetailPage() {
           {/* Tambahan: Tabel JSON Data Pribadi Lengkap */}
           <Card className="mt-6">
             <CardHeader>
-              <CardTitle>Tabel Data Pribadi </CardTitle>
+              <CardTitle>Tabel Data Pribadi</CardTitle>
+              <CardDescription>Menampilkan data asli</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm border">
                   <thead>
                     <tr>
-                      <th className="border px-2 py-1 text-left">Field</th>
-                      <th className="border px-2 py-1 text-left">Nilai</th>
+                      <th className="border px-2 py-1 text-left bg-gray-50">
+                        Field
+                      </th>
+                      <th className="border px-2 py-1 text-left bg-gray-50">
+                        Data Asli
+                      </th>
+                      <th className="border px-2 py-1 text-left bg-gray-50">
+                        Data Terenkripsi
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {employee &&
                       employee._rawKaryawan &&
                       Object.entries(employee._rawKaryawan).map(
-                        ([key, value]) => (
-                          <tr key={key}>
-                            <td className="border px-2 py-1 font-mono text-xs">
-                              {key}
-                            </td>
-                            <td className="border px-2 py-1 font-mono text-xs">
-                              {value === null || value === undefined
-                                ? "-"
-                                : String(value)}
-                            </td>
-                          </tr>
-                        )
+                        ([key, value]) => {
+                          // Tentukan apakah ini field encrypted atau tidak
+                          const isEncrypted =
+                            key.includes("encrypted") ||
+                            key.includes("Encrypted");
+                          const originalKey = key
+                            .replace("_encrypted", "")
+                            .replace("Encrypted", "");
+
+                          // Cari data asli jika ini field encrypted
+                          let originalValue = null;
+                          if (isEncrypted) {
+                            originalValue =
+                              employee._rawKaryawan[originalKey] ||
+                              "Tidak ada data asli";
+                          }
+
+                          return (
+                            <tr
+                              key={key}
+                              className={isEncrypted ? "bg-blue-50" : ""}
+                            >
+                              <td className="border px-2 py-1 font-mono text-xs font-medium">
+                                {key}
+                                {isEncrypted && (
+                                  <span className="ml-1 text-xs text-blue-600">
+                                    (encrypted)
+                                  </span>
+                                )}
+                              </td>
+                              <td className="border px-2 py-1 font-mono text-xs">
+                                {isEncrypted ? (
+                                  <span className="text-green-600">
+                                    {originalValue}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-600">
+                                    {value === null || value === undefined
+                                      ? "-"
+                                      : String(value)}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="border px-2 py-1 font-mono text-xs">
+                                {isEncrypted ? (
+                                  <span className="text-red-600 font-bold">
+                                    {value === null || value === undefined
+                                      ? "-"
+                                      : String(value)}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400">-</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        }
                       )}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Legend */}
+              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                <h4 className="text-sm font-medium mb-2">Keterangan:</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-blue-50 border border-blue-200 rounded mr-2"></div>
+                    <span>Field terenkripsi</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-green-50 border border-green-200 rounded mr-2"></div>
+                    <span className="text-green-600">Data asli</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-red-50 border border-red-200 rounded mr-2"></div>
+                    <span className="text-red-600">Data terenkripsi</span>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

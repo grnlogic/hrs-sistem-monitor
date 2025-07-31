@@ -121,7 +121,10 @@ export default function EditEmployeePage() {
 
       // Set current foto URL if exists
       if (karyawan.fotoProfil) {
-        setCurrentFotoUrl(employeeAPI.getFotoUrl(employeeId));
+        const fotoUrl = employeeAPI.getFotoUrl(karyawan.id.toString());
+        setCurrentFotoUrl(fotoUrl);
+        // Set preview URL juga untuk menampilkan foto yang sudah ada
+        setPreviewUrl(fotoUrl);
       }
     } catch (err) {
       setError("Gagal memuat data karyawan");
@@ -287,11 +290,15 @@ export default function EditEmployeePage() {
     };
 
     try {
-      await employeeAPI.update(employeeId, updateData);
+      await employeeAPI.update(employeeData.id.toString(), updateData);
 
+      // Upload foto hanya jika ada file baru yang dipilih
       if (selectedFile) {
         try {
-          await employeeAPI.uploadFoto(employeeId, selectedFile);
+          await employeeAPI.uploadFoto(
+            employeeData.id.toString(),
+            selectedFile
+          );
           setSuccess("Data karyawan berhasil diperbarui dengan foto!");
         } catch (uploadError) {
           setSuccess(
@@ -300,11 +307,12 @@ export default function EditEmployeePage() {
           console.error("Upload foto error:", uploadError);
         }
       } else {
+        // Jika tidak ada file baru, foto lama tetap dipertahankan
         setSuccess("Data karyawan berhasil diperbarui!");
       }
 
       setTimeout(() => {
-        router.push(`/dashboard/employees/${employeeId}`);
+        router.push(`/dashboard/employees/${employeeData.id}`);
       }, 2000);
     } catch (err) {
       setError("Gagal memperbarui data karyawan. Silakan coba lagi.");
