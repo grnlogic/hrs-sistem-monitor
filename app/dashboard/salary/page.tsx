@@ -45,6 +45,8 @@ export default function SalaryPage() {
               grouped[id] = { ...item };
             } else {
               grouped[id].totalHariMasuk += item.totalHariMasuk || 0;
+              grouped[id].totalHariSetengahHari +=
+                item.totalHariSetengahHari || 0;
               grouped[id].bonus += item.bonus || 0;
               // Gaji pokok TIDAK dijumlahkan - gunakan nilai dari record pertama
               // grouped[id].gajiPokok += item.gajiPokok || 0;
@@ -207,7 +209,9 @@ export default function SalaryPage() {
           <p className="text-sm text-blue-800">
             <strong>Info:</strong> Tab STAFF menampilkan data gaji khusus untuk
             karyawan dengan departemen yang mengandung kata "STAFF". Perhitungan
-            gaji untuk STAFF mungkin berbeda dengan karyawan lainnya.
+            gaji untuk STAFF mungkin berbeda dengan karyawan lainnya. Kolom
+            "Setengah Hari" menampilkan jumlah hari karyawan masuk setengah hari
+            (hanya dihitung setengah gaji).
           </p>
         </div>
       )}
@@ -298,6 +302,7 @@ export default function SalaryPage() {
                 <TableHead>Total Potongan</TableHead>
                 <TableHead>Total Gaji Bersih</TableHead>
                 <TableHead>Total Absensi</TableHead>
+                <TableHead>Setengah Hari</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -305,7 +310,7 @@ export default function SalaryPage() {
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center">
+                    <TableCell colSpan={12} className="text-center">
                       Tidak ada data
                     </TableCell>
                   </TableRow>
@@ -337,6 +342,15 @@ export default function SalaryPage() {
                         {formatCurrency(gaji.totalGajiBersih || 0)}
                       </TableCell>
                       <TableCell>{gaji.totalHariMasuk || 0}</TableCell>
+                      <TableCell>
+                        {gaji.totalHariSetengahHari ? (
+                          <Badge variant="secondary" className="text-xs">
+                            {gaji.totalHariSetengahHari} hari
+                          </Badge>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <select
                           value={gaji.statusPembayaran || "Belum Dibayar"}
@@ -383,6 +397,10 @@ export default function SalaryPage() {
                       (sum, g) => sum + (g.gajiPokok || 0),
                       0
                     );
+                    const totalSetengahHari = gajis.reduce(
+                      (sum, g) => sum + (g.totalHariSetengahHari || 0),
+                      0
+                    );
                     return (
                       <TableRow key={bulan}>
                         <TableCell colSpan={3}>-</TableCell>
@@ -391,6 +409,16 @@ export default function SalaryPage() {
                         <TableCell>{formatCurrency(totalBonus)}</TableCell>
                         <TableCell>{formatCurrency(totalGaji)}</TableCell>
                         <TableCell>-</TableCell>
+                        <TableCell>
+                          {totalSetengahHari > 0 ? (
+                            <Badge variant="secondary" className="text-xs">
+                              {totalSetengahHari} hari
+                            </Badge>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>-</TableCell>
                       </TableRow>
                     );
                   });
@@ -398,7 +426,7 @@ export default function SalaryPage() {
                     rows
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-center">
+                      <TableCell colSpan={12} className="text-center">
                         Tidak ada data
                       </TableCell>
                     </TableRow>

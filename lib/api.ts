@@ -526,3 +526,81 @@ export const addViolation = async (data: any) => {
     body: JSON.stringify(data),
   })
 }
+
+// Public Karyawan API
+export const publicKaryawanAPI = {
+  getAll: async () => {
+    return apiRequest("/public/karyawan")
+  },
+
+  getById: async (id: string) => {
+    return apiRequest(`/public/karyawan/${id}`)
+  },
+}
+
+// Public Absensi API
+export const publicAbsensiAPI = {
+  updateStatus: async (karyawanId: number, hadir: boolean, status: string, setengahHari: boolean = false) => {
+    const data = {
+      karyawanId,
+      tanggal: new Date().toISOString().split('T')[0], // Today's date
+      hadir,
+      status,
+      setengahHari
+    }
+    
+    try {
+      const response = await apiRequest("/absensi/json", {
+        method: "POST",
+        body: JSON.stringify(data),
+      })
+      return { success: true, data: response }
+    } catch (error) {
+      console.error("Error updating attendance:", error)
+      return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+    }
+  },
+
+  updateStatusWithDate: async (karyawanId: number, tanggal: string, hadir: boolean, status: string, setengahHari: boolean = false) => {
+    const data = {
+      karyawanId,
+      tanggal,
+      hadir,
+      status,
+      setengahHari
+    }
+    
+    try {
+      const response = await apiRequest("/absensi/json", {
+        method: "POST",
+        body: JSON.stringify(data),
+      })
+      return { success: true, data: response }
+    } catch (error) {
+      console.error("Error updating attendance:", error)
+      return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+    }
+  },
+
+  getByKaryawanAndTanggal: async (karyawanId: number, tanggal: string) => {
+    try {
+      const response = await apiRequest(`/absensi/karyawan/${karyawanId}/tanggal/${tanggal}`)
+      return { success: true, data: response }
+    } catch (error) {
+      console.error("Error getting attendance:", error)
+      return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+    }
+  },
+
+  updateSetengahHari: async (absensiId: number, setengahHari: boolean) => {
+    try {
+      const response = await apiRequest(`/absensi/${absensiId}/setengah-hari?setengahHari=${setengahHari}`, {
+        method: "POST",
+      })
+      return { success: true, data: response }
+    } catch (error) {
+      console.error("Error updating setengah hari:", error)
+      return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+    }
+  },
+}

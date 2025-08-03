@@ -26,10 +26,15 @@ export function downloadSalaryPDF(salaryData: any[]): void {
   // Buat URL untuk blob
   const url = URL.createObjectURL(blob);
   
+  // Generate nama file yang lebih deskriptif
+  const today = new Date().toISOString().split('T')[0];
+  const employeeCount = salaryData.length;
+  const fileName = `slip-gaji-${employeeCount}-karyawan-${today}.html`;
+  
   // Buat link untuk download
   const link = document.createElement('a');
   link.href = url;
-  link.download = `slip-gaji-${new Date().toISOString().split('T')[0]}.html`;
+  link.download = fileName;
   
   // Trigger download
   document.body.appendChild(link);
@@ -51,10 +56,14 @@ export function printSalaryPDF(salaryData: any[]): void {
     printWindow.document.write(html);
     printWindow.document.close();
     
+    // Set title untuk window print
+    printWindow.document.title = `Slip Gaji ${salaryData.length} Karyawan - ${new Date().toLocaleDateString('id-ID')}`;
+    
     // Tunggu sebentar agar konten ter-load
     setTimeout(() => {
       printWindow.print();
-      printWindow.close();
-    }, 500);
+      // Jangan langsung close, biarkan user memilih
+      // printWindow.close();
+    }, 1000);
   }
 }
