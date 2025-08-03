@@ -315,6 +315,23 @@ export const salaryAPI = {
     return apiRequest(`/gaji/department?departemen=${encodeURIComponent(departemen)}`)
   },
 
+  // Get gaji berdasarkan filter tanggal
+  getGajiByDateRange: async (tanggalMulai: string, tanggalAkhir: string, karyawanId?: string, departemen?: string) => {
+    const params = new URLSearchParams()
+    params.append('tanggalMulai', tanggalMulai)
+    params.append('tanggalAkhir', tanggalAkhir)
+    
+    if (karyawanId) {
+      params.append('karyawanId', karyawanId)
+    }
+    
+    if (departemen) {
+      params.append('departemen', departemen)
+    }
+    
+    return apiRequest(`/gaji/filter?${params.toString()}`)
+  },
+
   updateStatusPembayaran: async (data: { gajiId: string, statusPembayaran: string }) => {
     return apiRequest(`/gaji/status?gajiId=${data.gajiId}&statusPembayaran=${data.statusPembayaran}`, {
       method: "PUT",

@@ -25,6 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/overlay/dropdown-menu";
 import {
   Avatar,
@@ -37,6 +38,7 @@ import {
   MoreHorizontal,
   Eye,
   Edit,
+  Trash2,
   Users,
   UserCheck,
   UserX,
@@ -49,6 +51,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/form/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/overlay/alert-dialog";
 import { employeeAPI } from "@/lib/api";
 import type { Employee } from "@/lib/types";
 import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
@@ -62,10 +74,33 @@ export default function EmployeesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [avatarUrls, setAvatarUrls] = useState<{ [key: string]: string }>({});
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(
+    null
+  );
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchEmployees();
   }, []);
+
+  const handleDeleteEmployee = async (employee: Employee) => {
+    setIsDeleting(true);
+    try {
+      await employeeAPI.delete(employee.id.toString());
+      setEmployees((prev) => prev.filter((emp) => emp.id !== employee.id));
+      setFilteredEmployees((prev) =>
+        prev.filter((emp) => emp.id !== employee.id)
+      );
+      setEmployeeToDelete(null);
+      setDeleteDialogOpen(false);
+    } catch (err) {
+      setError("Gagal menghapus karyawan");
+      console.error("Error deleting employee:", err);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   useEffect(() => {
     filterEmployees();
@@ -411,6 +446,17 @@ export default function EmployeesPage() {
                               Edit Karyawan
                             </a>
                           </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setEmployeeToDelete(employee);
+                              setDeleteDialogOpen(true);
+                            }}
+                            className="text-red-600"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Hapus Karyawan
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -429,6 +475,41 @@ export default function EmployeesPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus Karyawan</AlertDialogTitle>
+            <AlertDialogDescription>
+              Apakah Anda yakin ingin menghapus karyawan{" "}
+              <span className="font-semibold">{employeeToDelete?.name}</span>?
+              Aksi ini tidak dapat dibatalkan. Data karyawan akan dihapus secara
+              permanen.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setEmployeeToDelete(null);
+                setDeleteDialogOpen(false);
+              }}
+            >
+              Batal
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (employeeToDelete) {
+                  handleDeleteEmployee(employeeToDelete);
+                }
+              }}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? "Menghapus..." : "Hapus"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -240,8 +240,8 @@ export function generateSalarySlipHTML(salaryData: any[]): string {
                     <span class="value">${gaji.karyawan?.namaLengkap || '-'}</span>
                 </div>
                 <div class="info-row">
-                    <span class="label">NIK:</span>
-                    <span class="value">${gaji.karyawan?.nik || '-'}</span>
+                    <span class="label">ID Karyawan:</span>
+                    <span class="value">${gaji.karyawan?.id || '-'}</span>
                 </div>
                 <div class="info-row">
                     <span class="label">Dept:</span>

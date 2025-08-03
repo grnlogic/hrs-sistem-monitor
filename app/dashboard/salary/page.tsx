@@ -26,59 +26,82 @@ export default function SalaryPage() {
   const [error, setError] = useState("");
   const [period, setPeriod] = useState("all");
   const [status, setStatus] = useState("all");
-  const [viewMode, setViewMode] = useState<"minggu" | "bulan">("minggu");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [exporting, setExporting] = useState(false);
   const [activeTab, setActiveTab] = useState<"all" | "staff">("all");
 
+  // Set default date range (current month)
   useEffect(() => {
-    setLoading(true);
-    import("@/lib/api").then(({ getAllSalaries }) => {
-      getAllSalaries()
-        .then((res) => {
-          // Gabungkan data per karyawan
-          const grouped: { [karyawanId: string]: any } = {};
-          res.forEach((item: any) => {
-            const id = item.karyawan?.id;
-            if (!grouped[id]) {
-              grouped[id] = { ...item };
-            } else {
-              grouped[id].totalHariMasuk += item.totalHariMasuk || 0;
-              grouped[id].totalHariSetengahHari +=
-                item.totalHariSetengahHari || 0;
-              grouped[id].bonus += item.bonus || 0;
-              // Gaji pokok TIDAK dijumlahkan - gunakan nilai dari record pertama
-              // grouped[id].gajiPokok += item.gajiPokok || 0;
-              grouped[id].totalGaji += item.totalGaji || 0;
-              grouped[id].potongan += item.potongan || 0;
-              grouped[id].pajakPph21 += item.pajakPph21 || 0;
-              grouped[id].potonganKeterlambatan +=
-                item.potonganKeterlambatan || 0;
-              grouped[id].potonganPinjaman += item.potonganPinjaman || 0;
-              grouped[id].potonganSumbangan += item.potonganSumbangan || 0;
-              grouped[id].potonganBpjs += item.potonganBpjs || 0;
-              grouped[id].potonganUndangan += item.potonganUndangan || 0;
-              grouped[id].totalGajiBersih += item.totalGajiBersih || 0;
-              // Status pembayaran: prioritas Belum Dibayar > Pending > Dibayar
-              const statusOrder = ["Belum Dibayar", "Pending", "Dibayar"];
-              const currStatus = grouped[id].statusPembayaran || "";
-              const newStatus = item.statusPembayaran || "";
-              if (
-                statusOrder.indexOf(newStatus) < statusOrder.indexOf(currStatus)
-              ) {
-                grouped[id].statusPembayaran = newStatus;
-              }
-            }
-          });
-          const merged = Object.values(grouped);
-          console.log("Data gaji semua karyawan (merged):", merged);
-          setData(merged);
-        })
-        .catch(() => setError("Gagal memuat data gaji"))
-        .finally(() => setLoading(false));
-    });
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    
+    setStartDate(firstDay.toISOString().split('T')[0]);
+    setEndDate(lastDay.toISOString().split('T')[0]);
   }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      let result;
+      if (startDate && endDate) {
+        result = await salaryAPI.getGajiByDateRange(startDate, endDate);
+      } else {
+        const { getAllSalaries } = await import("@/lib/api");
+        result = await getAllSalaries();
+      }
+      
+      // Gabungkan data per karyawan
+      const grouped: { [karyawanId: string]: any } = {};
+      result.forEach((item: any) => {
+        const id = item.karyawan?.id;
+        if (!grouped[id]) {
+          grouped[id] = { ...item };
+        } else {
+          grouped[id].totalHariMasuk += item.totalHariMasuk || 0;
+          grouped[id].totalHariSetengahHari +=
+            item.totalHariSetengahHari || 0;
+          grouped[id].bonus += item.bonus || 0;
+          grouped[id].totalGaji += item.totalGaji || 0;
+          grouped[id].potongan += item.potongan || 0;
+          grouped[id].pajakPph21 += item.pajakPph21 || 0;
+          grouped[id].potonganKeterlambatan +=
+            item.potonganKeterlambatan || 0;
+          grouped[id].potonganPinjaman += item.potonganPinjaman || 0;
+          grouped[id].potonganSumbangan += item.potonganSumbangan || 0;
+          grouped[id].potonganBpjs += item.potonganBpjs || 0;
+          grouped[id].potonganUndangan += item.potonganUndangan || 0;
+          grouped[id].totalGajiBersih += item.totalGajiBersih || 0;
+          // Status pembayaran: prioritas Belum Dibayar > Pending > Dibayar
+          const statusOrder = ["Belum Dibayar", "Pending", "Dibayar"];
+          const currStatus = grouped[id].statusPembayaran || "";
+          const newStatus = item.statusPembayaran || "";
+          if (
+            statusOrder.indexOf(newStatus) < statusOrder.indexOf(currStatus)
+          ) {
+            grouped[id].statusPembayaran = newStatus;
+          }
+        }
+      });
+      const merged = Object.values(grouped);
+      console.log("Data gaji (filtered by date):", merged);
+      setData(merged);
+    } catch (error) {
+      setError("Gagal memuat data gaji");
+      console.error("Error loading salary data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (startDate && endDate) {
+      loadData();
+    }
+  }, [startDate, endDate]);
 
   const handleStatusChange = async (gajiId: string, newStatus: string) => {
     setUpdatingStatus(gajiId);
@@ -88,9 +111,7 @@ export default function SalaryPage() {
         statusPembayaran: newStatus,
       });
       // Refresh data setelah update
-      const { getAllSalaries } = await import("@/lib/api");
-      const updatedData = await getAllSalaries();
-      setData(updatedData);
+      await loadData();
     } catch (error) {
       console.error("Gagal mengupdate status:", error);
     } finally {
@@ -139,7 +160,7 @@ export default function SalaryPage() {
     }
   };
 
-  // Filter data berdasarkan tab aktif
+  // Filter data berdasarkan tab aktif dan status
   const getFilteredData = () => {
     let filteredData = data;
 
@@ -150,18 +171,12 @@ export default function SalaryPage() {
       );
     }
 
-    // Filter berdasarkan periode dan status
+    // Filter berdasarkan status
     return filteredData.filter((item) => {
-      let match = true;
-      if (period !== "all") {
-        match = match && item.periodeAwal?.slice(0, 7) === period;
-      }
       if (status !== "all") {
-        match =
-          match &&
-          (item.statusPembayaran || "").toLowerCase() === status.toLowerCase();
+        return (item.statusPembayaran || "").toLowerCase() === status.toLowerCase();
       }
-      return match;
+      return true;
     });
   };
 
@@ -215,21 +230,25 @@ export default function SalaryPage() {
           </p>
         </div>
       )}
-      <div className="flex gap-2 mb-4 items-center">
-        <select
-          value={period}
-          onChange={(e) => setPeriod(e.target.value)}
-          className="border rounded px-2 py-1"
-        >
-          <option value="all">Semua Periode</option>
-          {Array.from(new Set(data.map((d) => d.periodeAwal?.slice(0, 7)))).map(
-            (p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            )
-          )}
-        </select>
+      <div className="flex gap-2 mb-4 items-center flex-wrap">
+        <div className="flex gap-2 items-center">
+          <label className="text-sm font-medium">Tanggal Mulai:</label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="border rounded px-2 py-1"
+          />
+        </div>
+        <div className="flex gap-2 items-center">
+          <label className="text-sm font-medium">Tanggal Akhir:</label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="border rounded px-2 py-1"
+          />
+        </div>
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
@@ -238,14 +257,6 @@ export default function SalaryPage() {
           <option value="all">Semua Status</option>
           <option value="dibayar">Dibayar</option>
           <option value="pending">Pending</option>
-        </select>
-        <select
-          value={viewMode}
-          onChange={(e) => setViewMode(e.target.value as "minggu" | "bulan")}
-          className="border rounded px-2 py-1"
-        >
-          <option value="minggu">Per Minggu</option>
-          <option value="bulan">Per Bulan</option>
         </select>
         <Button asChild>
           <a href="/dashboard/salary/process">Proses Gaji</a>
@@ -306,134 +317,73 @@ export default function SalaryPage() {
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
-            {viewMode === "minggu" ? (
-              <TableBody>
-                {filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={12} className="text-center">
-                      Tidak ada data
+            <TableBody>
+              {filtered.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={12} className="text-center">
+                    Tidak ada data
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filtered.map((gaji) => (
+                  <TableRow key={gaji.id}>
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        checked={selectedItems.includes(gaji.id)}
+                        onChange={() => handleSelectItem(gaji.id)}
+                        className="w-4 h-4"
+                      />
+                    </TableCell>
+                    <TableCell>{gaji.karyawan?.namaLengkap}</TableCell>
+                    <TableCell>{gaji.karyawan?.nik}</TableCell>
+                    <TableCell>{gaji.karyawan?.departemen || "-"}</TableCell>
+                    <TableCell>
+                      {gaji.periodeAwal} - {gaji.periodeAkhir}
+                    </TableCell>
+                    <TableCell>
+                      {formatCurrency(gaji.gajiPokok || 0)}
+                    </TableCell>
+                    <TableCell>{formatCurrency(gaji.bonus || 0)}</TableCell>
+                    <TableCell>
+                      {formatCurrency(gaji.potongan || 0)}
+                    </TableCell>
+                    <TableCell>
+                      {formatCurrency(gaji.totalGajiBersih || 0)}
+                    </TableCell>
+                    <TableCell>{gaji.totalHariMasuk || 0}</TableCell>
+                    <TableCell>
+                      {gaji.totalHariSetengahHari ? (
+                        <Badge variant="secondary" className="text-xs">
+                          {gaji.totalHariSetengahHari} hari
+                        </Badge>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <select
+                        value={gaji.statusPembayaran || "Belum Dibayar"}
+                        onChange={(e) =>
+                          handleStatusChange(gaji.id, e.target.value)
+                        }
+                        disabled={updatingStatus === gaji.id}
+                        className="border rounded px-2 py-1 text-sm"
+                      >
+                        <option value="Belum Dibayar">Belum Dibayar</option>
+                        <option value="Dibayar">Dibayar</option>
+                        <option value="Pending">Pending</option>
+                      </select>
+                      {updatingStatus === gaji.id && (
+                        <span className="text-xs text-gray-500 ml-1">
+                          Updating...
+                        </span>
+                      )}
                     </TableCell>
                   </TableRow>
-                ) : (
-                  filtered.map((gaji) => (
-                    <TableRow key={gaji.id}>
-                      <TableCell>
-                        <input
-                          type="checkbox"
-                          checked={selectedItems.includes(gaji.id)}
-                          onChange={() => handleSelectItem(gaji.id)}
-                          className="w-4 h-4"
-                        />
-                      </TableCell>
-                      <TableCell>{gaji.karyawan?.namaLengkap}</TableCell>
-                      <TableCell>{gaji.karyawan?.nik}</TableCell>
-                      <TableCell>{gaji.karyawan?.departemen || "-"}</TableCell>
-                      <TableCell>
-                        {gaji.periodeAwal} - {gaji.periodeAkhir}
-                      </TableCell>
-                      <TableCell>
-                        {formatCurrency(gaji.gajiPokok || 0)}
-                      </TableCell>
-                      <TableCell>{formatCurrency(gaji.bonus || 0)}</TableCell>
-                      <TableCell>
-                        {formatCurrency(gaji.potongan || 0)}
-                      </TableCell>
-                      <TableCell>
-                        {formatCurrency(gaji.totalGajiBersih || 0)}
-                      </TableCell>
-                      <TableCell>{gaji.totalHariMasuk || 0}</TableCell>
-                      <TableCell>
-                        {gaji.totalHariSetengahHari ? (
-                          <Badge variant="secondary" className="text-xs">
-                            {gaji.totalHariSetengahHari} hari
-                          </Badge>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <select
-                          value={gaji.statusPembayaran || "Belum Dibayar"}
-                          onChange={(e) =>
-                            handleStatusChange(gaji.id, e.target.value)
-                          }
-                          disabled={updatingStatus === gaji.id}
-                          className="border rounded px-2 py-1 text-sm"
-                        >
-                          <option value="Belum Dibayar">Belum Dibayar</option>
-                          <option value="Dibayar">Dibayar</option>
-                          <option value="Pending">Pending</option>
-                        </select>
-                        {updatingStatus === gaji.id && (
-                          <span className="text-xs text-gray-500 ml-1">
-                            Updating...
-                          </span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            ) : (
-              <TableBody>
-                {(() => {
-                  // Group by bulan
-                  const grouped: { [bulan: string]: any[] } = {};
-                  filtered.forEach((gaji) => {
-                    const bulan = gaji.periodeAwal?.slice(0, 7) || "-";
-                    if (!grouped[bulan]) grouped[bulan] = [];
-                    grouped[bulan].push(gaji);
-                  });
-                  const rows = Object.entries(grouped).map(([bulan, gajis]) => {
-                    const totalGaji = gajis.reduce(
-                      (sum, g) => sum + (g.totalGaji || 0),
-                      0
-                    );
-                    const totalBonus = gajis.reduce(
-                      (sum, g) => sum + (g.bonus || 0),
-                      0
-                    );
-                    const totalPokok = gajis.reduce(
-                      (sum, g) => sum + (g.gajiPokok || 0),
-                      0
-                    );
-                    const totalSetengahHari = gajis.reduce(
-                      (sum, g) => sum + (g.totalHariSetengahHari || 0),
-                      0
-                    );
-                    return (
-                      <TableRow key={bulan}>
-                        <TableCell colSpan={3}>-</TableCell>
-                        <TableCell>{bulan}</TableCell>
-                        <TableCell>{formatCurrency(totalPokok)}</TableCell>
-                        <TableCell>{formatCurrency(totalBonus)}</TableCell>
-                        <TableCell>{formatCurrency(totalGaji)}</TableCell>
-                        <TableCell>-</TableCell>
-                        <TableCell>
-                          {totalSetengahHari > 0 ? (
-                            <Badge variant="secondary" className="text-xs">
-                              {totalSetengahHari} hari
-                            </Badge>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>-</TableCell>
-                      </TableRow>
-                    );
-                  });
-                  return rows.length > 0 ? (
-                    rows
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={12} className="text-center">
-                        Tidak ada data
-                      </TableCell>
-                    </TableRow>
-                  );
-                })()}
-              </TableBody>
-            )}
+                ))
+              )}
+            </TableBody>
           </Table>
         </div>
       )}
