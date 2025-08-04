@@ -43,6 +43,9 @@ import {
   UserCheck,
   UserX,
   Building,
+  Download,
+  FileText,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   Select,
@@ -61,6 +64,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/overlay/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/overlay/dialog";
+import { Checkbox } from "@/components/ui/form/checkbox";
 import { employeeAPI } from "@/lib/api";
 import type { Employee } from "@/lib/types";
 import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
@@ -79,6 +92,18 @@ export default function EmployeesPage() {
     null
   );
   const [isDeleting, setIsDeleting] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [selectedFields, setSelectedFields] = useState<string[]>([
+    "name",
+    "nip",
+    "department",
+    "position",
+    "status",
+    "joinDate",
+    "email",
+  ]);
+  const [exportFormat, setExportFormat] = useState<"pdf" | "excel">("pdf");
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     fetchEmployees();
@@ -223,6 +248,206 @@ export default function EmployeesPage() {
     }
   };
 
+  // Fungsi untuk export ke PDF
+  const exportToPDF = async () => {
+    try {
+      const jsPDF = (await import("jspdf")).default;
+      const autoTable = (await import("jspdf-autotable")).default;
+
+      const doc = new jsPDF();
+
+      // Header
+      doc.setFontSize(16);
+      doc.text("Data Karyawan", 14, 15);
+      doc.setFontSize(10);
+      doc.text(`Diekspor pada: ${new Date().toLocaleDateString("id-ID")}`, 14, 25);
+
+      // Mapping field names
+      const fieldMapping: { [key: string]: string } = {
+        name: "Nama",
+        nip: "NIK",
+        department: "Departemen",
+        position: "Posisi",
+        status: "Status",
+        joinDate: "Tanggal Masuk",
+        email: "Email",
+        emergencyContactName: "Kontak Darurat",
+        emergencyContactPhone: "No. Telepon Darurat",
+      };
+
+      // Prepare headers
+      const headers = selectedFields.map(field => fieldMapping[field] || field);
+
+      // Prepare data
+      const data = filteredEmployees.map(employee => {
+        return selectedFields.map(field => {
+          switch (field) {
+            case "name":
+              return employee.name;
+            case "nip":
+              return employee.nip;
+            case "department":
+              return employee.department;
+            case "position":
+              return employee.position;
+            case "status":
+              return employee.status;
+            case "joinDate":
+              return employee.joinDate 
+                ? new Date(employee.joinDate).toLocaleDateString("id-ID")
+                : "-";
+            case "email":
+              return employee.email;
+            case "emergencyContactName":
+              return employee.emergencyContact?.name || "-";
+            case "emergencyContactPhone":
+              return employee.emergencyContact?.phone || "-";
+            default:
+              return "-";
+          }
+        });
+      });
+
+      // Generate table
+      autoTable(doc, {
+        head: [headers],
+        body: data,
+        startY: 35,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [41, 128, 185] },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+      });
+
+      // Save file
+      doc.save(`data-karyawan-${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (error) {
+      console.error("Error exporting to PDF:", error);
+      setError("Gagal mengekspor ke PDF");
+    }
+  };
+
+  // Fungsi untuk export ke Excel
+  const exportToExcel = async () => {
+    try {
+      const XLSX = await import("xlsx");
+
+      // Mapping field names
+      const fieldMapping: { [key: string]: string } = {
+        name: "Nama",
+        nip: "NIK", 
+        department: "Departemen",
+        position: "Posisi",
+        status: "Status",
+        joinDate: "Tanggal Masuk",
+        email: "Email",
+        emergencyContactName: "Kontak Darurat",
+        emergencyContactPhone: "No. Telepon Darurat",
+      };
+
+      // Prepare data for Excel
+      const data = filteredEmployees.map(employee => {
+        const row: { [key: string]: any } = {};
+        
+        selectedFields.forEach(field => {
+          const header = fieldMapping[field] || field;
+          switch (field) {
+            case "name":
+              row[header] = employee.name;
+              break;
+            case "nip":
+              row[header] = employee.nip;
+              break;
+            case "department":
+              row[header] = employee.department;
+              break;
+            case "position":
+              row[header] = employee.position;
+              break;
+            case "status":
+              row[header] = employee.status;
+              break;
+            case "joinDate":
+              row[header] = employee.joinDate 
+                ? new Date(employee.joinDate).toLocaleDateString("id-ID")
+                : "-";
+              break;
+            case "email":
+              row[header] = employee.email;
+              break;
+            case "emergencyContactName":
+              row[header] = employee.emergencyContact?.name || "-";
+              break;
+            case "emergencyContactPhone":
+              row[header] = employee.emergencyContact?.phone || "-";
+              break;
+            default:
+              row[header] = "-";
+          }
+        });
+        
+        return row;
+      });
+
+      // Create workbook and worksheet
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.json_to_sheet(data);
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Data Karyawan");
+
+      // Save file
+      XLSX.writeFile(workbook, `data-karyawan-${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      setError("Gagal mengekspor ke Excel");
+    }
+  };
+
+  // Handle export
+  const handleExport = async () => {
+    if (selectedFields.length === 0) {
+      setError("Pilih minimal satu field untuk diekspor");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      if (exportFormat === "pdf") {
+        await exportToPDF();
+      } else {
+        await exportToExcel();
+      }
+      setExportDialogOpen(false);
+    } catch (error) {
+      console.error("Export error:", error);
+      setError("Gagal mengekspor data");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Handle field selection
+  const handleFieldToggle = (field: string) => {
+    setSelectedFields(prev => 
+      prev.includes(field) 
+        ? prev.filter(f => f !== field)
+        : [...prev, field]
+    );
+  };
+
+  // Available fields for export
+  const availableFields = [
+    { key: "name", label: "Nama Lengkap" },
+    { key: "nip", label: "NIK" },
+    { key: "department", label: "Departemen" },
+    { key: "position", label: "Posisi/Jabatan" },
+    { key: "status", label: "Status Karyawan" },
+    { key: "joinDate", label: "Tanggal Masuk" },
+    { key: "email", label: "Email" },
+    { key: "emergencyContactName", label: "Nama Kontak Darurat" },
+    { key: "emergencyContactPhone", label: "No. Telepon Darurat" },
+  ];
+
   const employeeStats = {
     total: employees.length,
     active: employees.filter((emp) => emp.status === "Aktif").length,
@@ -252,12 +477,115 @@ export default function EmployeesPage() {
             Kelola data dan informasi karyawan
           </p>
         </div>
-        <Button asChild>
-          <a href="/dashboard/employees/new">
-            <Plus className="h-4 w-4 mr-2" />
-            Tambah Karyawan
-          </a>
-        </Button>
+        <div className="flex gap-2">
+          <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Download className="h-4 w-4 mr-2" />
+                Export Data
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Export Data Karyawan</DialogTitle>
+                <DialogDescription>
+                  Pilih data yang ingin diekspor dan format file yang diinginkan.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-6">
+                {/* Format Selection */}
+                <div>
+                  <label className="text-sm font-medium mb-3 block">Format Export</label>
+                  <div className="flex gap-4">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        id="pdf"
+                        name="format"
+                        value="pdf"
+                        checked={exportFormat === "pdf"}
+                        onChange={(e) => setExportFormat(e.target.value as "pdf" | "excel")}
+                        className="h-4 w-4"
+                      />
+                      <label htmlFor="pdf" className="flex items-center text-sm">
+                        <FileText className="h-4 w-4 mr-1" />
+                        PDF
+                      </label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        id="excel"
+                        name="format"
+                        value="excel"
+                        checked={exportFormat === "excel"}
+                        onChange={(e) => setExportFormat(e.target.value as "pdf" | "excel")}
+                        className="h-4 w-4"
+                      />
+                      <label htmlFor="excel" className="flex items-center text-sm">
+                        <FileSpreadsheet className="h-4 w-4 mr-1" />
+                        Excel
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Field Selection */}
+                <div>
+                  <label className="text-sm font-medium mb-3 block">Data yang Diekspor</label>
+                  <div className="space-y-2 max-h-60 overflow-y-auto border rounded-md p-3">
+                    {availableFields.map((field) => (
+                      <div key={field.key} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={field.key}
+                          checked={selectedFields.includes(field.key)}
+                          onCheckedChange={() => handleFieldToggle(field.key)}
+                        />
+                        <label htmlFor={field.key} className="text-sm">
+                          {field.label}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {selectedFields.length} dari {availableFields.length} field dipilih
+                  </p>
+                </div>
+
+                {/* Info */}
+                <div className="bg-blue-50 p-3 rounded-md">
+                  <p className="text-sm text-blue-800">
+                    <strong>Info:</strong> Data akan diekspor berdasarkan filter yang sedang aktif. 
+                    Saat ini akan mengekspor {filteredEmployees.length} dari {employees.length} karyawan.
+                  </p>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setExportDialogOpen(false)}
+                  disabled={isExporting}
+                >
+                  Batal
+                </Button>
+                <Button 
+                  onClick={handleExport} 
+                  disabled={isExporting || selectedFields.length === 0}
+                >
+                  {isExporting ? "Mengekspor..." : `Export ${exportFormat.toUpperCase()}`}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Button asChild>
+            <a href="/dashboard/employees/new">
+              <Plus className="h-4 w-4 mr-2" />
+              Tambah Karyawan
+            </a>
+          </Button>
+        </div>
       </div>
 
       {error && (

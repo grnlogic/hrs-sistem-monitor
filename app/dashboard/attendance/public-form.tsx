@@ -6,8 +6,8 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/form/label";
+import { Button } from "@/components/ui/form/button";
 import { publicKaryawanAPI, publicAbsensiAPI } from "@/lib/api";
 
 const statusOptions = ["HADIR", "SAKIT", "IZIN", "ALPA"];

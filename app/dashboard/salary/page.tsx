@@ -35,7 +35,9 @@ export default function SalaryPage() {
   const [showBonusModal, setShowBonusModal] = useState(false);
   const [bonusType, setBonusType] = useState<"equal" | "different">("equal");
   const [equalBonus, setEqualBonus] = useState("");
-  const [differentBonuses, setDifferentBonuses] = useState<{[key: string]: string}>({});
+  const [differentBonuses, setDifferentBonuses] = useState<{
+    [key: string]: string;
+  }>({});
   const [bonusLoading, setBonusLoading] = useState(false);
   const [bonusMsg, setBonusMsg] = useState("");
 
@@ -180,31 +182,33 @@ export default function SalaryPage() {
         for (const gajiId of selectedItems) {
           await salaryAPI.addBonus({
             gajiId,
-            bonus: Number(equalBonus)
+            bonus: Number(equalBonus),
           });
         }
-        setBonusMsg(`Bonus berhasil ditambahkan untuk ${selectedItems.length} karyawan!`);
+        setBonusMsg(
+          `Bonus berhasil ditambahkan untuk ${selectedItems.length} karyawan!`
+        );
       } else {
         // Bonus berbeda untuk setiap karyawan
         for (const [gajiId, bonus] of Object.entries(differentBonuses)) {
           if (selectedItems.includes(gajiId) && bonus) {
             await salaryAPI.addBonus({
               gajiId,
-              bonus: Number(bonus)
+              bonus: Number(bonus),
             });
           }
         }
         setBonusMsg(`Bonus berhasil ditambahkan untuk karyawan yang dipilih!`);
       }
-      
+
       // Refresh data
       await loadData();
-      
+
       // Reset form
       setEqualBonus("");
       setDifferentBonuses({});
       setSelectedItems([]);
-      
+
       setTimeout(() => {
         setShowBonusModal(false);
         setBonusMsg("");
@@ -218,9 +222,9 @@ export default function SalaryPage() {
   };
 
   const updateDifferentBonus = (gajiId: string, bonus: string) => {
-    setDifferentBonuses(prev => ({
+    setDifferentBonuses((prev) => ({
       ...prev,
-      [gajiId]: bonus
+      [gajiId]: bonus,
     }));
   };
 
@@ -466,7 +470,7 @@ export default function SalaryPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4">Input Bonus Individual</h2>
-            
+
             <div className="mb-4">
               <p className="text-sm text-gray-600">
                 {selectedItems.length} karyawan dipilih untuk diberi bonus
@@ -482,7 +486,9 @@ export default function SalaryPage() {
                     type="radio"
                     value="equal"
                     checked={bonusType === "equal"}
-                    onChange={(e) => setBonusType(e.target.value as "equal" | "different")}
+                    onChange={(e) =>
+                      setBonusType(e.target.value as "equal" | "different")
+                    }
                     className="mr-2"
                   />
                   Sama Rata
@@ -492,7 +498,9 @@ export default function SalaryPage() {
                     type="radio"
                     value="different"
                     checked={bonusType === "different"}
-                    onChange={(e) => setBonusType(e.target.value as "equal" | "different")}
+                    onChange={(e) =>
+                      setBonusType(e.target.value as "equal" | "different")
+                    }
                     className="mr-2"
                   />
                   Berbeda per Karyawan
@@ -503,7 +511,9 @@ export default function SalaryPage() {
             {/* Form Bonus Sama Rata */}
             {bonusType === "equal" && (
               <div className="mb-4">
-                <label className="block mb-2 font-semibold">Nominal Bonus (Sama Rata)</label>
+                <label className="block mb-2 font-semibold">
+                  Nominal Bonus (Sama Rata)
+                </label>
                 <input
                   type="number"
                   value={equalBonus}
@@ -521,31 +531,42 @@ export default function SalaryPage() {
             {/* Form Bonus Berbeda */}
             {bonusType === "different" && (
               <div className="mb-4">
-                <label className="block mb-2 font-semibold">Bonus per Karyawan</label>
+                <label className="block mb-2 font-semibold">
+                  Bonus per Karyawan
+                </label>
                 <div className="border rounded p-4 bg-gray-50 max-h-60 overflow-y-auto">
                   {filtered
-                    .filter(gaji => selectedItems.includes(gaji.id))
+                    .filter((gaji) => selectedItems.includes(gaji.id))
                     .map((gaji) => (
-                    <div key={gaji.id} className="flex items-center gap-4 mb-3 p-2 border-b">
-                      <div className="flex-1">
-                        <div className="font-medium">{gaji.karyawan?.namaLengkap}</div>
-                        <div className="text-sm text-gray-600">NIK: {gaji.karyawan?.nik}</div>
-                        <div className="text-sm text-gray-600">
-                          Gaji Pokok: {formatCurrency(gaji.gajiPokok || 0)}
+                      <div
+                        key={gaji.id}
+                        className="flex items-center gap-4 mb-3 p-2 border-b"
+                      >
+                        <div className="flex-1">
+                          <div className="font-medium">
+                            {gaji.karyawan?.namaLengkap}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            NIK: {gaji.karyawan?.nik}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            Gaji Pokok: {formatCurrency(gaji.gajiPokok || 0)}
+                          </div>
+                        </div>
+                        <div className="w-32">
+                          <input
+                            type="number"
+                            value={differentBonuses[gaji.id] || ""}
+                            onChange={(e) =>
+                              updateDifferentBonus(gaji.id, e.target.value)
+                            }
+                            min={0}
+                            className="w-full border rounded px-2 py-1 text-sm"
+                            placeholder="Bonus"
+                          />
                         </div>
                       </div>
-                      <div className="w-32">
-                        <input
-                          type="number"
-                          value={differentBonuses[gaji.id] || ""}
-                          onChange={(e) => updateDifferentBonus(gaji.id, e.target.value)}
-                          min={0}
-                          className="w-full border rounded px-2 py-1 text-sm"
-                          placeholder="Bonus"
-                        />
-                      </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
                 <p className="text-sm text-gray-600 mt-1">
                   Masukkan nominal bonus untuk setiap karyawan secara individual
@@ -559,46 +580,62 @@ export default function SalaryPage() {
                 <h4 className="font-semibold mb-2">Preview Bonus Sama Rata</h4>
                 <p>Nominal: {formatCurrency(Number(equalBonus))}</p>
                 <p>Jumlah Karyawan: {selectedItems.length}</p>
-                <p>Total Bonus: {formatCurrency(Number(equalBonus) * selectedItems.length)}</p>
+                <p>
+                  Total Bonus:{" "}
+                  {formatCurrency(Number(equalBonus) * selectedItems.length)}
+                </p>
               </div>
             )}
 
-            {bonusType === "different" && Object.keys(differentBonuses).length > 0 && (
-              <div className="mb-4 border rounded p-4 bg-green-50">
-                <h4 className="font-semibold mb-2">Preview Bonus Individual</h4>
-                <div className="max-h-32 overflow-y-auto">
-                  {Object.entries(differentBonuses).map(([gajiId, bonus]) => {
-                    const gaji = filtered.find(g => g.id === gajiId);
-                    return (
-                      <div key={gajiId} className="flex justify-between py-1">
-                        <span>{gaji?.karyawan?.namaLengkap}</span>
-                        <span>{formatCurrency(Number(bonus))}</span>
-                      </div>
-                    );
-                  })}
+            {bonusType === "different" &&
+              Object.keys(differentBonuses).length > 0 && (
+                <div className="mb-4 border rounded p-4 bg-green-50">
+                  <h4 className="font-semibold mb-2">
+                    Preview Bonus Individual
+                  </h4>
+                  <div className="max-h-32 overflow-y-auto">
+                    {Object.entries(differentBonuses).map(([gajiId, bonus]) => {
+                      const gaji = filtered.find((g) => g.id === gajiId);
+                      return (
+                        <div key={gajiId} className="flex justify-between py-1">
+                          <span>{gaji?.karyawan?.namaLengkap}</span>
+                          <span>{formatCurrency(Number(bonus))}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2 pt-2 border-t">
+                    <strong>
+                      Total Bonus:{" "}
+                      {formatCurrency(
+                        Object.values(differentBonuses).reduce(
+                          (sum, bonus) => sum + Number(bonus),
+                          0
+                        )
+                      )}
+                    </strong>
+                  </div>
                 </div>
-                <div className="mt-2 pt-2 border-t">
-                  <strong>Total Bonus: {formatCurrency(
-                    Object.values(differentBonuses).reduce((sum, bonus) => sum + Number(bonus), 0)
-                  )}</strong>
-                </div>
-              </div>
-            )}
+              )}
 
             {/* Message */}
             {bonusMsg && (
-              <div className={`mb-4 text-center text-sm p-2 rounded ${
-                bonusMsg.includes("berhasil") ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-              }`}>
+              <div
+                className={`mb-4 text-center text-sm p-2 rounded ${
+                  bonusMsg.includes("berhasil")
+                    ? "bg-green-100 text-green-800"
+                    : "bg-red-100 text-red-800"
+                }`}
+              >
                 {bonusMsg}
               </div>
             )}
 
             {/* Action Buttons */}
             <div className="flex gap-2 justify-end">
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => {
                   setShowBonusModal(false);
                   setBonusMsg("");
@@ -608,11 +645,13 @@ export default function SalaryPage() {
               >
                 Batal
               </Button>
-              <Button 
+              <Button
                 onClick={handleBonusSubmit}
-                disabled={bonusLoading || 
+                disabled={
+                  bonusLoading ||
                   (bonusType === "equal" && !equalBonus) ||
-                  (bonusType === "different" && Object.keys(differentBonuses).length === 0)
+                  (bonusType === "different" &&
+                    Object.keys(differentBonuses).length === 0)
                 }
               >
                 {bonusLoading ? "Menyimpan..." : "Simpan Bonus"}
