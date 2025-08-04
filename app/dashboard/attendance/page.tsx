@@ -178,12 +178,7 @@ export default function AttendancePage() {
             Pantau kehadiran dan absensi karyawan
           </p>
         </div>
-        <Button asChild>
-          <a href="/dashboard/attendance/new">
-            <Plus className="h-4 w-4 mr-2" />
-            Input Absensi
-          </a>
-        </Button>
+       
       </div>
 
       {error && (
