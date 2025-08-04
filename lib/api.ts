@@ -238,6 +238,14 @@ export const attendanceAPI = {
     return apiRequest(`/absensi/karyawan/${employeeId}`)
   },
 
+  // Update absensi dengan PUT endpoint
+  update: async (id: string, data: { hadir: boolean, status: string, setengahHari: boolean, keterangan?: string }) => {
+    return apiRequest(`/absensi/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
   // Tambahkan fungsi delete absensi
   delete: async (id: string) => {
     return apiRequest(`/absensi/${id}`, {
