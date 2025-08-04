@@ -11,6 +11,7 @@ const departmentOptions = [
   { label: "BLANDING PJP", value: "BLANDING PJP" },
   { label: "PACKING PJP", value: "PACKING PJP" },
   { label: "MARKET PJP", value: "MARKET PJP" },
+    { label: "MARKET CPD", value: "MARKET CPD" },
 ];
 
 export default function BonusPage() {
