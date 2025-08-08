@@ -623,7 +623,7 @@ export default function SalaryPage() {
                     </TableHead>
                     <TableHead className="font-semibold">📅 Periode</TableHead>
                     <TableHead className="font-semibold text-right">
-                      💵 Gaji Pokok
+                      💰 Gaji Bersih
                     </TableHead>
                     <TableHead className="font-semibold text-right">
                       🎁 Bonus
@@ -632,7 +632,7 @@ export default function SalaryPage() {
                       ✂️ Potongan
                     </TableHead>
                     <TableHead className="font-semibold text-right">
-                      💰 Gaji Bersih
+                      💵 Gaji Pokok
                     </TableHead>
                     <TableHead className="font-semibold text-center">
                       📊 Absensi
@@ -680,7 +680,7 @@ export default function SalaryPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        {formatCurrency(gaji.gajiPokok || 0)}
+                        {formatCurrency(gaji.totalGajiBersih || 0)}
                       </TableCell>
                       <TableCell className="text-right">
                         <span className="text-green-600 font-medium">
@@ -693,7 +693,7 @@ export default function SalaryPage() {
                         </span>
                       </TableCell>
                       <TableCell className="text-right font-bold text-blue-600">
-                        {formatCurrency(gaji.totalGajiBersih || 0)}
+                        {formatCurrency(gaji.gajiPokok || 0)}
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge
@@ -837,7 +837,8 @@ export default function SalaryPage() {
                             NIK: {gaji.karyawan?.nik}
                           </div>
                           <div className="text-sm text-gray-600">
-                            Gaji Pokok: {formatCurrency(gaji.gajiPokok || 0)}
+                            Gaji Bersih:{" "}
+                            {formatCurrency(gaji.totalGajiBersih || 0)}
                           </div>
                         </div>
                         <div className="w-32">

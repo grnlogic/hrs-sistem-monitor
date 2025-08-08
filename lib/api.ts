@@ -9,8 +9,8 @@ const getApiBaseUrl = () => {
     }
     return cleanUrl
   }
-  // Fallback untuk development
-  return "http://localhost:8080/api"
+  // Fallback untuk development - sesuaikan dengan port backend yang benar
+  return "http://localhost:8084/api"
 }
 
 const API_BASE_URL = getApiBaseUrl()
@@ -151,6 +151,18 @@ export const employeeAPI = {
     return apiRequest(`/karyawan/${id}`, {
       method: "DELETE",
     })
+  },
+
+  // Force delete karyawan beserta semua data terkait
+  forceDelete: async (id: string) => {
+    return apiRequest(`/karyawan/${id}/force`, {
+      method: "DELETE",
+    })
+  },
+
+  // Cek data terkait karyawan sebelum delete
+  checkRelatedData: async (id: string) => {
+    return apiRequest(`/karyawan/${id}/related-data`)
   },
 
   deleteEmployee: async (id: string) => {
@@ -346,6 +358,39 @@ export const salaryAPI = {
     })
   },
 
+  // Update status pembayaran dengan validasi periode (lebih aman)
+  updateStatusPembayaranWithPeriod: async (data: { 
+    gajiId: string, 
+    statusPembayaran: string, 
+    periodeAwal?: string, 
+    periodeAkhir?: string 
+  }) => {
+    const params = new URLSearchParams()
+    params.append('gajiId', data.gajiId)
+    params.append('statusPembayaran', data.statusPembayaran)
+    
+    if (data.periodeAwal) {
+      params.append('periodeAwal', data.periodeAwal)
+    }
+    
+    if (data.periodeAkhir) {
+      params.append('periodeAkhir', data.periodeAkhir)
+    }
+    
+    return apiRequest(`/gaji/status-with-period?${params.toString()}`, {
+      method: "PUT",
+    })
+  },
+
+  // Get data gaji detail per periode (tidak diagregasi)
+  getGajiByDateRangeDetailed: async (startDate: string, endDate: string) => {
+    const params = new URLSearchParams()
+    params.append('startDate', startDate)
+    params.append('endDate', endDate)
+    
+    return apiRequest(`/gaji/by-date-range?${params.toString()}`)
+  },
+
   // Potongan API
   addPajakPph21: async (data: { gajiId: string, pajakPph21: number }) => {
     return apiRequest(`/gaji/potongan/pph21?gajiId=${data.gajiId}&pajakPph21=${data.pajakPph21}`, {
@@ -387,6 +432,20 @@ export const salaryAPI = {
 // Tambahkan fungsi untuk rekap gaji semua karyawan
 export const getAllSalaries = async () => {
   return apiRequest("/gaji/rekap-all")
+}
+
+// Tambahkan fungsi untuk rekap gaji agregasi (jika diperlukan)
+export const getAllSalariesAgregated = async () => {
+  return apiRequest("/gaji/rekap-all-agregated")
+}
+
+// Fungsi untuk mendapatkan data gaji detail per periode
+export const getGajiByDateRangeDetailed = async (startDate: string, endDate: string) => {
+  const params = new URLSearchParams()
+  params.append('startDate', startDate)
+  params.append('endDate', endDate)
+  
+  return apiRequest(`/gaji/by-date-range?${params.toString()}`)
 }
 
 // Generate gaji API

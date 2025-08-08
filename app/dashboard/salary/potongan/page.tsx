@@ -39,8 +39,140 @@ export default function PotonganPage() {
   const fetchGajiList = async () => {
     try {
       const data = await getAllSalaries();
-      setGajiList(data);
+      console.log("Raw data from API:", data);
+
+      if (data && data.length > 0) {
+        // Group data berdasarkan karyawan ID dan status pembayaran
+        const groupedData = data.reduce((acc: any, item: any) => {
+          const key = `${item.karyawan?.id || "unknown"}_${
+            item.statusPembayaran || "belum_dibayar"
+          }`;
+
+          if (!acc[key]) {
+            // Buat entry baru dengan data dasar
+            acc[key] = {
+              ...item,
+              // Inisialisasi periode dengan tanggal pertama
+              periodeAwal:
+                item.periodeAwal ||
+                item.tanggalGaji ||
+                item.periode?.split(" - ")[0],
+              periodeAkhir:
+                item.periodeAkhir ||
+                item.tanggalGaji ||
+                item.periode?.split(" - ")[1],
+              totalHari: 1,
+              // Simpan array tanggal untuk referensi
+              tanggalList: [item.tanggalGaji || item.periode],
+              // Simpan ID asli untuk update status
+              originalIds: [item.id],
+              // Inisialisasi semua jenis potongan - GUNAKAN NILAI ACTUAL DARI DATABASE
+              pajakPph21: Number(item.pajakPph21) || 0,
+              potonganKeterlambatan: Number(item.potonganKeterlambatan) || 0,
+              potonganPinjaman: Number(item.potonganPinjaman) || 0,
+              potonganSumbangan: Number(item.potonganSumbangan) || 0,
+              potonganBpjs: Number(item.potonganBpjs) || 0,
+              potonganUndangan: Number(item.potonganUndangan) || 0,
+              // Hitung total potongan berdasarkan detail
+              potongan:
+                (Number(item.pajakPph21) || 0) +
+                (Number(item.potonganKeterlambatan) || 0) +
+                (Number(item.potonganPinjaman) || 0) +
+                (Number(item.potonganSumbangan) || 0) +
+                (Number(item.potonganBpjs) || 0) +
+                (Number(item.potonganUndangan) || 0),
+            };
+          } else {
+            // Gabungkan dengan data yang sudah ada
+            const existing = acc[key];
+
+            // Update periode (ambil tanggal terkecil dan terbesar)
+            const currentDate =
+              item.tanggalGaji || item.periode?.split(" - ")[0];
+            const existingStart = existing.periodeAwal;
+            const existingEnd = existing.periodeAkhir;
+
+            if (currentDate < existingStart) {
+              existing.periodeAwal = currentDate;
+            }
+            if (currentDate > existingEnd) {
+              existing.periodeAkhir = currentDate;
+            }
+
+            // Tambah total hari
+            existing.totalHari += 1;
+
+            // Tambah ke array tanggal
+            existing.tanggalList.push(item.tanggalGaji || item.periode);
+
+            // Tambah ID asli
+            existing.originalIds.push(item.id);
+
+            // PERBAIKAN: Akumulasi semua jenis potongan dengan benar
+            existing.pajakPph21 =
+              (existing.pajakPph21 || 0) + (Number(item.pajakPph21) || 0);
+            existing.potonganKeterlambatan =
+              (existing.potonganKeterlambatan || 0) +
+              (Number(item.potonganKeterlambatan) || 0);
+            existing.potonganPinjaman =
+              (existing.potonganPinjaman || 0) +
+              (Number(item.potonganPinjaman) || 0);
+            existing.potonganSumbangan =
+              (existing.potonganSumbangan || 0) +
+              (Number(item.potonganSumbangan) || 0);
+            existing.potonganBpjs =
+              (existing.potonganBpjs || 0) + (Number(item.potonganBpjs) || 0);
+            existing.potonganUndangan =
+              (existing.potonganUndangan || 0) +
+              (Number(item.potonganUndangan) || 0);
+
+            // Hitung ulang total potongan berdasarkan detail
+            existing.potongan =
+              existing.pajakPph21 +
+              existing.potonganKeterlambatan +
+              existing.potonganPinjaman +
+              existing.potonganSumbangan +
+              existing.potonganBpjs +
+              existing.potonganUndangan;
+
+            // Update total gaji (jika ada)
+            if (item.gajiPokok && existing.gajiPokok) {
+              existing.gajiPokok += Number(item.gajiPokok);
+            }
+            if (item.bonus && existing.bonus) {
+              existing.bonus += Number(item.bonus);
+            }
+            if (item.totalGajiBersih && existing.totalGajiBersih) {
+              existing.totalGajiBersih += Number(item.totalGajiBersih);
+            }
+          }
+
+          return acc;
+        }, {});
+
+        // Convert back to array dan format periode display
+        const aggregatedData = Object.values(groupedData).map((item: any) => ({
+          ...item,
+          // Format periode display
+          periode:
+            item.periodeAwal === item.periodeAkhir
+              ? item.periodeAwal
+              : `${item.periodeAwal} - ${item.periodeAkhir}`,
+          // Tambah info total hari di display
+          periodeDisplay:
+            item.totalHari === 1
+              ? `${item.periodeAwal} (1 hari)`
+              : `${item.periodeAwal} - ${item.periodeAkhir} (${item.totalHari} hari)`,
+        }));
+
+        console.log("Data gaji setelah agregasi (potongan):", aggregatedData);
+        console.log("Contoh data pertama:", aggregatedData[0]);
+        setGajiList(aggregatedData);
+      } else {
+        setGajiList([]);
+      }
     } catch (err) {
+      console.error("Error fetching gaji list:", err);
       setError("Gagal memuat data gaji");
     }
   };
@@ -65,49 +197,100 @@ export default function PotonganPage() {
     }
 
     try {
-      let response;
-      switch (potonganType) {
-        case "pph21":
-          response = await salaryAPI.addPajakPph21({
-            gajiId: selectedGajiId,
-            pajakPph21: amount,
-          });
-          break;
-        case "keterlambatan":
-          response = await salaryAPI.addPotonganKeterlambatan({
-            gajiId: selectedGajiId,
-            potonganKeterlambatan: amount,
-          });
-          break;
-        case "pinjaman":
-          response = await salaryAPI.addPotonganPinjaman({
-            gajiId: selectedGajiId,
-            potonganPinjaman: amount,
-          });
-          break;
-        case "sumbangan":
-          response = await salaryAPI.addPotonganSumbangan({
-            gajiId: selectedGajiId,
-            potonganSumbangan: amount,
-          });
-          break;
-        case "bpjs":
-          response = await salaryAPI.addPotonganBpjs({
-            gajiId: selectedGajiId,
-            potonganBpjs: amount,
-          });
-          break;
-        case "undangan":
-          response = await salaryAPI.addPotonganUndangan({
-            gajiId: selectedGajiId,
-            potonganUndangan: amount,
-          });
-          break;
-        default:
-          throw new Error("Jenis potongan tidak valid");
+      // Cari data yang dipilih untuk mendapatkan originalIds
+      const selectedItem = gajiList.find((item) => item.id === selectedGajiId);
+
+      if (!selectedItem) {
+        setError("Data gaji yang dipilih tidak ditemukan");
+        setIsLoading(false);
+        return;
       }
 
-      setSuccess("Potongan berhasil ditambahkan!");
+      const idsToUpdate = selectedItem?.originalIds || [selectedGajiId];
+
+      console.log("Menambahkan potongan:", {
+        selectedGajiId,
+        potonganType,
+        amount,
+        idsToUpdate,
+        selectedItem: {
+          nama: selectedItem.karyawan?.namaLengkap,
+          periode: selectedItem.periodeDisplay || selectedItem.periode,
+        },
+      });
+
+      if (!idsToUpdate || idsToUpdate.length === 0) {
+        setError("ID gaji tidak valid untuk diupdate");
+        setIsLoading(false);
+        return;
+      }
+
+      // Update semua ID asli yang terkait dengan data agregasi ini
+      for (const originalId of idsToUpdate) {
+        let response;
+        try {
+          switch (potonganType) {
+            case "pph21":
+              response = await salaryAPI.addPajakPph21({
+                gajiId: originalId,
+                pajakPph21: amount,
+              });
+              break;
+            case "keterlambatan":
+              response = await salaryAPI.addPotonganKeterlambatan({
+                gajiId: originalId,
+                potonganKeterlambatan: amount,
+              });
+              break;
+            case "pinjaman":
+              response = await salaryAPI.addPotonganPinjaman({
+                gajiId: originalId,
+                potonganPinjaman: amount,
+              });
+              break;
+            case "sumbangan":
+              response = await salaryAPI.addPotonganSumbangan({
+                gajiId: originalId,
+                potonganSumbangan: amount,
+              });
+              break;
+            case "bpjs":
+              response = await salaryAPI.addPotonganBpjs({
+                gajiId: originalId,
+                potonganBpjs: amount,
+              });
+              break;
+            case "undangan":
+              response = await salaryAPI.addPotonganUndangan({
+                gajiId: originalId,
+                potonganUndangan: amount,
+              });
+              break;
+            default:
+              throw new Error("Jenis potongan tidak valid");
+          }
+          console.log(
+            `Berhasil menambahkan potongan ${potonganType} untuk gaji ID ${originalId}:`,
+            response
+          );
+        } catch (apiError: any) {
+          console.error(
+            `Gagal menambahkan potongan untuk gaji ID ${originalId}:`,
+            apiError
+          );
+          throw new Error(
+            `Gagal menambahkan potongan untuk gaji ID ${originalId}: ${
+              apiError?.message || apiError
+            }`
+          );
+        }
+      }
+
+      setSuccess(
+        `Potongan ${getPotonganTypeLabel(
+          potonganType
+        )} sebesar Rp ${amount.toLocaleString("id-ID")} berhasil ditambahkan!`
+      );
       setSelectedGajiId("");
       setPotonganType("");
       setPotonganAmount("");
@@ -117,9 +300,12 @@ export default function PotonganPage() {
 
       setTimeout(() => {
         setSuccess("");
-      }, 3000);
-    } catch (err) {
-      setError("Gagal menambahkan potongan. Silakan coba lagi.");
+      }, 5000);
+    } catch (err: any) {
+      console.error("Error menambahkan potongan:", err);
+      setError(
+        err?.message || "Gagal menambahkan potongan. Silakan coba lagi."
+      );
     } finally {
       setIsLoading(false);
     }
@@ -146,9 +332,37 @@ export default function PotonganPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
-      <h1 className="text-3xl font-bold tracking-tight mb-4">
-        Kelola Potongan Gaji
-      </h1>
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-3xl font-bold tracking-tight">
+          Kelola Potongan Gaji
+        </h1>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={fetchGajiList}
+          disabled={isLoading}
+        >
+          🔄 Refresh Data
+        </Button>
+      </div>
+
+      {/* Info Agregasi */}
+      <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex items-start gap-3">
+          <span className="text-2xl">ℹ️</span>
+          <div>
+            <h4 className="font-semibold text-blue-800 mb-2">
+              Sistem Agregasi Data
+            </h4>
+            <p className="text-sm text-blue-700">
+              Data gaji dengan status sama akan digabungkan per karyawan untuk
+              menghindari potongan berlipat. Setiap karyawan hanya akan mendapat
+              potongan sekali meskipun memiliki beberapa data gaji.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {error && (
           <Alert variant="destructive">
@@ -166,7 +380,8 @@ export default function PotonganPage() {
           <CardHeader>
             <CardTitle>Tambah Potongan Gaji</CardTitle>
             <CardDescription>
-              Pilih karyawan dan jenis potongan yang akan ditambahkan
+              Pilih karyawan dan jenis potongan yang akan ditambahkan (data
+              sudah digabungkan per karyawan)
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -185,7 +400,7 @@ export default function PotonganPage() {
                     {gajiList.map((gaji) => (
                       <SelectItem key={gaji.id} value={gaji.id}>
                         {gaji.karyawan?.namaLengkap} - {gaji.karyawan?.nik} (
-                        {gaji.periodeAwal} - {gaji.periodeAkhir})
+                        {gaji.periodeDisplay || gaji.periode})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -251,7 +466,8 @@ export default function PotonganPage() {
         <CardHeader>
           <CardTitle>Rekap Potongan Gaji</CardTitle>
           <CardDescription>
-            Daftar semua potongan gaji yang telah ditambahkan
+            Daftar semua potongan gaji yang telah ditambahkan (data sudah
+            digabungkan per karyawan)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -301,31 +517,31 @@ export default function PotonganPage() {
                       {gaji.karyawan?.nik}
                     </td>
                     <td className="border border-gray-300 px-4 py-2">
-                      {gaji.periodeAwal} - {gaji.periodeAkhir}
+                      {gaji.periodeDisplay || gaji.periode}
                     </td>
                     <td className="border border-gray-300 px-4 py-2 text-right">
-                      Rp {gaji.pajakPph21?.toLocaleString("id-ID") || "0"}
-                    </td>
-                    <td className="border border-gray-300 px-4 py-2 text-right">
-                      Rp{" "}
-                      {gaji.potonganKeterlambatan?.toLocaleString("id-ID") ||
-                        "0"}
-                    </td>
-                    <td className="border border-gray-300 px-4 py-2 text-right">
-                      Rp {gaji.potonganPinjaman?.toLocaleString("id-ID") || "0"}
+                      Rp {(gaji.pajakPph21 || 0).toLocaleString("id-ID")}
                     </td>
                     <td className="border border-gray-300 px-4 py-2 text-right">
                       Rp{" "}
-                      {gaji.potonganSumbangan?.toLocaleString("id-ID") || "0"}
+                      {(gaji.potonganKeterlambatan || 0).toLocaleString(
+                        "id-ID"
+                      )}
                     </td>
                     <td className="border border-gray-300 px-4 py-2 text-right">
-                      Rp {gaji.potonganBpjs?.toLocaleString("id-ID") || "0"}
+                      Rp {(gaji.potonganPinjaman || 0).toLocaleString("id-ID")}
                     </td>
                     <td className="border border-gray-300 px-4 py-2 text-right">
-                      Rp {gaji.potonganUndangan?.toLocaleString("id-ID") || "0"}
+                      Rp {(gaji.potonganSumbangan || 0).toLocaleString("id-ID")}
+                    </td>
+                    <td className="border border-gray-300 px-4 py-2 text-right">
+                      Rp {(gaji.potonganBpjs || 0).toLocaleString("id-ID")}
+                    </td>
+                    <td className="border border-gray-300 px-4 py-2 text-right">
+                      Rp {(gaji.potonganUndangan || 0).toLocaleString("id-ID")}
                     </td>
                     <td className="border border-gray-300 px-4 py-2 text-right font-semibold">
-                      Rp {gaji.potongan?.toLocaleString("id-ID") || "0"}
+                      Rp {(gaji.potongan || 0).toLocaleString("id-ID")}
                     </td>
                   </tr>
                 ))}

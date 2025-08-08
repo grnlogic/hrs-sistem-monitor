@@ -46,6 +46,7 @@ import {
   Download,
   FileText,
   FileSpreadsheet,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Select,
@@ -92,6 +93,9 @@ export default function EmployeesPage() {
     null
   );
   const [isDeleting, setIsDeleting] = useState(false);
+  const [relatedDataInfo, setRelatedDataInfo] = useState<string>("");
+  const [showForceDeleteOption, setShowForceDeleteOption] = useState(false);
+  const [deleteMode, setDeleteMode] = useState<"safe" | "force">("safe");
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [selectedFields, setSelectedFields] = useState<string[]>([
     "name",
@@ -112,18 +116,51 @@ export default function EmployeesPage() {
   const handleDeleteEmployee = async (employee: Employee) => {
     setIsDeleting(true);
     try {
-      await employeeAPI.delete(employee.id.toString());
+      if (deleteMode === "force") {
+        // Force delete dengan semua data terkait
+        await employeeAPI.forceDelete(employee.id.toString());
+      } else {
+        // Safe delete (default)
+        await employeeAPI.delete(employee.id.toString());
+      }
+
       setEmployees((prev) => prev.filter((emp) => emp.id !== employee.id));
       setFilteredEmployees((prev) =>
         prev.filter((emp) => emp.id !== employee.id)
       );
       setEmployeeToDelete(null);
       setDeleteDialogOpen(false);
-    } catch (err) {
-      setError("Gagal menghapus karyawan");
-      console.error("Error deleting employee:", err);
+      setShowForceDeleteOption(false);
+      setDeleteMode("safe");
+      setRelatedDataInfo("");
+    } catch (err: any) {
+      // Jika gagal karena ada data terkait, tampilkan opsi force delete
+      if (err.message && err.message.includes("data terkait")) {
+        setShowForceDeleteOption(true);
+        setError(err.message);
+      } else {
+        setError("Gagal menghapus karyawan: " + (err.message || err));
+        console.error("Error deleting employee:", err);
+      }
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // Fungsi untuk cek data terkait sebelum delete
+  const handleCheckRelatedData = async (employee: Employee) => {
+    try {
+      const response = await employeeAPI.checkRelatedData(
+        employee.id.toString()
+      );
+      setRelatedDataInfo(response);
+      setEmployeeToDelete(employee);
+      setDeleteDialogOpen(true);
+      setShowForceDeleteOption(false);
+      setDeleteMode("safe");
+    } catch (err: any) {
+      setError("Gagal mengecek data terkait: " + (err.message || err));
+      console.error("Error checking related data:", err);
     }
   };
 
@@ -260,7 +297,11 @@ export default function EmployeesPage() {
       doc.setFontSize(16);
       doc.text("Data Karyawan", 14, 15);
       doc.setFontSize(10);
-      doc.text(`Diekspor pada: ${new Date().toLocaleDateString("id-ID")}`, 14, 25);
+      doc.text(
+        `Diekspor pada: ${new Date().toLocaleDateString("id-ID")}`,
+        14,
+        25
+      );
 
       // Mapping field names
       const fieldMapping: { [key: string]: string } = {
@@ -276,11 +317,13 @@ export default function EmployeesPage() {
       };
 
       // Prepare headers
-      const headers = selectedFields.map(field => fieldMapping[field] || field);
+      const headers = selectedFields.map(
+        (field) => fieldMapping[field] || field
+      );
 
       // Prepare data
-      const data = filteredEmployees.map(employee => {
-        return selectedFields.map(field => {
+      const data = filteredEmployees.map((employee) => {
+        return selectedFields.map((field) => {
           switch (field) {
             case "name":
               return employee.name;
@@ -293,7 +336,7 @@ export default function EmployeesPage() {
             case "status":
               return employee.status;
             case "joinDate":
-              return employee.joinDate 
+              return employee.joinDate
                 ? new Date(employee.joinDate).toLocaleDateString("id-ID")
                 : "-";
             case "email":
@@ -319,7 +362,7 @@ export default function EmployeesPage() {
       });
 
       // Save file
-      doc.save(`data-karyawan-${new Date().toISOString().split('T')[0]}.pdf`);
+      doc.save(`data-karyawan-${new Date().toISOString().split("T")[0]}.pdf`);
     } catch (error) {
       console.error("Error exporting to PDF:", error);
       setError("Gagal mengekspor ke PDF");
@@ -334,7 +377,7 @@ export default function EmployeesPage() {
       // Mapping field names
       const fieldMapping: { [key: string]: string } = {
         name: "Nama",
-        nip: "NIK", 
+        nip: "NIK",
         department: "Departemen",
         position: "Posisi",
         status: "Status",
@@ -345,10 +388,10 @@ export default function EmployeesPage() {
       };
 
       // Prepare data for Excel
-      const data = filteredEmployees.map(employee => {
+      const data = filteredEmployees.map((employee) => {
         const row: { [key: string]: any } = {};
-        
-        selectedFields.forEach(field => {
+
+        selectedFields.forEach((field) => {
           const header = fieldMapping[field] || field;
           switch (field) {
             case "name":
@@ -367,7 +410,7 @@ export default function EmployeesPage() {
               row[header] = employee.status;
               break;
             case "joinDate":
-              row[header] = employee.joinDate 
+              row[header] = employee.joinDate
                 ? new Date(employee.joinDate).toLocaleDateString("id-ID")
                 : "-";
               break;
@@ -384,7 +427,7 @@ export default function EmployeesPage() {
               row[header] = "-";
           }
         });
-        
+
         return row;
       });
 
@@ -396,7 +439,10 @@ export default function EmployeesPage() {
       XLSX.utils.book_append_sheet(workbook, worksheet, "Data Karyawan");
 
       // Save file
-      XLSX.writeFile(workbook, `data-karyawan-${new Date().toISOString().split('T')[0]}.xlsx`);
+      XLSX.writeFile(
+        workbook,
+        `data-karyawan-${new Date().toISOString().split("T")[0]}.xlsx`
+      );
     } catch (error) {
       console.error("Error exporting to Excel:", error);
       setError("Gagal mengekspor ke Excel");
@@ -428,10 +474,8 @@ export default function EmployeesPage() {
 
   // Handle field selection
   const handleFieldToggle = (field: string) => {
-    setSelectedFields(prev => 
-      prev.includes(field) 
-        ? prev.filter(f => f !== field)
-        : [...prev, field]
+    setSelectedFields((prev) =>
+      prev.includes(field) ? prev.filter((f) => f !== field) : [...prev, field]
     );
   };
 
@@ -489,14 +533,17 @@ export default function EmployeesPage() {
               <DialogHeader>
                 <DialogTitle>Export Data Karyawan</DialogTitle>
                 <DialogDescription>
-                  Pilih data yang ingin diekspor dan format file yang diinginkan.
+                  Pilih data yang ingin diekspor dan format file yang
+                  diinginkan.
                 </DialogDescription>
               </DialogHeader>
-              
+
               <div className="space-y-6">
                 {/* Format Selection */}
                 <div>
-                  <label className="text-sm font-medium mb-3 block">Format Export</label>
+                  <label className="text-sm font-medium mb-3 block">
+                    Format Export
+                  </label>
                   <div className="flex gap-4">
                     <div className="flex items-center space-x-2">
                       <input
@@ -505,10 +552,15 @@ export default function EmployeesPage() {
                         name="format"
                         value="pdf"
                         checked={exportFormat === "pdf"}
-                        onChange={(e) => setExportFormat(e.target.value as "pdf" | "excel")}
+                        onChange={(e) =>
+                          setExportFormat(e.target.value as "pdf" | "excel")
+                        }
                         className="h-4 w-4"
                       />
-                      <label htmlFor="pdf" className="flex items-center text-sm">
+                      <label
+                        htmlFor="pdf"
+                        className="flex items-center text-sm"
+                      >
                         <FileText className="h-4 w-4 mr-1" />
                         PDF
                       </label>
@@ -520,10 +572,15 @@ export default function EmployeesPage() {
                         name="format"
                         value="excel"
                         checked={exportFormat === "excel"}
-                        onChange={(e) => setExportFormat(e.target.value as "pdf" | "excel")}
+                        onChange={(e) =>
+                          setExportFormat(e.target.value as "pdf" | "excel")
+                        }
                         className="h-4 w-4"
                       />
-                      <label htmlFor="excel" className="flex items-center text-sm">
+                      <label
+                        htmlFor="excel"
+                        className="flex items-center text-sm"
+                      >
                         <FileSpreadsheet className="h-4 w-4 mr-1" />
                         Excel
                       </label>
@@ -533,10 +590,15 @@ export default function EmployeesPage() {
 
                 {/* Field Selection */}
                 <div>
-                  <label className="text-sm font-medium mb-3 block">Data yang Diekspor</label>
+                  <label className="text-sm font-medium mb-3 block">
+                    Data yang Diekspor
+                  </label>
                   <div className="space-y-2 max-h-60 overflow-y-auto border rounded-md p-3">
                     {availableFields.map((field) => (
-                      <div key={field.key} className="flex items-center space-x-2">
+                      <div
+                        key={field.key}
+                        className="flex items-center space-x-2"
+                      >
                         <Checkbox
                           id={field.key}
                           checked={selectedFields.includes(field.key)}
@@ -549,32 +611,36 @@ export default function EmployeesPage() {
                     ))}
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">
-                    {selectedFields.length} dari {availableFields.length} field dipilih
+                    {selectedFields.length} dari {availableFields.length} field
+                    dipilih
                   </p>
                 </div>
 
                 {/* Info */}
                 <div className="bg-blue-50 p-3 rounded-md">
                   <p className="text-sm text-blue-800">
-                    <strong>Info:</strong> Data akan diekspor berdasarkan filter yang sedang aktif. 
-                    Saat ini akan mengekspor {filteredEmployees.length} dari {employees.length} karyawan.
+                    <strong>Info:</strong> Data akan diekspor berdasarkan filter
+                    yang sedang aktif. Saat ini akan mengekspor{" "}
+                    {filteredEmployees.length} dari {employees.length} karyawan.
                   </p>
                 </div>
               </div>
 
               <DialogFooter>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setExportDialogOpen(false)}
                   disabled={isExporting}
                 >
                   Batal
                 </Button>
-                <Button 
-                  onClick={handleExport} 
+                <Button
+                  onClick={handleExport}
                   disabled={isExporting || selectedFields.length === 0}
                 >
-                  {isExporting ? "Mengekspor..." : `Export ${exportFormat.toUpperCase()}`}
+                  {isExporting
+                    ? "Mengekspor..."
+                    : `Export ${exportFormat.toUpperCase()}`}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -777,8 +843,7 @@ export default function EmployeesPage() {
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             onClick={() => {
-                              setEmployeeToDelete(employee);
-                              setDeleteDialogOpen(true);
+                              handleCheckRelatedData(employee);
                             }}
                             className="text-red-600"
                           >
@@ -805,14 +870,100 @@ export default function EmployeesPage() {
       </Card>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle>Hapus Karyawan</AlertDialogTitle>
-            <AlertDialogDescription>
-              Apakah Anda yakin ingin menghapus karyawan{" "}
-              <span className="font-semibold">{employeeToDelete?.name}</span>?
-              Aksi ini tidak dapat dibatalkan. Data karyawan akan dihapus secara
-              permanen.
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              Hapus Karyawan
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>
+                Anda akan menghapus karyawan{" "}
+                <span className="font-semibold">{employeeToDelete?.name}</span>
+              </p>
+
+              {relatedDataInfo && (
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                  <p className="text-sm text-blue-800 font-medium">
+                    Informasi Data Terkait:
+                  </p>
+                  <p className="text-sm text-blue-700">{relatedDataInfo}</p>
+                </div>
+              )}
+
+              {showForceDeleteOption && (
+                <div className="space-y-3">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                    <p className="text-sm text-yellow-800 font-medium">
+                      ⚠️ Pilih Mode Penghapusan:
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        id="safe-delete"
+                        name="deleteMode"
+                        value="safe"
+                        checked={deleteMode === "safe"}
+                        onChange={(e) =>
+                          setDeleteMode(e.target.value as "safe" | "force")
+                        }
+                        className="h-4 w-4"
+                      />
+                      <label htmlFor="safe-delete" className="text-sm">
+                        <span className="font-medium text-green-700">
+                          Safe Delete
+                        </span>
+                        <span className="text-gray-600">
+                          {" "}
+                          - Hanya hapus data karyawan (menjaga histori)
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        id="force-delete"
+                        name="deleteMode"
+                        value="force"
+                        checked={deleteMode === "force"}
+                        onChange={(e) =>
+                          setDeleteMode(e.target.value as "safe" | "force")
+                        }
+                        className="h-4 w-4"
+                      />
+                      <label htmlFor="force-delete" className="text-sm">
+                        <span className="font-medium text-red-700">
+                          Force Delete
+                        </span>
+                        <span className="text-gray-600">
+                          {" "}
+                          - Hapus semua data termasuk histori
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                    <p className="text-xs text-red-700">
+                      ⚠️ <strong>Peringatan:</strong> Force Delete akan
+                      menghapus semua data absensi, gaji, cuti, dan pelanggaran.
+                      Data yang terhapus tidak dapat dikembalikan!
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {!showForceDeleteOption && (
+                <p className="text-sm text-gray-600">
+                  Aksi ini akan menghapus data karyawan. Jika karyawan memiliki
+                  data terkait, sistem akan memberikan opsi penghapusan yang
+                  sesuai.
+                </p>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -820,7 +971,11 @@ export default function EmployeesPage() {
               onClick={() => {
                 setEmployeeToDelete(null);
                 setDeleteDialogOpen(false);
+                setShowForceDeleteOption(false);
+                setDeleteMode("safe");
+                setRelatedDataInfo("");
               }}
+              disabled={isDeleting}
             >
               Batal
             </AlertDialogCancel>
@@ -831,9 +986,17 @@ export default function EmployeesPage() {
                 }
               }}
               disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700"
+              className={`${
+                deleteMode === "force"
+                  ? "bg-red-600 hover:bg-red-700"
+                  : "bg-blue-600 hover:bg-blue-700"
+              }`}
             >
-              {isDeleting ? "Menghapus..." : "Hapus"}
+              {isDeleting
+                ? "Menghapus..."
+                : deleteMode === "force"
+                ? "Force Delete"
+                : "Hapus Karyawan"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

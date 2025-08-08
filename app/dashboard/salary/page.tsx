@@ -26,7 +26,8 @@ export default function SalaryPage() {
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [exporting, setExporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<"all" | "staff">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "staff" | "paid">("all");
+  const [dataTab, setDataTab] = useState<"unpaid" | "paid">("unpaid");
   const [showBonusModal, setShowBonusModal] = useState(false);
   const [bonusType, setBonusType] = useState<"equal" | "different">("equal");
   const [equalBonus, setEqualBonus] = useState("");
@@ -35,6 +36,10 @@ export default function SalaryPage() {
   }>({});
   const [bonusLoading, setBonusLoading] = useState(false);
   const [bonusMsg, setBonusMsg] = useState("");
+  const [batchUpdateLoading, setBatchUpdateLoading] = useState(false);
+  const [lastClickTime, setLastClickTime] = useState(0);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   // Set default date range (current month)
   useEffect(() => {
@@ -51,48 +56,138 @@ export default function SalaryPage() {
     try {
       let result;
       if (startDate && endDate) {
-        result = await salaryAPI.getGajiByDateRange(startDate, endDate);
+        // Gunakan endpoint detail yang baru untuk mendapatkan data per periode
+        const { getGajiByDateRangeDetailed } = await import("@/lib/api");
+        result = await getGajiByDateRangeDetailed(startDate, endDate);
       } else {
+        // Gunakan endpoint detail untuk semua data (tidak agregasi)
         const { getAllSalaries } = await import("@/lib/api");
         result = await getAllSalaries();
       }
 
-      // Gabungkan data per karyawan
-      const grouped: { [karyawanId: string]: any } = {};
-      result.forEach((item: any) => {
-        const id = item.karyawan?.id;
-        if (!grouped[id]) {
-          grouped[id] = { ...item };
-        } else {
-          grouped[id].totalHariMasuk += item.totalHariMasuk || 0;
-          grouped[id].totalHariSetengahHari += item.totalHariSetengahHari || 0;
-          grouped[id].bonus += item.bonus || 0;
-          grouped[id].totalGaji += item.totalGaji || 0;
-          grouped[id].potongan += item.potongan || 0;
-          grouped[id].pajakPph21 += item.pajakPph21 || 0;
-          grouped[id].potonganKeterlambatan += item.potonganKeterlambatan || 0;
-          grouped[id].potonganPinjaman += item.potonganPinjaman || 0;
-          grouped[id].potonganSumbangan += item.potonganSumbangan || 0;
-          grouped[id].potonganBpjs += item.potonganBpjs || 0;
-          grouped[id].potonganUndangan += item.potonganUndangan || 0;
-          grouped[id].totalGajiBersih += item.totalGajiBersih || 0;
-          // Status pembayaran: prioritas Belum Dibayar > Pending > Dibayar
-          const statusOrder = ["Belum Dibayar", "Pending", "Dibayar"];
-          const currStatus = grouped[id].statusPembayaran || "";
-          const newStatus = item.statusPembayaran || "";
-          if (
-            statusOrder.indexOf(newStatus) < statusOrder.indexOf(currStatus)
-          ) {
-            grouped[id].statusPembayaran = newStatus;
+      // Agregasi data berdasarkan karyawan dan status pembayaran
+      console.log("Data gaji dari API (sebelum agregasi):", result);
+
+      if (result && result.length > 0) {
+        // Group data berdasarkan karyawan ID dan status pembayaran
+        const groupedData = result.reduce((acc: any, item: any) => {
+          const key = `${item.karyawan?.id || "unknown"}_${
+            item.statusPembayaran || "belum_dibayar"
+          }`;
+
+          if (!acc[key]) {
+            // Buat entry baru dengan data dasar
+            acc[key] = {
+              ...item,
+              // Inisialisasi periode dengan tanggal pertama
+              periodeAwal: item.tanggalGaji || item.periode?.split(" - ")[0],
+              periodeAkhir: item.tanggalGaji || item.periode?.split(" - ")[1],
+              totalHari: 1,
+              // Simpan array tanggal untuk referensi
+              tanggalList: [item.tanggalGaji || item.periode],
+              // Simpan ID asli untuk update status
+              originalIds: [item.id],
+              // Inisialisasi semua field potongan detail
+              pajakPph21: Number(item.pajakPph21) || 0,
+              potonganKeterlambatan: Number(item.potonganKeterlambatan) || 0,
+              potonganPinjaman: Number(item.potonganPinjaman) || 0,
+              potonganSumbangan: Number(item.potonganSumbangan) || 0,
+              potonganBpjs: Number(item.potonganBpjs) || 0,
+              potonganUndangan: Number(item.potonganUndangan) || 0,
+            };
+          } else {
+            // Gabungkan dengan data yang sudah ada
+            const existing = acc[key];
+
+            // Update periode (ambil tanggal terkecil dan terbesar)
+            const currentDate =
+              item.tanggalGaji || item.periode?.split(" - ")[0];
+            const existingStart = existing.periodeAwal;
+            const existingEnd = existing.periodeAkhir;
+
+            if (currentDate < existingStart) {
+              existing.periodeAwal = currentDate;
+            }
+            if (currentDate > existingEnd) {
+              existing.periodeAkhir = currentDate;
+            }
+
+            // Tambah total hari
+            existing.totalHari += 1;
+
+            // Tambah ke array tanggal
+            existing.tanggalList.push(item.tanggalGaji || item.periode);
+
+            // Tambah ID asli
+            existing.originalIds.push(item.id);
+
+            // Update total gaji (jika ada)
+            if (item.gajiPokok && existing.gajiPokok) {
+              existing.gajiPokok += item.gajiPokok;
+            }
+            if (item.bonus && existing.bonus) {
+              existing.bonus += item.bonus;
+            }
+            if (item.potongan && existing.potongan) {
+              existing.potongan += item.potongan;
+            }
+            if (item.gajiBersih && existing.gajiBersih) {
+              existing.gajiBersih += item.gajiBersih;
+            }
+
+            // PERBAIKAN: Agregasi semua field potongan detail
+            existing.pajakPph21 = (existing.pajakPph21 || 0) + (Number(item.pajakPph21) || 0);
+            existing.potonganKeterlambatan = (existing.potonganKeterlambatan || 0) + (Number(item.potonganKeterlambatan) || 0);
+            existing.potonganPinjaman = (existing.potonganPinjaman || 0) + (Number(item.potonganPinjaman) || 0);
+            existing.potonganSumbangan = (existing.potonganSumbangan || 0) + (Number(item.potonganSumbangan) || 0);
+            existing.potonganBpjs = (existing.potonganBpjs || 0) + (Number(item.potonganBpjs) || 0);
+            existing.potonganUndangan = (existing.potonganUndangan || 0) + (Number(item.potonganUndangan) || 0);
           }
+
+          return acc;
+        }, {});
+
+        // Convert back to array dan format periode display
+        const aggregatedData = Object.values(groupedData).map((item: any) => ({
+          ...item,
+          // Format periode display
+          periode:
+            item.periodeAwal === item.periodeAkhir
+              ? item.periodeAwal
+              : `${item.periodeAwal} - ${item.periodeAkhir}`,
+          // Tambah info total hari di display
+          periodeDisplay:
+            item.totalHari === 1
+              ? `${item.periodeAwal} (1 hari)`
+              : `${item.periodeAwal} - ${item.periodeAkhir} (${item.totalHari} hari)`,
+        }));
+
+        console.log("Data gaji setelah agregasi:", aggregatedData);
+        
+        // Debug: Log beberapa contoh data agregasi dengan detail potongan
+        if (aggregatedData.length > 0) {
+          console.log("=== SAMPLE AGGREGATED DATA ===");
+          aggregatedData.slice(0, 3).forEach((item: any, index: number) => {
+            console.log(`Aggregated sample ${index + 1}:`, {
+              nama: item.karyawan?.namaLengkap,
+              pajakPph21: item.pajakPph21,
+              potonganKeterlambatan: item.potonganKeterlambatan,
+              potonganPinjaman: item.potonganPinjaman,
+              potonganSumbangan: item.potonganSumbangan,
+              potonganBpjs: item.potonganBpjs,
+              potonganUndangan: item.potonganUndangan,
+              totalCalculated: (item.pajakPph21 || 0) + (item.potonganKeterlambatan || 0) + (item.potonganPinjaman || 0) + (item.potonganSumbangan || 0) + (item.potonganBpjs || 0) + (item.potonganUndangan || 0)
+            });
+          });
+          console.log("=== END SAMPLE ===");
         }
-      });
-      const merged = Object.values(grouped);
-      console.log("Data gaji (filtered by date):", merged);
-      setData(merged);
-    } catch (error) {
-      setError("Gagal memuat data gaji");
-      console.error("Error loading salary data:", error);
+        setData(aggregatedData);
+      } else {
+        setData([]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal memuat data gaji");
+      console.error("Error loading salary data:", err);
     } finally {
       setLoading(false);
     }
@@ -107,24 +202,367 @@ export default function SalaryPage() {
   const handleStatusChange = async (gajiId: string, newStatus: string) => {
     setUpdatingStatus(gajiId);
     try {
-      await salaryAPI.updateStatusPembayaran({
-        gajiId,
-        statusPembayaran: newStatus,
-      });
+      // Cari data yang dipilih untuk mendapatkan originalIds jika ada
+      const selectedItem = dataTabFiltered.find((item) => item.id === gajiId);
+      const idsToUpdate = selectedItem?.originalIds || [gajiId];
+
+      console.log(`Single update for ${gajiId}, updating IDs:`, idsToUpdate);
+
+      // Update semua ID asli yang terkait
+      for (const originalId of idsToUpdate) {
+        await salaryAPI.updateStatusPembayaranWithPeriod({
+          gajiId: originalId,
+          statusPembayaran: newStatus,
+          periodeAwal: startDate,
+          periodeAkhir: endDate,
+        });
+      }
+
       // Refresh data setelah update
       await loadData();
     } catch (error) {
       console.error("Gagal mengupdate status:", error);
+      setError("Gagal mengupdate status pembayaran");
     } finally {
       setUpdatingStatus(null);
     }
   };
 
+  // Fungsi untuk batch update status pembayaran
+  const handleBatchStatusUpdate = async (newStatus: string) => {
+    // Debouncing - prevent multiple rapid clicks
+    const now = Date.now();
+    if (now - lastClickTime < 2000) {
+      // 2 second debounce
+      console.log("Debouncing: Click ignored");
+      return;
+    }
+    setLastClickTime(now);
+
+    if (selectedItems.length === 0) {
+      alert("Pilih minimal satu data untuk diupdate");
+      return;
+    }
+
+    if (batchUpdateLoading) {
+      console.log("Already processing, ignoring click");
+      return;
+    }
+
+    const confirmed = confirm(
+      `Apakah Anda yakin ingin mengubah status ${selectedItems.length} data menjadi "${newStatus}"?`
+    );
+
+    if (!confirmed) return;
+
+    setBatchUpdateLoading(true);
+    try {
+      console.log("Starting batch update:", { selectedItems, newStatus });
+
+      // Update status untuk semua item yang dipilih dengan error handling per item
+      const updatePromises = selectedItems.map(async (aggregatedId) => {
+        try {
+          // Cari data yang dipilih untuk mendapatkan originalIds
+          const selectedItem = dataTabFiltered.find(
+            (item) => item.id === aggregatedId
+          );
+          const idsToUpdate = selectedItem?.originalIds || [aggregatedId];
+
+          console.log(`Updating IDs for ${aggregatedId}:`, idsToUpdate);
+
+          // Update semua ID asli yang terkait dengan data agregasi ini
+          const updateResults = await Promise.all(
+            idsToUpdate.map(async (originalId: string) => {
+              // Add timeout to prevent hanging
+              const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(
+                  () => reject(new Error(`Timeout updating ${originalId}`)),
+                  10000
+                )
+              );
+
+              // Gunakan endpoint yang lebih sederhana tanpa validasi periode
+              const updatePromise = salaryAPI.updateStatusPembayaran({
+                gajiId: originalId,
+                statusPembayaran: newStatus,
+              });
+
+              await Promise.race([updatePromise, timeoutPromise]);
+              return originalId;
+            })
+          );
+
+          return {
+            gajiId: aggregatedId,
+            originalIds: updateResults,
+            success: true,
+          };
+        } catch (error) {
+          console.error(`Failed to update ${aggregatedId}:`, error);
+          return { gajiId: aggregatedId, success: false, error };
+        }
+      });
+
+      const results = await Promise.allSettled(updatePromises);
+      const successCount = results.filter(
+        (result) => result.status === "fulfilled" && result.value.success
+      ).length;
+
+      console.log("Batch update results:", results);
+
+      // Refresh data dengan retry mechanism
+      try {
+        await loadData();
+      } catch (loadError) {
+        console.error("Error refreshing data:", loadError);
+        // Don't fail the whole operation, just warn user
+        alert(
+          "Status berhasil diupdate, tetapi gagal refresh data. Silakan refresh halaman manual."
+        );
+      }
+
+      // Jika status diubah menjadi "Dibayar", handle PDF dan redirect
+      if (newStatus === "Dibayar" && successCount > 0) {
+        const successfulItems = results
+          .filter(
+            (result) => result.status === "fulfilled" && result.value.success
+          )
+          .map(
+            (result) =>
+              (
+                result as PromiseFulfilledResult<{
+                  gajiId: string;
+                  success: boolean;
+                }>
+              ).value.gajiId
+          );
+
+        const selectedData = dataTabFiltered.filter((item) =>
+          successfulItems.includes(item.id)
+        );
+
+        // Auto print PDF dengan error handling
+        if (selectedData.length > 0) {
+          try {
+            console.log("=== CONSOLIDATING DATA FOR PDF ===");
+            console.log("Selected data before consolidation:", selectedData.map(item => ({
+              nama: item.karyawan?.namaLengkap,
+              pajakPph21: item.pajakPph21,
+              potonganKeterlambatan: item.potonganKeterlambatan,
+              potonganPinjaman: item.potonganPinjaman,
+              potonganSumbangan: item.potonganSumbangan,
+              potonganBpjs: item.potonganBpjs,
+              potonganUndangan: item.potonganUndangan
+            })));
+
+            // Gabungkan data berdasarkan karyawan yang sama (nama dan NIK)
+            const groupedDataForPDF = selectedData.reduce((acc, item) => {
+              const key = `${item.karyawan?.namaLengkap}_${item.karyawan?.nik}`;
+
+              console.log(`Processing item for key: ${key}`, {
+                pajakPph21: item.pajakPph21,
+                potonganKeterlambatan: item.potonganKeterlambatan,
+                potonganPinjaman: item.potonganPinjaman,
+                potonganSumbangan: item.potonganSumbangan,
+                potonganBpjs: item.potonganBpjs,
+                potonganUndangan: item.potonganUndangan
+              });
+
+              if (!acc[key]) {
+                // Buat entry baru untuk karyawan ini
+                acc[key] = {
+                  ...item,
+                  // Gabungkan periode
+                  periodeAwal: item.periodeAwal,
+                  periodeAkhir: item.periodeAkhir,
+                  // Total akumulasi untuk karyawan ini
+                  gajiPokok: item.gajiPokok || 0,
+                  bonus: item.bonus || 0,
+                  totalHariMasuk: item.totalHariMasuk || 0,
+                  totalHariSetengahHari: item.totalHariSetengahHari || 0,
+                  // Gabungkan semua potongan detail dengan benar
+                  pajakPph21: Number(item.pajakPph21) || 0,
+                  potonganKeterlambatan:
+                    Number(item.potonganKeterlambatan) || 0,
+                  potonganPinjaman: Number(item.potonganPinjaman) || 0,
+                  potonganSumbangan: Number(item.potonganSumbangan) || 0,
+                  potonganBpjs: Number(item.potonganBpjs) || 0,
+                  potonganUndangan: Number(item.potonganUndangan) || 0,
+                };
+                console.log(`Created new entry for ${key}:`, acc[key]);
+              } else {
+                // Gabungkan dengan entry yang sudah ada
+                const existing = acc[key];
+                console.log(`Merging data for existing ${key}:`, {
+                  existingBefore: {
+                    pajakPph21: existing.pajakPph21,
+                    potonganKeterlambatan: existing.potonganKeterlambatan,
+                    potonganPinjaman: existing.potonganPinjaman,
+                    potonganSumbangan: existing.potonganSumbangan,
+                    potonganBpjs: existing.potonganBpjs,
+                    potonganUndangan: existing.potonganUndangan
+                  },
+                  newItem: {
+                    pajakPph21: item.pajakPph21,
+                    potonganKeterlambatan: item.potonganKeterlambatan,
+                    potonganPinjaman: item.potonganPinjaman,
+                    potonganSumbangan: item.potonganSumbangan,
+                    potonganBpjs: item.potonganBpjs,
+                    potonganUndangan: item.potonganUndangan
+                  }
+                });
+
+                existing.gajiPokok =
+                  (existing.gajiPokok || 0) + (item.gajiPokok || 0);
+                existing.bonus = (existing.bonus || 0) + (item.bonus || 0);
+                existing.totalHariMasuk =
+                  (existing.totalHariMasuk || 0) + (item.totalHariMasuk || 0);
+                existing.totalHariSetengahHari =
+                  (existing.totalHariSetengahHari || 0) +
+                  (item.totalHariSetengahHari || 0);
+
+                // Gabungkan potongan detail dengan benar
+                const oldPajakPph21 = existing.pajakPph21 || 0;
+                const oldPotonganKeterlambatan = existing.potonganKeterlambatan || 0;
+                const oldPotonganPinjaman = existing.potonganPinjaman || 0;
+                const oldPotonganSumbangan = existing.potonganSumbangan || 0;
+                const oldPotonganBpjs = existing.potonganBpjs || 0;
+                const oldPotonganUndangan = existing.potonganUndangan || 0;
+
+                existing.pajakPph21 =
+                  (existing.pajakPph21 || 0) + (Number(item.pajakPph21) || 0);
+                existing.potonganKeterlambatan =
+                  (existing.potonganKeterlambatan || 0) +
+                  (Number(item.potonganKeterlambatan) || 0);
+                existing.potonganPinjaman =
+                  (existing.potonganPinjaman || 0) +
+                  (Number(item.potonganPinjaman) || 0);
+                existing.potonganSumbangan =
+                  (existing.potonganSumbangan || 0) +
+                  (Number(item.potonganSumbangan) || 0);
+                existing.potonganBpjs =
+                  (existing.potonganBpjs || 0) +
+                  (Number(item.potonganBpjs) || 0);
+                existing.potonganUndangan =
+                  (existing.potonganUndangan || 0) +
+                  (Number(item.potonganUndangan) || 0);
+
+                console.log(`After merging for ${key}:`, {
+                  pajakPph21: `${oldPajakPph21} + ${Number(item.pajakPph21) || 0} = ${existing.pajakPph21}`,
+                  potonganKeterlambatan: `${oldPotonganKeterlambatan} + ${Number(item.potonganKeterlambatan) || 0} = ${existing.potonganKeterlambatan}`,
+                  potonganPinjaman: `${oldPotonganPinjaman} + ${Number(item.potonganPinjaman) || 0} = ${existing.potonganPinjaman}`,
+                  potonganSumbangan: `${oldPotonganSumbangan} + ${Number(item.potonganSumbangan) || 0} = ${existing.potonganSumbangan}`,
+                  potonganBpjs: `${oldPotonganBpjs} + ${Number(item.potonganBpjs) || 0} = ${existing.potonganBpjs}`,
+                  potonganUndangan: `${oldPotonganUndangan} + ${Number(item.potonganUndangan) || 0} = ${existing.potonganUndangan}`
+                });
+
+                // Update periode untuk mencakup range yang lebih luas
+                if (
+                  item.periodeAwal &&
+                  (!existing.periodeAwal ||
+                    item.periodeAwal < existing.periodeAwal)
+                ) {
+                  existing.periodeAwal = item.periodeAwal;
+                }
+                if (
+                  item.periodeAkhir &&
+                  (!existing.periodeAkhir ||
+                    item.periodeAkhir > existing.periodeAkhir)
+                ) {
+                  existing.periodeAkhir = item.periodeAkhir;
+                }
+              }
+
+              return acc;
+            }, {} as Record<string, any>);
+
+            const consolidatedDataForPDF = Object.values(groupedDataForPDF);
+
+            console.log("=== FINAL CONSOLIDATED DATA FOR PDF ===");
+            consolidatedDataForPDF.forEach((item: any, index: number) => {
+              console.log(`Final consolidated item ${index + 1}:`, {
+                nama: item.karyawan?.namaLengkap,
+                pajakPph21: item.pajakPph21,
+                potonganKeterlambatan: item.potonganKeterlambatan,
+                potonganPinjaman: item.potonganPinjaman,
+                potonganSumbangan: item.potonganSumbangan,
+                potonganBpjs: item.potonganBpjs,
+                potonganUndangan: item.potonganUndangan,
+                totalCalculated: (item.pajakPph21 || 0) + (item.potonganKeterlambatan || 0) + (item.potonganPinjaman || 0) + (item.potonganSumbangan || 0) + (item.potonganBpjs || 0) + (item.potonganUndangan || 0)
+              });
+            });
+            console.log("=== END FINAL CONSOLIDATED DATA ===");
+
+            console.log("Data structure check:", {
+              count: consolidatedDataForPDF.length,
+              firstItem: consolidatedDataForPDF[0],
+              hasKaryawan: consolidatedDataForPDF.every(
+                (item: any) => item.karyawan
+              ),
+            });
+
+            await printSalaryPDF(consolidatedDataForPDF);
+          } catch (pdfError) {
+            console.error("Error printing PDF:", pdfError);
+            alert(
+              `Warning: Status berhasil diupdate, tetapi gagal mencetak PDF: ${
+                pdfError instanceof Error ? pdfError.message : "Unknown error"
+              }`
+            );
+          }
+        }
+
+        // Pindah ke tab "Data Sudah Dibayar"
+        setDataTab("paid");
+      }
+
+      // Reset selection
+      setSelectedItems([]);
+
+      // Show success message with details
+      let successMsg = `Berhasil mengupdate ${successCount} dari ${selectedItems.length} data`;
+      if (newStatus === "Dibayar") {
+        successMsg += ` menjadi "Dibayar"${
+          successCount > 0 ? " dan mencetak slip gaji!" : "!"
+        }`;
+        if (successCount > 0) {
+          successMsg += ` Data tersimpan di tab "Sudah Dibayar".`;
+        }
+      } else {
+        successMsg += ` menjadi "${newStatus}"!`;
+      }
+
+      if (successCount < selectedItems.length) {
+        successMsg += ` (${
+          selectedItems.length - successCount
+        } item gagal diupdate)`;
+      }
+
+      setSuccessMessage(successMsg);
+      setShowSuccessMessage(true);
+
+      // Hide success message after 5 seconds
+      setTimeout(() => {
+        setShowSuccessMessage(false);
+        setSuccessMessage("");
+      }, 5000);
+    } catch (error) {
+      console.error("Gagal mengupdate status batch:", error);
+      alert(
+        `Gagal mengupdate status batch: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    } finally {
+      setBatchUpdateLoading(false);
+    }
+  };
+
   const handleSelectAll = () => {
-    if (selectedItems.length === filtered.length) {
+    if (selectedItems.length === dataTabFiltered.length) {
       setSelectedItems([]);
     } else {
-      setSelectedItems(filtered.map((item) => item.id));
+      setSelectedItems(dataTabFiltered.map((item) => item.id));
     }
   };
 
@@ -144,18 +582,107 @@ export default function SalaryPage() {
 
     setExporting(true);
     try {
-      const selectedData = filtered.filter((item) =>
+      const selectedData = dataTabFiltered.filter((item) =>
         selectedItems.includes(item.id)
       );
 
-      if (action === "download") {
-        downloadSalaryPDF(selectedData);
-      } else {
-        printSalaryPDF(selectedData);
+      // Validasi data sebelum export
+      if (selectedData.length === 0) {
+        throw new Error("Data yang dipilih tidak valid");
       }
+
+      console.log("Exporting aggregated data:", selectedData);
+
+      // Gabungkan data berdasarkan karyawan yang sama (nama dan NIK)
+      const groupedDataForPDF = selectedData.reduce((acc, item) => {
+        const key = `${item.karyawan?.namaLengkap}_${item.karyawan?.nik}`;
+
+        if (!acc[key]) {
+          // Buat entry baru untuk karyawan ini
+          acc[key] = {
+            ...item,
+            // Gabungkan periode
+            periodeAwal: item.periodeAwal,
+            periodeAkhir: item.periodeAkhir,
+            // Total akumulasi untuk karyawan ini
+            gajiPokok: item.gajiPokok || 0,
+            bonus: item.bonus || 0,
+            totalHariMasuk: item.totalHariMasuk || 0,
+            totalHariSetengahHari: item.totalHariSetengahHari || 0,
+            // Gabungkan semua potongan detail dengan benar
+            pajakPph21: Number(item.pajakPph21) || 0,
+            potonganKeterlambatan: Number(item.potonganKeterlambatan) || 0,
+            potonganPinjaman: Number(item.potonganPinjaman) || 0,
+            potonganSumbangan: Number(item.potonganSumbangan) || 0,
+            potonganBpjs: Number(item.potonganBpjs) || 0,
+            potonganUndangan: Number(item.potonganUndangan) || 0,
+          };
+        } else {
+          // Gabungkan dengan entry yang sudah ada
+          const existing = acc[key];
+          existing.gajiPokok =
+            (existing.gajiPokok || 0) + (item.gajiPokok || 0);
+          existing.bonus = (existing.bonus || 0) + (item.bonus || 0);
+          existing.totalHariMasuk =
+            (existing.totalHariMasuk || 0) + (item.totalHariMasuk || 0);
+          existing.totalHariSetengahHari =
+            (existing.totalHariSetengahHari || 0) +
+            (item.totalHariSetengahHari || 0);
+
+          // Gabungkan potongan detail dengan benar
+          existing.pajakPph21 =
+            (existing.pajakPph21 || 0) + (Number(item.pajakPph21) || 0);
+          existing.potonganKeterlambatan =
+            (existing.potonganKeterlambatan || 0) +
+            (Number(item.potonganKeterlambatan) || 0);
+          existing.potonganPinjaman =
+            (existing.potonganPinjaman || 0) +
+            (Number(item.potonganPinjaman) || 0);
+          existing.potonganSumbangan =
+            (existing.potonganSumbangan || 0) +
+            (Number(item.potonganSumbangan) || 0);
+          existing.potonganBpjs =
+            (existing.potonganBpjs || 0) + (Number(item.potonganBpjs) || 0);
+          existing.potonganUndangan =
+            (existing.potonganUndangan || 0) +
+            (Number(item.potonganUndangan) || 0);
+
+          // Update periode untuk mencakup range yang lebih luas
+          if (
+            item.periodeAwal &&
+            (!existing.periodeAwal || item.periodeAwal < existing.periodeAwal)
+          ) {
+            existing.periodeAwal = item.periodeAwal;
+          }
+          if (
+            item.periodeAkhir &&
+            (!existing.periodeAkhir ||
+              item.periodeAkhir > existing.periodeAkhir)
+          ) {
+            existing.periodeAkhir = item.periodeAkhir;
+          }
+        }
+
+        return acc;
+      }, {} as Record<string, any>);
+
+      const consolidatedDataForPDF = Object.values(groupedDataForPDF);
+
+      if (action === "download") {
+        await downloadSalaryPDF(consolidatedDataForPDF);
+      } else {
+        await printSalaryPDF(consolidatedDataForPDF);
+      }
+
+      // Show success message
+      alert(`${action === "download" ? "Download" : "Print"} PDF berhasil!`);
     } catch (error) {
       console.error("Gagal export PDF:", error);
-      alert("Gagal export PDF");
+      alert(
+        `Gagal ${action === "download" ? "download" : "print"} PDF: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     } finally {
       setExporting(false);
     }
@@ -174,23 +701,41 @@ export default function SalaryPage() {
     try {
       if (bonusType === "equal") {
         // Bonus sama rata untuk karyawan yang dipilih
-        for (const gajiId of selectedItems) {
-          await salaryAPI.addBonus({
-            gajiId,
-            bonus: Number(equalBonus),
-          });
+        for (const aggregatedId of selectedItems) {
+          // Cari data yang dipilih untuk mendapatkan originalIds
+          const selectedItem = dataTabFiltered.find(
+            (item) => item.id === aggregatedId
+          );
+          const idsToUpdate = selectedItem?.originalIds || [aggregatedId];
+
+          // Tambahkan bonus ke semua ID asli
+          for (const originalId of idsToUpdate) {
+            await salaryAPI.addBonus({
+              gajiId: originalId,
+              bonus: Number(equalBonus),
+            });
+          }
         }
         setBonusMsg(
           `Bonus berhasil ditambahkan untuk ${selectedItems.length} karyawan!`
         );
       } else {
         // Bonus berbeda untuk setiap karyawan
-        for (const [gajiId, bonus] of Object.entries(differentBonuses)) {
-          if (selectedItems.includes(gajiId) && bonus) {
-            await salaryAPI.addBonus({
-              gajiId,
-              bonus: Number(bonus),
-            });
+        for (const [aggregatedId, bonus] of Object.entries(differentBonuses)) {
+          if (selectedItems.includes(aggregatedId) && bonus) {
+            // Cari data yang dipilih untuk mendapatkan originalIds
+            const selectedItem = dataTabFiltered.find(
+              (item) => item.id === aggregatedId
+            );
+            const idsToUpdate = selectedItem?.originalIds || [aggregatedId];
+
+            // Tambahkan bonus ke semua ID asli
+            for (const originalId of idsToUpdate) {
+              await salaryAPI.addBonus({
+                gajiId: originalId,
+                bonus: Number(bonus),
+              });
+            }
           }
         }
         setBonusMsg(`Bonus berhasil ditambahkan untuk karyawan yang dipilih!`);
@@ -234,6 +779,13 @@ export default function SalaryPage() {
       );
     }
 
+    // Filter berdasarkan data yang sudah dibayar
+    if (activeTab === "paid") {
+      filteredData = data.filter(
+        (item) => (item.statusPembayaran || "").toLowerCase() === "dibayar"
+      );
+    }
+
     // Filter berdasarkan status
     return filteredData.filter((item) => {
       if (status !== "all") {
@@ -245,7 +797,23 @@ export default function SalaryPage() {
     });
   };
 
+  // Filter data berdasarkan data tab (untuk tabel data gaji)
+  const getDataTabFiltered = () => {
+    const baseFiltered = getFilteredData();
+
+    if (dataTab === "unpaid") {
+      return baseFiltered.filter(
+        (item) => (item.statusPembayaran || "").toLowerCase() !== "dibayar"
+      );
+    } else {
+      return baseFiltered.filter(
+        (item) => (item.statusPembayaran || "").toLowerCase() === "dibayar"
+      );
+    }
+  };
+
   const filtered = getFilteredData();
+  const dataTabFiltered = getDataTabFiltered();
 
   // Reset selected items ketika tab berubah
   useEffect(() => {
@@ -254,10 +822,44 @@ export default function SalaryPage() {
     setEqualBonus("");
     setDifferentBonuses({});
     setBonusMsg("");
-  }, [activeTab]);
+  }, [activeTab, dataTab]);
 
   return (
     <div className="p-6 space-y-6">
+      {/* Success Message */}
+      {showSuccessMessage && (
+        <div className="fixed top-4 right-4 z-50 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded shadow-lg max-w-md">
+          <div className="flex items-start gap-2">
+            <span className="text-xl">✅</span>
+            <div>
+              <div className="font-semibold">Berhasil!</div>
+              <div className="text-sm">{successMessage}</div>
+            </div>
+            <button
+              onClick={() => setShowSuccessMessage(false)}
+              className="ml-auto text-green-700 hover:text-green-900"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Loading Overlay */}
+      {batchUpdateLoading && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 flex items-center gap-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div>
+              <div className="font-semibold">Memproses Pembayaran...</div>
+              <div className="text-sm text-gray-600">
+                Mohon tunggu, jangan tutup halaman ini
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header Section */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-800 rounded-lg p-6 text-white">
         <h1 className="text-3xl font-bold mb-2">
@@ -266,7 +868,7 @@ export default function SalaryPage() {
         <p className="text-blue-100">
           Kelola data gaji, bonus, potongan, dan laporan penggajian karyawan
         </p>
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
           <div className="bg-white/10 rounded p-3">
             <div className="font-semibold">Total Karyawan</div>
             <div className="text-2xl font-bold">{data.length}</div>
@@ -277,6 +879,17 @@ export default function SalaryPage() {
               {
                 data.filter((item) =>
                   item.karyawan?.departemen?.toLowerCase().includes("staff")
+                ).length
+              }
+            </div>
+          </div>
+          <div className="bg-white/10 rounded p-3">
+            <div className="font-semibold">Sudah Dibayar</div>
+            <div className="text-2xl font-bold">
+              {
+                data.filter(
+                  (item) =>
+                    (item.statusPembayaran || "").toLowerCase() === "dibayar"
                 ).length
               }
             </div>
@@ -293,7 +906,7 @@ export default function SalaryPage() {
         <h3 className="font-semibold text-amber-800 mb-2">
           📋 Panduan Penggunaan
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-amber-700">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-amber-700">
           <div>
             <strong>1. Filter Data:</strong> Gunakan tanggal dan status untuk
             menyaring data
@@ -303,12 +916,50 @@ export default function SalaryPage() {
             karyawan
           </div>
           <div>
-            <strong>3. Kelola Bonus:</strong> Tambah bonus individual atau
-            departemen
+            <strong>3. Bayar & Print:</strong> Ubah status jadi "Dibayar" dan
+            auto-print slip
           </div>
           <div>
-            <strong>4. Export Data:</strong> Download/print laporan PDF yang
-            dipilih
+            <strong>4. Batalkan Pembayaran:</strong> Kembalikan status ke "Belum
+            Dibayar"
+          </div>
+          <div>
+            <strong>5. Tab "Sudah Dibayar":</strong> Lihat histori gaji (status
+            tetap bisa diubah)
+          </div>
+          <div>
+            <strong>6. Export/Bonus:</strong> Kelola bonus dan export PDF
+          </div>
+        </div>
+        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+          <div className="flex items-center gap-2 text-blue-800">
+            <span className="text-lg">ℹ️</span>
+            <strong>Info Agregasi Data:</strong>
+          </div>
+          <p className="text-sm text-blue-700 mt-1">
+            Data gaji dengan status sama akan digabungkan per periode untuk
+            mempermudah manajemen. Periode ditampilkan sebagai range tanggal
+            dengan total hari kerja.
+          </p>
+          <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
+            <div className="flex items-center gap-2 text-yellow-800">
+              <span className="text-sm">💡</span>
+              <strong>Perhitungan Gaji:</strong>
+            </div>
+            <ul className="text-xs text-yellow-700 mt-1 space-y-1">
+              <li>
+                • <strong>STAFF:</strong> Gaji pokok = gaji per bulan, Total
+                gaji = gaji pokok - potongan setengah hari
+              </li>
+              <li>
+                • <strong>Non-STAFF:</strong> Gaji pokok = gaji per hari, Total
+                gaji = gaji harian (hari penuh + setengah hari)
+              </li>
+              <li>
+                • <strong>Gaji Bersih:</strong> Total gaji + bonus - potongan
+                (ditampilkan di bawah Total Gaji)
+              </li>
+            </ul>
           </div>
         </div>
       </div>
@@ -323,10 +974,12 @@ export default function SalaryPage() {
         <div className="p-4">
           <Tabs
             value={activeTab}
-            onValueChange={(value) => setActiveTab(value as "all" | "staff")}
+            onValueChange={(value) =>
+              setActiveTab(value as "all" | "staff" | "paid")
+            }
             className="w-full"
           >
-            <TabsList className="grid w-full grid-cols-2 bg-gray-100">
+            <TabsList className="grid w-full grid-cols-3 bg-gray-100">
               <TabsTrigger
                 value="all"
                 className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
@@ -345,6 +998,19 @@ export default function SalaryPage() {
                 }
                 )
               </TabsTrigger>
+              <TabsTrigger
+                value="paid"
+                className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white"
+              >
+                ✅ Sudah Dibayar (
+                {
+                  data.filter(
+                    (item) =>
+                      (item.statusPembayaran || "").toLowerCase() === "dibayar"
+                  ).length
+                }
+                )
+              </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -357,7 +1023,8 @@ export default function SalaryPage() {
               ✅ Data Terpilih:
             </span>
             <span className="text-blue-600 font-bold">
-              {selectedItems.length} dari {filtered.length} karyawan dipilih
+              {selectedItems.length} dari {dataTabFiltered.length} karyawan
+              dipilih
             </span>
           </div>
           <p className="text-sm text-blue-600 mt-1">
@@ -386,6 +1053,41 @@ export default function SalaryPage() {
                   setengah gaji
                 </li>
                 <li>• Status pembayaran dapat diubah langsung dari tabel</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "paid" && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">✅</span>
+            <div>
+              <h4 className="font-semibold text-emerald-800 mb-2">
+                Data Gaji yang Sudah Dibayar
+              </h4>
+              <ul className="text-sm text-emerald-700 space-y-1">
+                <li>
+                  • Menampilkan data gaji karyawan yang statusnya sudah
+                  "Dibayar"
+                </li>
+                <li>
+                  • Data ini merupakan histori pembayaran gaji yang telah
+                  selesai
+                </li>
+                <li>
+                  • Cocok untuk laporan pembayaran per minggu atau periode
+                  tertentu
+                </li>
+                <li>
+                  • PDF slip gaji sudah digenerate saat status diubah ke
+                  "Dibayar"
+                </li>
+                <li>
+                  • <strong>Status masih bisa diubah kembali</strong> jika
+                  diperlukan (mis: batalkan pembayaran)
+                </li>
               </ul>
             </div>
           </div>
@@ -496,7 +1198,7 @@ export default function SalaryPage() {
           <h3 className="font-medium text-gray-700 mb-3">
             📊 Aksi Data Terpilih
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <Button
               onClick={() => setShowBonusModal(true)}
               disabled={selectedItems.length === 0}
@@ -507,26 +1209,93 @@ export default function SalaryPage() {
               Bonus Individual ({selectedItems.length})
             </Button>
             <Button
+              onClick={() => handleBatchStatusUpdate("Dibayar")}
+              disabled={batchUpdateLoading || selectedItems.length === 0}
+              className="bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {batchUpdateLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <span className="mr-2">✅</span>
+                  Bayar & Print ({selectedItems.length})
+                </>
+              )}
+            </Button>
+            <Button
+              onClick={() => handleBatchStatusUpdate("Pending")}
+              disabled={batchUpdateLoading || selectedItems.length === 0}
+              variant="outline"
+              className="border-yellow-300 text-yellow-700 hover:bg-yellow-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {batchUpdateLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600 mr-2"></div>
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <span className="mr-2">⏳</span>
+                  Set Pending ({selectedItems.length})
+                </>
+              )}
+            </Button>
+            <Button
+              onClick={() => handleBatchStatusUpdate("Belum Dibayar")}
+              disabled={batchUpdateLoading || selectedItems.length === 0}
+              variant="outline"
+              className="border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {batchUpdateLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600 mr-2"></div>
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <span className="mr-2">❌</span>
+                  Batalkan Bayar ({selectedItems.length})
+                </>
+              )}
+            </Button>
+            <Button
               onClick={() => handleExportPDF("download")}
               variant="outline"
               disabled={exporting || selectedItems.length === 0}
-              className="border-blue-300 text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+              className="border-blue-300 text-blue-700 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span className="mr-2">📥</span>
-              {exporting
-                ? "Exporting..."
-                : `Download PDF (${selectedItems.length})`}
+              {exporting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <span className="mr-2">📥</span>
+                  Download PDF ({selectedItems.length})
+                </>
+              )}
             </Button>
             <Button
               onClick={() => handleExportPDF("print")}
               variant="outline"
               disabled={exporting || selectedItems.length === 0}
-              className="border-purple-300 text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+              className="border-purple-300 text-purple-700 hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span className="mr-2">🖨️</span>
-              {exporting
-                ? "Printing..."
-                : `Print PDF (${selectedItems.length})`}
+              {exporting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-2"></div>
+                  Printing...
+                </>
+              ) : (
+                <>
+                  <span className="mr-2">🖨️</span>
+                  Print PDF ({selectedItems.length})
+                </>
+              )}
             </Button>
           </div>
           {selectedItems.length === 0 && (
@@ -534,6 +1303,30 @@ export default function SalaryPage() {
               💡 Pilih minimal satu karyawan dari tabel untuk menggunakan aksi
               di atas
             </p>
+          )}
+          {selectedItems.length > 0 && (
+            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+              <p className="text-sm text-blue-700">
+                <strong>💡 Tips:</strong>
+              </p>
+              <ul className="text-sm text-blue-700 mt-1 space-y-1">
+                <li>
+                  • <strong>"Bayar & Print"</strong> - Ubah status ke "Dibayar"
+                  + auto print PDF
+                </li>
+                <li>
+                  • <strong>"Batalkan Bayar"</strong> - Kembalikan status dari
+                  "Dibayar" ke "Belum Dibayar"
+                </li>
+                <li>
+                  • <strong>"Set Pending"</strong> - Ubah status ke "Pending"
+                  (untuk review)
+                </li>
+                <li>
+                  • Status bisa diubah kapan saja melalui dropdown di tabel
+                </li>
+              </ul>
+            </div>
           )}
         </div>
       </div>
@@ -546,9 +1339,73 @@ export default function SalaryPage() {
               📋 Data Gaji Karyawan
             </h2>
             <div className="text-sm text-gray-600">
-              Menampilkan {filtered.length} dari {data.length} data
+              Menampilkan {dataTabFiltered.length} dari {data.length} data
             </div>
           </div>
+        </div>
+
+        {/* Tab untuk Data Gaji */}
+        <div className="p-4 border-b bg-gray-50">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-sm font-medium text-gray-700">
+              Filter Status Pembayaran:
+            </span>
+          </div>
+          <Tabs
+            value={dataTab}
+            onValueChange={(value) => setDataTab(value as "unpaid" | "paid")}
+            className="w-full"
+          >
+            <TabsList className="grid w-full grid-cols-2 bg-gray-100 max-w-md">
+              <TabsTrigger
+                value="unpaid"
+                className="data-[state=active]:bg-red-500 data-[state=active]:text-white text-sm"
+              >
+                ❌ Belum Dibayar (
+                {
+                  getFilteredData().filter(
+                    (item) =>
+                      (item.statusPembayaran || "").toLowerCase() !== "dibayar"
+                  ).length
+                }
+                )
+              </TabsTrigger>
+              <TabsTrigger
+                value="paid"
+                className="data-[state=active]:bg-green-500 data-[state=active]:text-white text-sm"
+              >
+                ✅ Sudah Dibayar (
+                {
+                  getFilteredData().filter(
+                    (item) =>
+                      (item.statusPembayaran || "").toLowerCase() === "dibayar"
+                  ).length
+                }
+                )
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {/* Info Tab */}
+          {dataTab === "unpaid" && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded">
+              <p className="text-sm text-red-700">
+                <strong>📋 Tab Belum Dibayar:</strong> Data gaji yang belum
+                dibayar atau masih pending. Anda dapat memproses pembayaran dari
+                tab ini.
+              </p>
+            </div>
+          )}
+
+          {dataTab === "paid" && (
+            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded">
+              <p className="text-sm text-green-700">
+                <strong>✅ Tab Sudah Dibayar:</strong> Histori gaji yang sudah
+                dibayar. Status masih bisa diubah kembali jika diperlukan
+                (misalnya untuk pembatalan).
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="p-4">
@@ -573,25 +1430,17 @@ export default function SalaryPage() {
                 🔄 Coba Lagi
               </Button>
             </div>
-          ) : filtered.length === 0 ? (
+          ) : dataTabFiltered.length === 0 ? (
             <div className="text-center py-12">
               <div className="text-6xl mb-4">📋</div>
               <h3 className="text-lg font-semibold text-gray-600 mb-2">
                 Tidak Ada Data
               </h3>
               <p className="text-gray-500 mb-4">
-                {data.length === 0
-                  ? "Belum ada data gaji yang tersedia. Silakan proses gaji terlebih dahulu."
-                  : "Tidak ada data yang sesuai dengan filter yang dipilih. Coba ubah filter tanggal atau status."}
+                {dataTab === "unpaid"
+                  ? "Tidak ada data gaji yang belum dibayar sesuai filter yang dipilih."
+                  : "Belum ada data gaji yang sudah dibayar sesuai filter yang dipilih."}
               </p>
-              {data.length === 0 && (
-                <Button asChild className="bg-blue-600 hover:bg-blue-700">
-                  <a href="/dashboard/salary/process">
-                    <span className="mr-2">🔄</span>
-                    Proses Gaji Sekarang
-                  </a>
-                </Button>
-              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -602,13 +1451,13 @@ export default function SalaryPage() {
                       <input
                         type="checkbox"
                         checked={
-                          selectedItems.length === filtered.length &&
-                          filtered.length > 0
+                          selectedItems.length === dataTabFiltered.length &&
+                          dataTabFiltered.length > 0
                         }
                         onChange={handleSelectAll}
                         className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                         title={
-                          selectedItems.length === filtered.length
+                          selectedItems.length === dataTabFiltered.length
                             ? "Batalkan pilih semua"
                             : "Pilih semua"
                         }
@@ -621,9 +1470,17 @@ export default function SalaryPage() {
                     <TableHead className="font-semibold">
                       🏢 Departemen
                     </TableHead>
-                    <TableHead className="font-semibold">📅 Periode</TableHead>
+                    <TableHead className="font-semibold">
+                      📅 Periode Kerja
+                      <div className="text-xs font-normal text-gray-500 mt-1">
+                        Range tanggal & total hari
+                      </div>
+                    </TableHead>
                     <TableHead className="font-semibold text-right">
                       💵 Gaji Pokok
+                      <div className="text-xs font-normal text-gray-500 mt-1">
+                        Dasar per hari/bulan
+                      </div>
                     </TableHead>
                     <TableHead className="font-semibold text-right">
                       🎁 Bonus
@@ -633,9 +1490,9 @@ export default function SalaryPage() {
                     </TableHead>
                     <TableHead className="font-semibold text-right">
                       💰 Gaji Bersih
-                    </TableHead>
-                    <TableHead className="font-semibold text-center">
-                      📊 Absensi
+                      <div className="text-xs font-normal text-gray-500 mt-1">
+                        Final + Bonus - Potongan
+                      </div>
                     </TableHead>
                     <TableHead className="font-semibold text-center">
                       ⏰ Setengah Hari
@@ -646,7 +1503,7 @@ export default function SalaryPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((gaji) => (
+                  {dataTabFiltered.map((gaji) => (
                     <TableRow key={gaji.id} className="hover:bg-gray-50">
                       <TableCell>
                         <input
@@ -676,11 +1533,17 @@ export default function SalaryPage() {
                       </TableCell>
                       <TableCell className="text-sm">
                         <div className="text-gray-600">
-                          {gaji.periodeAwal} - {gaji.periodeAkhir}
+                          {gaji.periodeDisplay ||
+                            `${gaji.periodeAwal} - ${gaji.periodeAkhir}`}
                         </div>
+                        {gaji.totalHari && gaji.totalHari > 1 && (
+                          <div className="text-xs text-blue-600 font-medium mt-1">
+                            📅 {gaji.totalHari} hari kerja
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        {formatCurrency(gaji.gajiPokok || 0)}
+                        {formatCurrency(gaji.totalGajiBersih || 0)}
                       </TableCell>
                       <TableCell className="text-right">
                         <span className="text-green-600 font-medium">
@@ -693,15 +1556,7 @@ export default function SalaryPage() {
                         </span>
                       </TableCell>
                       <TableCell className="text-right font-bold text-blue-600">
-                        {formatCurrency(gaji.totalGajiBersih || 0)}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge
-                          variant="secondary"
-                          className="bg-blue-100 text-blue-800"
-                        >
-                          {gaji.totalHariMasuk || 0} hari
-                        </Badge>
+                        {formatCurrency(gaji.gajiPokok || 0)}
                       </TableCell>
                       <TableCell className="text-center">
                         {gaji.totalHariSetengahHari ? (
@@ -740,6 +1595,11 @@ export default function SalaryPage() {
                           <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
                             <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-400"></div>
                             Updating...
+                          </div>
+                        )}
+                        {activeTab === "paid" && (
+                          <div className="text-xs text-blue-600 mt-1">
+                            💡 Bisa diubah kembali
                           </div>
                         )}
                       </TableCell>
@@ -822,7 +1682,7 @@ export default function SalaryPage() {
                   Bonus per Karyawan
                 </label>
                 <div className="border rounded p-4 bg-gray-50 max-h-60 overflow-y-auto">
-                  {filtered
+                  {dataTabFiltered
                     .filter((gaji) => selectedItems.includes(gaji.id))
                     .map((gaji) => (
                       <div
@@ -837,7 +1697,8 @@ export default function SalaryPage() {
                             NIK: {gaji.karyawan?.nik}
                           </div>
                           <div className="text-sm text-gray-600">
-                            Gaji Pokok: {formatCurrency(gaji.gajiPokok || 0)}
+                            Gaji Bersih:{" "}
+                            {formatCurrency(gaji.totalGajiBersih || 0)}
                           </div>
                         </div>
                         <div className="w-32">
@@ -882,7 +1743,7 @@ export default function SalaryPage() {
                   </h4>
                   <div className="max-h-32 overflow-y-auto">
                     {Object.entries(differentBonuses).map(([gajiId, bonus]) => {
-                      const gaji = filtered.find((g) => g.id === gajiId);
+                      const gaji = dataTabFiltered.find((g) => g.id === gajiId);
                       return (
                         <div key={gajiId} className="flex justify-between py-1">
                           <span>{gaji?.karyawan?.namaLengkap}</span>

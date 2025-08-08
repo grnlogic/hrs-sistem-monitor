@@ -2,7 +2,26 @@ import { formatCurrency } from './utils';
 
 // Helper function untuk mengecek apakah field memiliki nilai
 function hasValue(value: any): boolean {
-  return value && value > 0;
+  // Convert to number and check if it's a valid positive number
+  const numValue = Number(value);
+  return !isNaN(numValue) && numValue > 0;
+}
+
+// Helper function untuk menghitung total potongan
+function calculateTotalPotongan(gaji: any): number {
+  return (gaji.pajakPph21 || 0) + 
+         (gaji.potonganKeterlambatan || 0) + 
+         (gaji.potonganPinjaman || 0) + 
+         (gaji.potonganSumbangan || 0) + 
+         (gaji.potonganBpjs || 0) + 
+         (gaji.potonganUndangan || 0);
+}
+
+// Helper function untuk menghitung gaji bersih yang benar
+function calculateGajiBersih(gaji: any): number {
+  const totalPendapatan = (gaji.gajiPokok || 0) + (gaji.bonus || 0);
+  const totalPotongan = calculateTotalPotongan(gaji);
+  return totalPendapatan - totalPotongan;
 }
 
 // Helper function untuk generate potongan HTML
@@ -16,12 +35,26 @@ function generatePotonganHTML(gaji: any): string {
     { label: 'Undangan', value: gaji.potonganUndangan }
   ];
 
+  // Debug: Log data potongan yang diterima
+  console.log('Data potongan untuk PDF:', {
+    karyawan: gaji.karyawan?.namaLengkap,
+    potonganItems: potonganItems.map(item => ({ label: item.label, value: item.value, hasValue: hasValue(item.value) }))
+  });
+
+  // Tampilkan semua potongan yang memiliki nilai > 0
   const activePotongan = potonganItems.filter(item => hasValue(item.value));
   
   if (activePotongan.length === 0) {
     return `
       <div class="no-data">Tidak ada potongan</div>
     `;
+  }
+
+  // Tambahan: jika semua potongan 0 tapi ada potongan di data, tampilkan semua
+  const totalPotongan = potonganItems.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
+  if (totalPotongan > 0 && activePotongan.length < potonganItems.length) {
+    // Ada potongan total tapi tidak semua ter-detect, tampilkan semua yang ada nilainya
+    console.log('Warning: Total potongan > 0 tapi tidak semua ter-detect, showing all non-zero items');
   }
 
   return activePotongan.map(item => `
@@ -33,6 +66,23 @@ function generatePotonganHTML(gaji: any): string {
 }
 
 export function generateSalarySlipHTML(salaryData: any[]): string {
+  // Debug: Log data yang akan diproses untuk PDF
+  console.log('=== GENERATING PDF TEMPLATE ===');
+  console.log('Total data items:', salaryData.length);
+  salaryData.forEach((item, index) => {
+    console.log(`Data ${index + 1}:`, {
+      nama: item.karyawan?.namaLengkap,
+      pajakPph21: item.pajakPph21,
+      potonganKeterlambatan: item.potonganKeterlambatan,
+      potonganPinjaman: item.potonganPinjaman,
+      potonganSumbangan: item.potonganSumbangan,
+      potonganBpjs: item.potonganBpjs,
+      potonganUndangan: item.potonganUndangan,
+      totalPotongan: (item.pajakPph21 || 0) + (item.potonganKeterlambatan || 0) + (item.potonganPinjaman || 0) + (item.potonganSumbangan || 0) + (item.potonganBpjs || 0) + (item.potonganUndangan || 0)
+    });
+  });
+  console.log('=== END DEBUG ===');
+
   const template = `<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -223,7 +273,12 @@ export function generateSalarySlipHTML(salaryData: any[]): string {
 </head>
 <body>
     <div class="page-container">
-        ${salaryData.map((gaji, index) => `
+        ${salaryData.map((gaji, index) => {
+          // Hitung ulang total potongan dan gaji bersih
+          const totalPotongan = calculateTotalPotongan(gaji);
+          const gajiBersih = calculateGajiBersih(gaji);
+          
+          return `
         <!-- Slip Gaji ${index + 1} -->
         <div class="slip-gaji">
             <div class="slip-header">
@@ -251,7 +306,7 @@ export function generateSalarySlipHTML(salaryData: any[]): string {
             
             <div class="period-info">
                 <strong>Periode:</strong> ${gaji.periodeAwal || '-'} s/d ${gaji.periodeAkhir || '-'}<br>
-                <strong>Kehadiran:</strong> ${gaji.totalHariMasuk || 0} hari${gaji.totalHariSetengahHari ? ` (+ ${gaji.totalHariSetengahHari} setengah hari)` : ''}
+                <strong>Periode Kerja:</strong> ${gaji.totalHariMasuk || 0} hari${gaji.totalHariSetengahHari ? ` (+ ${gaji.totalHariSetengahHari} setengah hari)` : ''}
             </div>
             
             <div class="salary-details">
@@ -278,14 +333,14 @@ export function generateSalarySlipHTML(salaryData: any[]): string {
                     ${generatePotonganHTML(gaji)}
                     <div class="info-row total-row">
                         <span class="label">Jumlah:</span>
-                        <span class="value">${formatCurrency(gaji.potongan || 0)}</span>
+                        <span class="value">${formatCurrency(totalPotongan)}</span>
                     </div>
                 </div>
                 
                 <div class="grand-total">
                     <div class="info-row">
                         <span class="label">GAJI BERSIH:</span>
-                        <span class="value">${formatCurrency(gaji.totalGajiBersih || gaji.totalGaji || 0)}</span>
+                        <span class="value">${formatCurrency(gajiBersih)}</span>
                     </div>
                 </div>
             </div>
@@ -294,7 +349,7 @@ export function generateSalarySlipHTML(salaryData: any[]): string {
                 Dicetak: ${new Date().toLocaleDateString('id-ID')} | ${new Date().toLocaleTimeString('id-ID')}
             </div>
         </div>
-        `).join('')}
+        `}).join('')}
     </div>
 </body>
 </html>`;
