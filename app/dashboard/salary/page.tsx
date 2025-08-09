@@ -136,34 +136,64 @@ export default function SalaryPage() {
             }
 
             // PERBAIKAN: Agregasi semua field potongan detail
-            existing.pajakPph21 = (existing.pajakPph21 || 0) + (Number(item.pajakPph21) || 0);
-            existing.potonganKeterlambatan = (existing.potonganKeterlambatan || 0) + (Number(item.potonganKeterlambatan) || 0);
-            existing.potonganPinjaman = (existing.potonganPinjaman || 0) + (Number(item.potonganPinjaman) || 0);
-            existing.potonganSumbangan = (existing.potonganSumbangan || 0) + (Number(item.potonganSumbangan) || 0);
-            existing.potonganBpjs = (existing.potonganBpjs || 0) + (Number(item.potonganBpjs) || 0);
-            existing.potonganUndangan = (existing.potonganUndangan || 0) + (Number(item.potonganUndangan) || 0);
+            existing.pajakPph21 =
+              (existing.pajakPph21 || 0) + (Number(item.pajakPph21) || 0);
+            existing.potonganKeterlambatan =
+              (existing.potonganKeterlambatan || 0) +
+              (Number(item.potonganKeterlambatan) || 0);
+            existing.potonganPinjaman =
+              (existing.potonganPinjaman || 0) +
+              (Number(item.potonganPinjaman) || 0);
+            existing.potonganSumbangan =
+              (existing.potonganSumbangan || 0) +
+              (Number(item.potonganSumbangan) || 0);
+            existing.potonganBpjs =
+              (existing.potonganBpjs || 0) + (Number(item.potonganBpjs) || 0);
+            existing.potonganUndangan =
+              (existing.potonganUndangan || 0) +
+              (Number(item.potonganUndangan) || 0);
           }
 
           return acc;
         }, {});
 
         // Convert back to array dan format periode display
-        const aggregatedData = Object.values(groupedData).map((item: any) => ({
-          ...item,
-          // Format periode display
-          periode:
-            item.periodeAwal === item.periodeAkhir
-              ? item.periodeAwal
-              : `${item.periodeAwal} - ${item.periodeAkhir}`,
-          // Tambah info total hari di display
-          periodeDisplay:
-            item.totalHari === 1
-              ? `${item.periodeAwal} (1 hari)`
-              : `${item.periodeAwal} - ${item.periodeAkhir} (${item.totalHari} hari)`,
-        }));
+        const aggregatedData = Object.values(groupedData).map((item: any) => {
+          // Hitung ulang total potongan berdasarkan detail potongan yang sudah diagregasi
+          const totalPotonganDetail =
+            (item.pajakPph21 || 0) +
+            (item.potonganKeterlambatan || 0) +
+            (item.potonganPinjaman || 0) +
+            (item.potonganSumbangan || 0) +
+            (item.potonganBpjs || 0) +
+            (item.potonganUndangan || 0);
+
+          // Hitung ulang gaji bersih berdasarkan data yang sudah diagregasi
+          const totalPendapatan = (item.gajiPokok || 0) + (item.bonus || 0);
+          const gajiBersihCorrect = totalPendapatan - totalPotonganDetail;
+
+          return {
+            ...item,
+            // Update total potongan dengan nilai yang benar
+            potongan: totalPotonganDetail,
+            // Update gaji bersih dengan nilai yang benar
+            gajiBersih: gajiBersihCorrect,
+            totalGajiBersih: gajiBersihCorrect,
+            // Format periode display
+            periode:
+              item.periodeAwal === item.periodeAkhir
+                ? item.periodeAwal
+                : `${item.periodeAwal} - ${item.periodeAkhir}`,
+            // Tambah info total hari di display
+            periodeDisplay:
+              item.totalHari === 1
+                ? `${item.periodeAwal} (1 hari)`
+                : `${item.periodeAwal} - ${item.periodeAkhir} (${item.totalHari} hari)`,
+          };
+        });
 
         console.log("Data gaji setelah agregasi:", aggregatedData);
-        
+
         // Debug: Log beberapa contoh data agregasi dengan detail potongan
         if (aggregatedData.length > 0) {
           console.log("=== SAMPLE AGGREGATED DATA ===");
@@ -176,7 +206,13 @@ export default function SalaryPage() {
               potonganSumbangan: item.potonganSumbangan,
               potonganBpjs: item.potonganBpjs,
               potonganUndangan: item.potonganUndangan,
-              totalCalculated: (item.pajakPph21 || 0) + (item.potonganKeterlambatan || 0) + (item.potonganPinjaman || 0) + (item.potonganSumbangan || 0) + (item.potonganBpjs || 0) + (item.potonganUndangan || 0)
+              totalCalculated:
+                (item.pajakPph21 || 0) +
+                (item.potonganKeterlambatan || 0) +
+                (item.potonganPinjaman || 0) +
+                (item.potonganSumbangan || 0) +
+                (item.potonganBpjs || 0) +
+                (item.potonganUndangan || 0),
             });
           });
           console.log("=== END SAMPLE ===");
@@ -345,15 +381,18 @@ export default function SalaryPage() {
         if (selectedData.length > 0) {
           try {
             console.log("=== CONSOLIDATING DATA FOR PDF ===");
-            console.log("Selected data before consolidation:", selectedData.map(item => ({
-              nama: item.karyawan?.namaLengkap,
-              pajakPph21: item.pajakPph21,
-              potonganKeterlambatan: item.potonganKeterlambatan,
-              potonganPinjaman: item.potonganPinjaman,
-              potonganSumbangan: item.potonganSumbangan,
-              potonganBpjs: item.potonganBpjs,
-              potonganUndangan: item.potonganUndangan
-            })));
+            console.log(
+              "Selected data before consolidation:",
+              selectedData.map((item) => ({
+                nama: item.karyawan?.namaLengkap,
+                pajakPph21: item.pajakPph21,
+                potonganKeterlambatan: item.potonganKeterlambatan,
+                potonganPinjaman: item.potonganPinjaman,
+                potonganSumbangan: item.potonganSumbangan,
+                potonganBpjs: item.potonganBpjs,
+                potonganUndangan: item.potonganUndangan,
+              }))
+            );
 
             // Gabungkan data berdasarkan karyawan yang sama (nama dan NIK)
             const groupedDataForPDF = selectedData.reduce((acc, item) => {
@@ -365,7 +404,7 @@ export default function SalaryPage() {
                 potonganPinjaman: item.potonganPinjaman,
                 potonganSumbangan: item.potonganSumbangan,
                 potonganBpjs: item.potonganBpjs,
-                potonganUndangan: item.potonganUndangan
+                potonganUndangan: item.potonganUndangan,
               });
 
               if (!acc[key]) {
@@ -400,7 +439,7 @@ export default function SalaryPage() {
                     potonganPinjaman: existing.potonganPinjaman,
                     potonganSumbangan: existing.potonganSumbangan,
                     potonganBpjs: existing.potonganBpjs,
-                    potonganUndangan: existing.potonganUndangan
+                    potonganUndangan: existing.potonganUndangan,
                   },
                   newItem: {
                     pajakPph21: item.pajakPph21,
@@ -408,8 +447,8 @@ export default function SalaryPage() {
                     potonganPinjaman: item.potonganPinjaman,
                     potonganSumbangan: item.potonganSumbangan,
                     potonganBpjs: item.potonganBpjs,
-                    potonganUndangan: item.potonganUndangan
-                  }
+                    potonganUndangan: item.potonganUndangan,
+                  },
                 });
 
                 existing.gajiPokok =
@@ -423,7 +462,8 @@ export default function SalaryPage() {
 
                 // Gabungkan potongan detail dengan benar
                 const oldPajakPph21 = existing.pajakPph21 || 0;
-                const oldPotonganKeterlambatan = existing.potonganKeterlambatan || 0;
+                const oldPotonganKeterlambatan =
+                  existing.potonganKeterlambatan || 0;
                 const oldPotonganPinjaman = existing.potonganPinjaman || 0;
                 const oldPotonganSumbangan = existing.potonganSumbangan || 0;
                 const oldPotonganBpjs = existing.potonganBpjs || 0;
@@ -448,12 +488,24 @@ export default function SalaryPage() {
                   (Number(item.potonganUndangan) || 0);
 
                 console.log(`After merging for ${key}:`, {
-                  pajakPph21: `${oldPajakPph21} + ${Number(item.pajakPph21) || 0} = ${existing.pajakPph21}`,
-                  potonganKeterlambatan: `${oldPotonganKeterlambatan} + ${Number(item.potonganKeterlambatan) || 0} = ${existing.potonganKeterlambatan}`,
-                  potonganPinjaman: `${oldPotonganPinjaman} + ${Number(item.potonganPinjaman) || 0} = ${existing.potonganPinjaman}`,
-                  potonganSumbangan: `${oldPotonganSumbangan} + ${Number(item.potonganSumbangan) || 0} = ${existing.potonganSumbangan}`,
-                  potonganBpjs: `${oldPotonganBpjs} + ${Number(item.potonganBpjs) || 0} = ${existing.potonganBpjs}`,
-                  potonganUndangan: `${oldPotonganUndangan} + ${Number(item.potonganUndangan) || 0} = ${existing.potonganUndangan}`
+                  pajakPph21: `${oldPajakPph21} + ${
+                    Number(item.pajakPph21) || 0
+                  } = ${existing.pajakPph21}`,
+                  potonganKeterlambatan: `${oldPotonganKeterlambatan} + ${
+                    Number(item.potonganKeterlambatan) || 0
+                  } = ${existing.potonganKeterlambatan}`,
+                  potonganPinjaman: `${oldPotonganPinjaman} + ${
+                    Number(item.potonganPinjaman) || 0
+                  } = ${existing.potonganPinjaman}`,
+                  potonganSumbangan: `${oldPotonganSumbangan} + ${
+                    Number(item.potonganSumbangan) || 0
+                  } = ${existing.potonganSumbangan}`,
+                  potonganBpjs: `${oldPotonganBpjs} + ${
+                    Number(item.potonganBpjs) || 0
+                  } = ${existing.potonganBpjs}`,
+                  potonganUndangan: `${oldPotonganUndangan} + ${
+                    Number(item.potonganUndangan) || 0
+                  } = ${existing.potonganUndangan}`,
                 });
 
                 // Update periode untuk mencakup range yang lebih luas
@@ -476,7 +528,39 @@ export default function SalaryPage() {
               return acc;
             }, {} as Record<string, any>);
 
-            const consolidatedDataForPDF = Object.values(groupedDataForPDF);
+            const consolidatedDataForPDF = Object.values(groupedDataForPDF).map(
+              (item: any) => {
+                // Jika tidak ada totalHari, hitung berdasarkan range tanggal
+                if (!item.totalHari && item.periodeAwal && item.periodeAkhir) {
+                  if (item.periodeAwal === item.periodeAkhir) {
+                    item.totalHari = 1;
+                  } else {
+                    const startDate = new Date(item.periodeAwal);
+                    const endDate = new Date(item.periodeAkhir);
+                    item.totalHari =
+                      Math.ceil(
+                        (endDate.getTime() - startDate.getTime()) /
+                          (1000 * 60 * 60 * 24)
+                      ) + 1;
+                  }
+                }
+
+                // Jika masih tidak ada totalHari, gunakan total hari masuk + hari setengah
+                if (!item.totalHari) {
+                  item.totalHari =
+                    (item.totalHariMasuk || 0) +
+                    (item.totalHariSetengahHari || 0);
+                }
+
+                // TAMBAHAN: Generate periodeDisplay untuk PDF (sama dengan format di halaman utama)
+                item.periodeDisplay =
+                  item.totalHari === 1
+                    ? `${item.periodeAwal} (1 hari)`
+                    : `${item.periodeAwal} - ${item.periodeAkhir} (${item.totalHari} hari)`;
+
+                return item;
+              }
+            );
 
             console.log("=== FINAL CONSOLIDATED DATA FOR PDF ===");
             consolidatedDataForPDF.forEach((item: any, index: number) => {
@@ -488,7 +572,13 @@ export default function SalaryPage() {
                 potonganSumbangan: item.potonganSumbangan,
                 potonganBpjs: item.potonganBpjs,
                 potonganUndangan: item.potonganUndangan,
-                totalCalculated: (item.pajakPph21 || 0) + (item.potonganKeterlambatan || 0) + (item.potonganPinjaman || 0) + (item.potonganSumbangan || 0) + (item.potonganBpjs || 0) + (item.potonganUndangan || 0)
+                totalCalculated:
+                  (item.pajakPph21 || 0) +
+                  (item.potonganKeterlambatan || 0) +
+                  (item.potonganPinjaman || 0) +
+                  (item.potonganSumbangan || 0) +
+                  (item.potonganBpjs || 0) +
+                  (item.potonganUndangan || 0),
               });
             });
             console.log("=== END FINAL CONSOLIDATED DATA ===");
@@ -609,6 +699,7 @@ export default function SalaryPage() {
             bonus: item.bonus || 0,
             totalHariMasuk: item.totalHariMasuk || 0,
             totalHariSetengahHari: item.totalHariSetengahHari || 0,
+            totalHari: item.totalHari || 0, // Tambahkan totalHari
             // Gabungkan semua potongan detail dengan benar
             pajakPph21: Number(item.pajakPph21) || 0,
             potonganKeterlambatan: Number(item.potonganKeterlambatan) || 0,
@@ -661,12 +752,50 @@ export default function SalaryPage() {
           ) {
             existing.periodeAkhir = item.periodeAkhir;
           }
+
+          // Update total hari jika ada
+          if (item.totalHari) {
+            existing.totalHari =
+              (existing.totalHari || 0) + (item.totalHari || 0);
+          }
         }
 
         return acc;
       }, {} as Record<string, any>);
 
-      const consolidatedDataForPDF = Object.values(groupedDataForPDF);
+      // Hitung ulang totalHari untuk setiap item yang diagregasi
+      const consolidatedDataForPDF = Object.values(groupedDataForPDF).map(
+        (item: any) => {
+          // Jika tidak ada totalHari, hitung berdasarkan range tanggal
+          if (!item.totalHari && item.periodeAwal && item.periodeAkhir) {
+            if (item.periodeAwal === item.periodeAkhir) {
+              item.totalHari = 1;
+            } else {
+              const startDate = new Date(item.periodeAwal);
+              const endDate = new Date(item.periodeAkhir);
+              item.totalHari =
+                Math.ceil(
+                  (endDate.getTime() - startDate.getTime()) /
+                    (1000 * 60 * 60 * 24)
+                ) + 1;
+            }
+          }
+
+          // Jika masih tidak ada totalHari, gunakan total hari masuk + hari setengah
+          if (!item.totalHari) {
+            item.totalHari =
+              (item.totalHariMasuk || 0) + (item.totalHariSetengahHari || 0);
+          }
+
+          // TAMBAHAN: Generate periodeDisplay untuk PDF (sama dengan format di halaman utama)
+          item.periodeDisplay =
+            item.totalHari === 1
+              ? `${item.periodeAwal} (1 hari)`
+              : `${item.periodeAwal} - ${item.periodeAkhir} (${item.totalHari} hari)`;
+
+          return item;
+        }
+      );
 
       if (action === "download") {
         await downloadSalaryPDF(consolidatedDataForPDF);
