@@ -121,19 +121,14 @@ export default function SalaryPage() {
             // Tambah ID asli
             existing.originalIds.push(item.id);
 
-            // Update total gaji (jika ada)
-            if (item.gajiPokok && existing.gajiPokok) {
-              existing.gajiPokok += item.gajiPokok;
+            // Update agregat: totalGaji dijumlahkan, gajiPokok TIDAK dijumlahkan (tetap sebagai dasar per hari/bulan)
+            // Pertahankan gajiPokok dari entry pertama agar tampil sesuai "dasar tarif"
+            existing.totalGaji =
+              (existing.totalGaji || 0) + (item.totalGaji || 0);
+            if (item.bonus) {
+              existing.bonus = (existing.bonus || 0) + item.bonus;
             }
-            if (item.bonus && existing.bonus) {
-              existing.bonus += item.bonus;
-            }
-            if (item.potongan && existing.potongan) {
-              existing.potongan += item.potongan;
-            }
-            if (item.gajiBersih && existing.gajiBersih) {
-              existing.gajiBersih += item.gajiBersih;
-            }
+            // totalGajiBersih akan dihitung ulang, jadi tidak perlu diagregasi
 
             // PERBAIKAN: Agregasi semua field potongan detail
             existing.pajakPph21 =
@@ -169,7 +164,8 @@ export default function SalaryPage() {
             (item.potonganUndangan || 0);
 
           // Hitung ulang gaji bersih berdasarkan data yang sudah diagregasi
-          const totalPendapatan = (item.gajiPokok || 0) + (item.bonus || 0);
+          // totalGaji sudah mencerminkan gaji pokok (termasuk penyesuaian hari/setengah hari) + bonus
+          const totalPendapatan = item.totalGaji || 0;
           const gajiBersihCorrect = totalPendapatan - totalPotonganDetail;
 
           return {
@@ -1672,7 +1668,7 @@ export default function SalaryPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        {formatCurrency(gaji.totalGajiBersih || 0)}
+                        {formatCurrency(gaji.gajiPokok || 0)}
                       </TableCell>
                       <TableCell className="text-right">
                         <span className="text-green-600 font-medium">
@@ -1685,7 +1681,7 @@ export default function SalaryPage() {
                         </span>
                       </TableCell>
                       <TableCell className="text-right font-bold text-blue-600">
-                        {formatCurrency(gaji.gajiPokok || 0)}
+                        {formatCurrency(gaji.totalGajiBersih || 0)}
                       </TableCell>
                       <TableCell className="text-center">
                         {gaji.totalHariSetengahHari ? (

@@ -19,20 +19,44 @@ function calculateTotalPotongan(gaji: any): number {
 
 // Helper function untuk menghitung gaji bersih yang benar
 function calculateGajiBersih(gaji: any): number {
-    const totalPendapatan = (gaji.gajiPokok || 0) + (gaji.bonus || 0);
+    // PERBAIKAN: Prioritaskan nilai yang sudah dihitung dari halaman web
+    // 1. Gunakan totalGajiBersih yang sudah dihitung dengan benar di halaman web
+    // 2. Fallback ke gajiBersih jika totalGajiBersih tidak ada
+    // 3. Terakhir, hitung manual jika kedua nilai tidak ada
+    
+    if (typeof gaji.totalGajiBersih === 'number' && gaji.totalGajiBersih > 0) {
+        console.log('Menggunakan totalGajiBersih dari halaman web untuk:', gaji.karyawan?.namaLengkap, {
+            totalGajiBersih: gaji.totalGajiBersih,
+            source: 'web calculation'
+        });
+        return gaji.totalGajiBersih;
+    }
+    
+    if (typeof gaji.gajiBersih === 'number' && gaji.gajiBersih > 0) {
+        console.log('Menggunakan gajiBersih dari halaman web untuk:', gaji.karyawan?.namaLengkap, {
+            gajiBersih: gaji.gajiBersih,
+            source: 'web fallback'
+        });
+        return gaji.gajiBersih;
+    }
+    
+    // Fallback: hitung manual (seperti di halaman web)
+    const totalPendapatan = gaji.totalGaji || ((gaji.gajiPokok || 0) + (gaji.bonus || 0));
     const totalPotongan = calculateTotalPotongan(gaji);
+    const calculatedGajiBersih = totalPendapatan - totalPotongan;
     
     // Debug log untuk memastikan perhitungan benar
-    console.log('Menghitung gaji bersih untuk:', gaji.karyawan?.namaLengkap, {
+    console.log('Menghitung gaji bersih manual untuk:', gaji.karyawan?.namaLengkap, {
         gajiPokok: gaji.gajiPokok,
         bonus: gaji.bonus,
+        totalGaji: gaji.totalGaji,
         totalPendapatan,
         totalPotongan,
-        gajiBersihHitung: totalPendapatan - totalPotongan,
-        gajiBersihAsli: gaji.gajiBersih || gaji.totalGajiBersih
+        gajiBersihHitung: calculatedGajiBersih,
+        source: 'manual calculation'
     });
     
-    return totalPendapatan - totalPotongan;
+    return calculatedGajiBersih;
 }
 
 // Helper function untuk generate potongan HTML
@@ -87,13 +111,22 @@ export function generateSalarySlipHTML(salaryData: any[]): string {
             periodeAwal: item.periodeAwal,
             periodeAkhir: item.periodeAkhir,
             totalHari: item.totalHari,
+            // Gaji details
+            gajiPokok: item.gajiPokok,
+            totalGaji: item.totalGaji,
+            bonus: item.bonus,
+            // Gaji bersih comparisons
+            gajiBersih: item.gajiBersih,
+            totalGajiBersih: item.totalGajiBersih,
+            // Potongan details
             pajakPph21: item.pajakPph21,
             potonganKeterlambatan: item.potonganKeterlambatan,
             potonganPinjaman: item.potonganPinjaman,
             potonganSumbangan: item.potonganSumbangan,
             potonganBpjs: item.potonganBpjs,
             potonganUndangan: item.potonganUndangan,
-            totalPotongan: (item.pajakPph21 || 0) + (item.potonganKeterlambatan || 0) + (item.potonganPinjaman || 0) + (item.potonganSumbangan || 0) + (item.potonganBpjs || 0) + (item.potonganUndangan || 0)
+            totalPotonganCalculated: (item.pajakPph21 || 0) + (item.potonganKeterlambatan || 0) + (item.potonganPinjaman || 0) + (item.potonganSumbangan || 0) + (item.potonganBpjs || 0) + (item.potonganUndangan || 0),
+            potongan: item.potongan
         });
     });
     console.log('=== END DEBUG ===');
@@ -364,7 +397,7 @@ export function generateSalarySlipHTML(salaryData: any[]): string {
                     ` : ''}
                     <div class="info-row total-row">
                         <span class="label">Jumlah:</span>
-                        <span class="value">${formatCurrency((gaji.gajiPokok || 0) + (gaji.bonus || 0))}</span>
+                        <span class="value">${formatCurrency(gaji.totalGaji || ((gaji.gajiPokok || 0) + (gaji.bonus || 0)))}</span>
                     </div>
                 </div>
                 
