@@ -14,6 +14,10 @@ import {
   DollarSign,
   AlertTriangle,
   Calendar,
+  TrendingUp,
+  BarChart3,
+  PieChart,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/form/button";
 import {
@@ -37,6 +41,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/display/table";
+import {
+  PieChart as RechartsPieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  Area,
+  AreaChart,
+} from "recharts";
 
 interface DashboardStats {
   totalEmployees: number;
@@ -48,6 +69,9 @@ interface DashboardStats {
   pendingLeaves: number;
   totalViolations: number;
   monthlyPayroll: number;
+  weeklyAttendance: any[];
+  departmentStats: any[];
+  monthlyTrends: any[];
 }
 
 export default function DashboardPage() {
@@ -91,15 +115,31 @@ export default function DashboardPage() {
 
         const todayAttendance = {
           present: todayAttendanceData.filter(
-            (a: any) => a.status === "Hadir" || a.status === "Present"
+            (a: any) =>
+              a.status === "Hadir" ||
+              a.status === "Present" ||
+              a.status === "HADIR"
           ).length,
           late: todayAttendanceData.filter(
-            (a: any) => a.status === "Terlambat" || a.status === "Late"
+            (a: any) =>
+              a.status === "Terlambat" ||
+              a.status === "Late" ||
+              a.status === "TERLAMBAT"
           ).length,
           absent: todayAttendanceData.filter((a: any) =>
-            ["Sakit", "Alpha", "Cuti", "Absent", "Sick", "Leave"].includes(
-              a.status
-            )
+            [
+              "Sakit",
+              "Alpha",
+              "Cuti",
+              "Absent",
+              "Sick",
+              "Leave",
+              "SAKIT",
+              "ALPHA",
+              "CUTI",
+              "TIDAK HADIR",
+              "OFF",
+            ].includes(a.status)
           ).length,
         };
 
@@ -128,12 +168,120 @@ export default function DashboardPage() {
             leave.status === "Pending" || leave.status === "pending"
         ).length;
 
+        // Prepare weekly attendance data for chart
+        const last7Days = Array.from({ length: 7 }, (_, i) => {
+          const date = new Date();
+          date.setDate(date.getDate() - i);
+          return date.toISOString().split("T")[0];
+        }).reverse();
+
+        const weeklyAttendance = last7Days.map((date) => {
+          const dayData = attendanceData.filter(
+            (a: any) => a.tanggal === date || a.date === date
+          );
+          return {
+            date: new Date(date).toLocaleDateString("id-ID", {
+              weekday: "short",
+            }),
+            hadir: dayData.filter(
+              (a: any) =>
+                a.status === "Hadir" ||
+                a.status === "Present" ||
+                a.status === "HADIR"
+            ).length,
+            terlambat: dayData.filter(
+              (a: any) =>
+                a.status === "Terlambat" ||
+                a.status === "Late" ||
+                a.status === "TERLAMBAT"
+            ).length,
+            tidak_hadir: dayData.filter((a: any) =>
+              [
+                "Sakit",
+                "Alpha",
+                "Cuti",
+                "Absent",
+                "Sick",
+                "Leave",
+                "SAKIT",
+                "ALPHA",
+                "CUTI",
+                "TIDAK HADIR",
+                "OFF",
+              ].includes(a.status)
+            ).length,
+          };
+        });
+
+        // Department statistics
+        const departmentStats = Object.entries(
+          employeesData.reduce((acc: any, emp: any) => {
+            const dept = emp.department || emp.departemen || "Tidak Ada";
+            acc[dept] = (acc[dept] || 0) + 1;
+            return acc;
+          }, {})
+        ).map(([name, value]) => ({
+          name,
+          value,
+          fill: `hsl(${Math.random() * 360}, 70%, 50%)`,
+        }));
+
+        // Monthly trends (last 6 months)
+        const last6Months = Array.from({ length: 6 }, (_, i) => {
+          const date = new Date();
+          date.setMonth(date.getMonth() - i);
+          return {
+            month: date.toLocaleDateString("id-ID", { month: "short" }),
+            year: date.getFullYear(),
+            monthIndex: date.getMonth() + 1,
+          };
+        }).reverse();
+
+        const monthlyTrends = last6Months.map((month) => {
+          const monthSalaries = salaryData.filter((salary: any) => {
+            const salaryDate = new Date(
+              salary.date || salary.tanggal || salary.createdAt
+            );
+            return (
+              salaryDate.getMonth() + 1 === month.monthIndex &&
+              salaryDate.getFullYear() === month.year
+            );
+          });
+
+          const monthAttendance = attendanceData.filter((att: any) => {
+            const attDate = new Date(att.tanggal || att.date);
+            return (
+              attDate.getMonth() + 1 === month.monthIndex &&
+              attDate.getFullYear() === month.year
+            );
+          });
+
+          return {
+            month: month.month,
+            gaji: monthSalaries.reduce(
+              (total: number, salary: any) =>
+                total +
+                (salary.totalSalary || salary.total || salary.gaji || 0),
+              0
+            ),
+            kehadiran: monthAttendance.filter(
+              (a: any) =>
+                a.status === "Hadir" ||
+                a.status === "Present" ||
+                a.status === "HADIR"
+            ).length,
+          };
+        });
+
         setStats({
           totalEmployees: employeesData.length,
           todayAttendance,
           pendingLeaves,
           totalViolations: violationData.length,
           monthlyPayroll,
+          weeklyAttendance,
+          departmentStats,
+          monthlyTrends,
         });
         setEmployees(employeesData);
         setAttendance(attendanceData);
@@ -160,14 +308,28 @@ export default function DashboardPage() {
   };
 
   // Helper untuk ambil nama karyawan dari id
-  const getEmployeeName = (id: string) => {
+  const getEmployeeName = (id: string | number) => {
+    if (!id) return "-";
     const emp = employees.find((e) => String(e.id) === String(id));
-    return emp ? emp.name || emp.namaLengkap || emp.nik || emp.nip || "-" : "-";
+    return emp ? emp.namaLengkap || emp.name || emp.nik || emp.nip || "-" : "-";
   };
 
   // Helper untuk ambil data karyawan dari id
   const getEmployeeData = (id: string) => {
     return employees.find((e) => String(e.id) === String(id));
+  };
+
+  // Colors for charts
+  const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"];
+
+  // Custom chart colors
+  const chartColors = {
+    primary: "#3B82F6",
+    success: "#10B981",
+    warning: "#F59E0B",
+    danger: "#EF4444",
+    info: "#06B6D4",
+    purple: "#8B5CF6",
   };
 
   if (isLoading) {
@@ -208,177 +370,318 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4">
+    <div className="flex flex-1 flex-col gap-6 p-6 bg-gray-50">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Selamat datang di sistem monitoring karyawan PT. PADUD
+          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Dashboard HRD
+          </h1>
+          <p className="text-gray-600 mt-2">
+            Selamat datang di sistem monitoring karyawan PT. PADUD - Pantau
+            performa tim Anda secara real-time
           </p>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <Activity className="h-4 w-4" />
+          <span>Update terakhir: {new Date().toLocaleTimeString("id-ID")}</span>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
         {/* Total Karyawan */}
-        <Card>
+        <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0 shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+            <CardTitle className="text-sm font-medium opacity-90">
               Total Karyawan
             </CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <Users className="h-5 w-5 opacity-80" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-3xl font-bold">
               {stats?.totalEmployees || 0}
             </div>
-            <p className="text-xs text-muted-foreground">Karyawan aktif</p>
+            <p className="text-xs opacity-80 mt-1">Karyawan aktif</p>
           </CardContent>
         </Card>
 
         {/* Kehadiran Hari Ini */}
-        <Card>
+        <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white border-0 shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Kehadiran Hari Ini
+            <CardTitle className="text-sm font-medium opacity-90">
+              Hadir Hari Ini
             </CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <Clock className="h-5 w-5 opacity-80" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-3xl font-bold">
               {stats?.todayAttendance.present || 0}
             </div>
-            <div className="flex gap-2 text-xs">
-              <span className="text-yellow-600">
-                Terlambat: {stats?.todayAttendance.late || 0}
-              </span>
-              <span className="text-red-600">
-                Tidak Hadir: {stats?.todayAttendance.absent || 0}
-              </span>
+            <div className="flex gap-3 text-xs opacity-80 mt-1">
+              <span>Terlambat: {stats?.todayAttendance.late || 0}</span>
+              <span>Absent: {stats?.todayAttendance.absent || 0}</span>
             </div>
           </CardContent>
         </Card>
 
         {/* Payroll Bulan Ini */}
-        <Card>
+        <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white border-0 shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+            <CardTitle className="text-sm font-medium opacity-90">
               Payroll Bulan Ini
             </CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <DollarSign className="h-5 w-5 opacity-80" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {formatCurrency(stats?.monthlyPayroll || 0)}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Total gaji bulan ini
-            </p>
+            <p className="text-xs opacity-80 mt-1">Total gaji bulan ini</p>
           </CardContent>
         </Card>
 
         {/* Cuti Pending */}
-        <Card>
+        <Card className="bg-gradient-to-br from-yellow-500 to-yellow-600 text-white border-0 shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Cuti Pending</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium opacity-90">
+              Cuti Pending
+            </CardTitle>
+            <Calendar className="h-5 w-5 opacity-80" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">
+            <div className="text-3xl font-bold">
               {stats?.pendingLeaves || 0}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Menunggu persetujuan
-            </p>
+            <p className="text-xs opacity-80 mt-1">Menunggu persetujuan</p>
           </CardContent>
         </Card>
 
         {/* Total Pelanggaran */}
-        <Card>
+        <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white border-0 shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pelanggaran</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium opacity-90">
+              Pelanggaran
+            </CardTitle>
+            <AlertTriangle className="h-5 w-5 opacity-80" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">
+            <div className="text-3xl font-bold">
               {stats?.totalViolations || 0}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Total pelanggaran tercatat
-            </p>
+            <p className="text-xs opacity-80 mt-1">Total pelanggaran</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabel Daftar Karyawan */}
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Daftar Karyawan</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nama</TableHead>
-                <TableHead>NIK</TableHead>
-                <TableHead>Jabatan</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Aksi</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+      {/* Charts Section */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {/* Weekly Attendance Chart */}
+        <Card className="shadow-lg border-0">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-blue-600" />
+              Kehadiran 7 Hari Terakhir
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={stats?.weeklyAttendance || []}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip
+                  contentStyle={{
+                    background: "white",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "8px",
+                    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                  }}
+                />
+                <Bar
+                  dataKey="hadir"
+                  fill={chartColors.success}
+                  name="Hadir"
+                  radius={[2, 2, 0, 0]}
+                />
+                <Bar
+                  dataKey="terlambat"
+                  fill={chartColors.warning}
+                  name="Terlambat"
+                  radius={[2, 2, 0, 0]}
+                />
+                <Bar
+                  dataKey="tidak_hadir"
+                  fill={chartColors.danger}
+                  name="Tidak Hadir"
+                  radius={[2, 2, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Department Distribution */}
+        <Card className="shadow-lg border-0">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2">
+              <PieChart className="h-5 w-5 text-purple-600" />
+              Distribusi Departemen
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <RechartsPieChart>
+                <Pie
+                  data={stats?.departmentStats || []}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }: any) =>
+                    `${name} ${((percent || 0) * 100).toFixed(0)}%`
+                  }
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {(stats?.departmentStats || []).map(
+                    (entry: any, index: number) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={COLORS[index % COLORS.length]}
+                      />
+                    )
+                  )}
+                </Pie>
+                <Tooltip />
+              </RechartsPieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Monthly Trends */}
+        <Card className="shadow-lg border-0">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-green-600" />
+              Trend Bulanan
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={stats?.monthlyTrends || []}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                <YAxis yAxisId="left" tick={{ fontSize: 12 }} />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  tick={{ fontSize: 12 }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "white",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "8px",
+                    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                  }}
+                  labelFormatter={(value) => `Bulan: ${value}`}
+                  formatter={(value: any, name: string) => [
+                    name === "gaji" ? formatCurrency(value) : value,
+                    name === "gaji" ? "Total Gaji" : "Kehadiran",
+                  ]}
+                />
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="gaji"
+                  stroke={chartColors.primary}
+                  strokeWidth={3}
+                  dot={{ fill: chartColors.primary, strokeWidth: 2, r: 4 }}
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="kehadiran"
+                  stroke={chartColors.success}
+                  strokeWidth={3}
+                  dot={{ fill: chartColors.success, strokeWidth: 2, r: 4 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Data Tables Section */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Recent Employees */}
+        <Card className="shadow-lg border-0">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center justify-between">
+              <span>Karyawan Terbaru</span>
+              <Badge variant="outline" className="text-xs">
+                {employees.length} Total
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
               {employees.slice(0, 5).map((emp) => (
-                <TableRow key={emp.id}>
-                  <TableCell className="flex items-center gap-2">
-                    <Avatar className="w-8 h-8">
+                <div
+                  key={emp.id}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <Avatar className="w-10 h-10">
                       <AvatarImage src={emp.avatar || emp.fotoProfil} />
-                      <AvatarFallback>
+                      <AvatarFallback className="bg-blue-100 text-blue-600">
                         {emp.name?.[0] || emp.namaLengkap?.[0] || "-"}
                       </AvatarFallback>
                     </Avatar>
-                    {emp.name || emp.namaLengkap || "-"}
-                  </TableCell>
-                  <TableCell>{emp.nip || emp.nik || "-"}</TableCell>
-                  <TableCell>{emp.position || emp.jabatan || "-"}</TableCell>
-                  <TableCell>
-                    {emp.status || emp.statusKaryawan || "-"}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setSelectedEmployee(emp);
-                        setShowDetail(true);
-                      }}
-                    >
-                      Detail
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                    <div>
+                      <div className="font-medium text-sm">
+                        {emp.name || emp.namaLengkap || "-"}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {emp.position || emp.jabatan || "-"}
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedEmployee(emp);
+                      setShowDetail(true);
+                    }}
+                  >
+                    Detail
+                  </Button>
+                </div>
               ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Tabel Absensi Hari Ini */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Absensi Hari Ini</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nama</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Jam Masuk</TableHead>
-                <TableHead>Jam Pulang</TableHead>
-                <TableHead>Keterangan</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+        {/* Today's Attendance */}
+        <Card className="shadow-lg border-0">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center justify-between">
+              <span>Absensi Hari Ini</span>
+              <Badge variant="outline" className="text-xs">
+                {
+                  attendance.filter((a) => {
+                    const today = new Date().toISOString().split("T")[0];
+                    return a.tanggal === today || a.date === today;
+                  }).length
+                }{" "}
+                Hadir
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
               {attendance
                 .filter((a) => {
                   const today = new Date().toISOString().split("T")[0];
@@ -386,191 +689,290 @@ export default function DashboardPage() {
                 })
                 .slice(0, 5)
                 .map((a) => (
-                  <TableRow key={a.id}>
-                    <TableCell>
-                      {getEmployeeName(a.karyawanId || a.karyawan?.id)}
-                    </TableCell>
-                    <TableCell>{a.status}</TableCell>
-                    <TableCell>{a.waktuMasuk || a.checkIn || "-"}</TableCell>
-                    <TableCell>{a.waktuPulang || a.checkOut || "-"}</TableCell>
-                    <TableCell>{a.keterangan || a.notes || "-"}</TableCell>
-                  </TableRow>
+                  <div
+                    key={a.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-3 h-3 rounded-full ${
+                          a.status === "Hadir" ||
+                          a.status === "Present" ||
+                          a.status === "HADIR"
+                            ? "bg-green-500"
+                            : a.status === "Terlambat" ||
+                              a.status === "Late" ||
+                              a.status === "TERLAMBAT"
+                            ? "bg-yellow-500"
+                            : "bg-red-500"
+                        }`}
+                      ></div>
+                      <div>
+                        <div className="font-medium text-sm">
+                          {getEmployeeName(a.karyawanId || a.karyawan?.id)}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {a.waktuMasuk || a.checkIn || "-"} -{" "}
+                          {a.waktuPulang || a.checkOut || "-"}
+                        </div>
+                      </div>
+                    </div>
+                    <Badge
+                      variant={
+                        a.status === "Hadir" ||
+                        a.status === "Present" ||
+                        a.status === "HADIR"
+                          ? "default"
+                          : a.status === "Terlambat" ||
+                            a.status === "Late" ||
+                            a.status === "TERLAMBAT"
+                          ? "secondary"
+                          : "destructive"
+                      }
+                      className="text-xs"
+                    >
+                      {a.status}
+                    </Badge>
+                  </div>
                 ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Tabel Cuti Terbaru */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Cuti Terbaru</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nama</TableHead>
-                <TableHead>Jenis</TableHead>
-                <TableHead>Tanggal Mulai</TableHead>
-                <TableHead>Tanggal Selesai</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {leaves.slice(0, 5).map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell>
-                    {getEmployeeName(c.karyawanId || c.karyawan?.id)}
-                  </TableCell>
-                  <TableCell>{c.jenisCuti || c.type || "-"}</TableCell>
-                  <TableCell>{c.tanggalMulai || c.startDate || "-"}</TableCell>
-                  <TableCell>{c.tanggalSelesai || c.endDate || "-"}</TableCell>
-                  <TableCell>{c.status}</TableCell>
-                </TableRow>
+      {/* Additional Info Cards */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Recent Leave Requests */}
+        <Card className="shadow-lg border-0">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center justify-between">
+              <span>Cuti Terbaru</span>
+              <Badge
+                variant={stats?.pendingLeaves ? "destructive" : "secondary"}
+                className="text-xs"
+              >
+                {stats?.pendingLeaves || 0} Pending
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {leaves.slice(0, 4).map((c) => (
+                <div
+                  key={c.id}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                >
+                  <div>
+                    <div className="font-medium text-sm">
+                      {getEmployeeName(c.karyawanId || c.karyawan?.id)}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {c.jenisCuti || c.type || "-"} •{" "}
+                      {c.tanggalMulai || c.startDate || "-"}
+                    </div>
+                  </div>
+                  <Badge
+                    variant={
+                      c.status === "Approved" || c.status === "approved"
+                        ? "default"
+                        : c.status === "Pending" || c.status === "pending"
+                        ? "secondary"
+                        : "destructive"
+                    }
+                    className="text-xs"
+                  >
+                    {c.status}
+                  </Badge>
+                </div>
               ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Tabel Pelanggaran Terbaru */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Pelanggaran Terbaru</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nama</TableHead>
-                <TableHead>Jenis</TableHead>
-                <TableHead>Tanggal</TableHead>
-                <TableHead>Sanksi</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {violations.slice(0, 5).map((v) => (
-                <TableRow key={v.id}>
-                  <TableCell>
-                    {getEmployeeName(v.karyawanId || v.karyawan?.id)}
-                  </TableCell>
-                  <TableCell>{v.type || v.jenisPelanggaran || "-"}</TableCell>
-                  <TableCell>{v.date || v.tanggalKejadian || "-"}</TableCell>
-                  <TableCell>{v.sanction || v.jenisSanksi || "-"}</TableCell>
-                </TableRow>
+        {/* Recent Violations */}
+        <Card className="shadow-lg border-0">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center justify-between">
+              <span>Pelanggaran Terbaru</span>
+              <Badge variant="destructive" className="text-xs">
+                {violations.length} Total
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {violations.slice(0, 4).map((v) => (
+                <div
+                  key={v.id}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                >
+                  <div>
+                    <div className="font-medium text-sm">
+                      {getEmployeeName(v.karyawanId || v.karyawan?.id)}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {v.type || v.jenisPelanggaran || "-"} •{" "}
+                      {v.date || v.tanggalKejadian || "-"}
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="text-xs">
+                    {v.sanction || v.jenisSanksi || "-"}
+                  </Badge>
+                </div>
               ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Tabel Gaji Terbaru */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Gaji Terbaru</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nama</TableHead>
-                <TableHead>Periode</TableHead>
-                <TableHead>Gaji Pokok</TableHead>
-                <TableHead>Bonus</TableHead>
-                <TableHead>Potongan</TableHead>
-                <TableHead>Gaji Bersih</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {salaries.slice(0, 5).map((g) => (
-                <TableRow key={g.id}>
-                  <TableCell>
-                    {getEmployeeName(g.karyawanId || g.karyawan?.id)}
-                  </TableCell>
-                  <TableCell>
-                    {g.periodeAwal || g.periode || "-"} -{" "}
-                    {g.periodeAkhir || g.periode || "-"}
-                  </TableCell>
-                  <TableCell>
-                    {formatCurrency(g.gajiPokok || g.basicSalary || 0)}
-                  </TableCell>
-                  <TableCell>{formatCurrency(g.bonus || 0)}</TableCell>
-                  <TableCell>{formatCurrency(g.potongan || 0)}</TableCell>
-                  <TableCell>
-                    {formatCurrency(g.totalGajiBersih || g.totalSalary || 0)}
-                  </TableCell>
-                  <TableCell>{g.statusPembayaran || g.status || "-"}</TableCell>
-                </TableRow>
+        {/* Salary Summary */}
+        <Card className="shadow-lg border-0">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center justify-between">
+              <span>Ringkasan Gaji</span>
+              <Badge variant="outline" className="text-xs">
+                {salaries.length} Records
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {salaries.slice(0, 4).map((g) => (
+                <div
+                  key={g.id}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                >
+                  <div>
+                    <div className="font-medium text-sm">
+                      {getEmployeeName(g.karyawanId || g.karyawan?.id)}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {g.periodeAwal || g.periode || "-"} •{" "}
+                      {formatCurrency(g.totalGajiBersih || g.totalSalary || 0)}
+                    </div>
+                  </div>
+                  <Badge
+                    variant={
+                      g.statusPembayaran === "Lunas" || g.status === "Paid"
+                        ? "default"
+                        : "secondary"
+                    }
+                    className="text-xs"
+                  >
+                    {g.statusPembayaran || g.status || "-"}
+                  </Badge>
+                </div>
               ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Modal Detail Karyawan */}
       {showDetail && selectedEmployee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-lg shadow-lg max-w-lg w-full p-6 relative">
-            <button
-              className="absolute top-2 right-2"
-              onClick={() => setShowDetail(false)}
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <div className="flex items-center gap-4 mb-4">
-              <Avatar className="w-16 h-16">
-                <AvatarImage
-                  src={selectedEmployee.avatar || selectedEmployee.fotoProfil}
-                />
-                <AvatarFallback>
-                  {selectedEmployee.name?.[0] ||
-                    selectedEmployee.namaLengkap?.[0] ||
-                    "-"}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <h2 className="text-xl font-bold">
-                  {selectedEmployee.name || selectedEmployee.namaLengkap || "-"}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Detail Karyawan
                 </h2>
-                <div className="text-sm text-gray-500">
-                  {selectedEmployee.position || selectedEmployee.jabatan || "-"}
+                <button
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                  onClick={() => setShowDetail(false)}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-6 mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
+                <Avatar className="w-20 h-20 ring-4 ring-white shadow-lg">
+                  <AvatarImage
+                    src={selectedEmployee.avatar || selectedEmployee.fotoProfil}
+                  />
+                  <AvatarFallback className="bg-blue-500 text-white text-xl">
+                    {selectedEmployee.name?.[0] ||
+                      selectedEmployee.namaLengkap?.[0] ||
+                      "-"}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">
+                    {selectedEmployee.name ||
+                      selectedEmployee.namaLengkap ||
+                      "-"}
+                  </h3>
+                  <div className="text-gray-600 mb-1">
+                    {selectedEmployee.position ||
+                      selectedEmployee.jabatan ||
+                      "-"}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    NIK: {selectedEmployee.nip || selectedEmployee.nik || "-"}
+                  </div>
                 </div>
-                <div className="text-xs text-gray-400">
-                  NIK: {selectedEmployee.nip || selectedEmployee.nik || "-"}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Status
+                    </div>
+                    <div className="text-sm font-medium">
+                      {selectedEmployee.status ||
+                        selectedEmployee.statusKaryawan ||
+                        "-"}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Email
+                    </div>
+                    <div className="text-sm font-medium">
+                      {selectedEmployee.email || "-"}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Tanggal Masuk
+                    </div>
+                    <div className="text-sm font-medium">
+                      {selectedEmployee.joinDate ||
+                        selectedEmployee.tanggalMasuk ||
+                        "-"}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <b>Status:</b>{" "}
-                {selectedEmployee.status ||
-                  selectedEmployee.statusKaryawan ||
-                  "-"}
-              </div>
-              <div>
-                <b>Departemen:</b>{" "}
-                {selectedEmployee.department ||
-                  selectedEmployee.departemen ||
-                  "-"}
-              </div>
-              <div>
-                <b>Email:</b> {selectedEmployee.email || "-"}
-              </div>
-              <div>
-                <b>No. HP:</b>{" "}
-                {selectedEmployee.phone || selectedEmployee.noHp || "-"}
-              </div>
-              <div>
-                <b>Tanggal Masuk:</b>{" "}
-                {selectedEmployee.joinDate ||
-                  selectedEmployee.tanggalMasuk ||
-                  "-"}
-              </div>
-              <div>
-                <b>Alamat:</b>{" "}
-                {selectedEmployee.address || selectedEmployee.alamat || "-"}
+                <div className="space-y-4">
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Departemen
+                    </div>
+                    <div className="text-sm font-medium">
+                      {selectedEmployee.department ||
+                        selectedEmployee.departemen ||
+                        "-"}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      No. HP
+                    </div>
+                    <div className="text-sm font-medium">
+                      {selectedEmployee.phone || selectedEmployee.noHp || "-"}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Alamat
+                    </div>
+                    <div className="text-sm font-medium">
+                      {selectedEmployee.address ||
+                        selectedEmployee.alamat ||
+                        "-"}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

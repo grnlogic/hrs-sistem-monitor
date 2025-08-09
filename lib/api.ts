@@ -307,6 +307,55 @@ export const employeeAPI = {
 // Attendance API
 export const attendanceAPI = {
   getAll: async () => {
+    try {
+      // Ambil semua karyawan terlebih dahulu
+      const employees = await employeeAPI.getAll()
+      
+      // Ambil data absensi untuk setiap karyawan dan gabungkan
+      const allAttendanceData: any[] = []
+      
+      for (const employee of employees) {
+        try {
+          const employeeAttendance = await apiRequest(`/absensi/karyawan/${employee.id}`)
+          
+          // Transform data untuk konsistensi
+          const transformedData = employeeAttendance.map((attendance: any) => ({
+            id: attendance.id,
+            karyawanId: attendance.karyawan?.id || employee.id,
+            tanggal: attendance.tanggal,
+            date: attendance.tanggal, // alias untuk kompatibilitas
+            status: attendance.status,
+            hadir: attendance.hadir,
+            setengahHari: attendance.setengahHari,
+            waktuMasuk: attendance.waktuMasuk,
+            waktuPulang: attendance.waktuPulang,
+            checkIn: attendance.waktuMasuk, // alias untuk kompatibilitas
+            checkOut: attendance.waktuPulang, // alias untuk kompatibilitas
+            keterangan: attendance.keterangan,
+            notes: attendance.keterangan, // alias untuk kompatibilitas
+            karyawan: attendance.karyawan || {
+              id: employee.id,
+              namaLengkap: employee.namaLengkap || employee.name,
+              nik: employee.nik || employee.nip
+            }
+          }))
+          
+          allAttendanceData.push(...transformedData)
+        } catch (empError) {
+          console.warn(`Gagal mengambil data absensi untuk karyawan ${employee.id}:`, empError)
+          // Lanjutkan ke karyawan berikutnya
+        }
+      }
+      
+      return allAttendanceData
+    } catch (error) {
+      console.error("Error fetching all attendance data:", error)
+      throw error
+    }
+  },
+
+  // Method yang lama tetap ada untuk backup/kompatibilitas
+  getAllLegacy: async () => {
     return apiRequest("/absensi/rekap")
   },
 
