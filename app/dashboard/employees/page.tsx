@@ -108,6 +108,7 @@ export default function EmployeesPage() {
   ]);
   const [exportFormat, setExportFormat] = useState<"pdf" | "excel">("pdf");
   const [isExporting, setIsExporting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
     fetchEmployees();
@@ -133,14 +134,35 @@ export default function EmployeesPage() {
       setShowForceDeleteOption(false);
       setDeleteMode("safe");
       setRelatedDataInfo("");
+      setError("");
+
+      // Tampilkan success message
+      const deleteType =
+        deleteMode === "force" ? "beserta semua data terkait" : "";
+      setSuccessMessage(
+        `Karyawan ${employee.name} berhasil dihapus ${deleteType}`
+      );
+
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccessMessage(""), 5000);
     } catch (err: any) {
       // Jika gagal karena ada data terkait, tampilkan opsi force delete
-      if (err.message && err.message.includes("data terkait")) {
+      if (
+        err.message &&
+        (err.message.includes("data terkait") ||
+          err.message.includes("masih memiliki data") ||
+          err.message.includes("related data"))
+      ) {
         setShowForceDeleteOption(true);
         setError(err.message);
       } else {
         setError("Gagal menghapus karyawan: " + (err.message || err));
         console.error("Error deleting employee:", err);
+        setDeleteDialogOpen(false);
+        setEmployeeToDelete(null);
+        setShowForceDeleteOption(false);
+        setDeleteMode("safe");
+        setRelatedDataInfo("");
       }
     } finally {
       setIsDeleting(false);
@@ -150,6 +172,7 @@ export default function EmployeesPage() {
   // Fungsi untuk cek data terkait sebelum delete
   const handleCheckRelatedData = async (employee: Employee) => {
     try {
+      setError(""); // Clear previous errors
       const response = await employeeAPI.checkRelatedData(
         employee.id.toString()
       );
@@ -158,6 +181,24 @@ export default function EmployeesPage() {
       setDeleteDialogOpen(true);
       setShowForceDeleteOption(false);
       setDeleteMode("safe");
+
+      // Jika ada data terkait (bukan hanya "Karyawan tidak ditemukan"), tampilkan opsi force delete
+      if (
+        response &&
+        !response.includes("Karyawan tidak ditemukan") &&
+        (response.includes("Absensi (") ||
+          response.includes("Gaji (") ||
+          response.includes("Cuti (") ||
+          response.includes("Pelanggaran ("))
+      ) {
+        const hasData = response.match(/\((\d+)\)/g)?.some((match) => {
+          const count = parseInt(match.replace(/[()]/g, ""));
+          return count > 0;
+        });
+        if (hasData) {
+          setShowForceDeleteOption(true);
+        }
+      }
     } catch (err: any) {
       setError("Gagal mengecek data terkait: " + (err.message || err));
       console.error("Error checking related data:", err);
@@ -660,6 +701,14 @@ export default function EmployeesPage() {
         </Alert>
       )}
 
+      {successMessage && (
+        <Alert className="border-green-200 bg-green-50">
+          <AlertDescription className="text-green-800">
+            {successMessage}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Statistics Cards */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
@@ -876,94 +925,99 @@ export default function EmployeesPage() {
               <AlertTriangle className="h-5 w-5 text-red-600" />
               Hapus Karyawan
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-3">
-              <p>
-                Anda akan menghapus karyawan{" "}
-                <span className="font-semibold">{employeeToDelete?.name}</span>
-              </p>
-
-              {relatedDataInfo && (
-                <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-                  <p className="text-sm text-blue-800 font-medium">
-                    Informasi Data Terkait:
-                  </p>
-                  <p className="text-sm text-blue-700">{relatedDataInfo}</p>
-                </div>
-              )}
-
-              {showForceDeleteOption && (
-                <div className="space-y-3">
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-                    <p className="text-sm text-yellow-800 font-medium">
-                      ⚠️ Pilih Mode Penghapusan:
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="radio"
-                        id="safe-delete"
-                        name="deleteMode"
-                        value="safe"
-                        checked={deleteMode === "safe"}
-                        onChange={(e) =>
-                          setDeleteMode(e.target.value as "safe" | "force")
-                        }
-                        className="h-4 w-4"
-                      />
-                      <label htmlFor="safe-delete" className="text-sm">
-                        <span className="font-medium text-green-700">
-                          Safe Delete
-                        </span>
-                        <span className="text-gray-600">
-                          {" "}
-                          - Hanya hapus data karyawan (menjaga histori)
-                        </span>
-                      </label>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="radio"
-                        id="force-delete"
-                        name="deleteMode"
-                        value="force"
-                        checked={deleteMode === "force"}
-                        onChange={(e) =>
-                          setDeleteMode(e.target.value as "safe" | "force")
-                        }
-                        className="h-4 w-4"
-                      />
-                      <label htmlFor="force-delete" className="text-sm">
-                        <span className="font-medium text-red-700">
-                          Force Delete
-                        </span>
-                        <span className="text-gray-600">
-                          {" "}
-                          - Hapus semua data termasuk histori
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="bg-red-50 border border-red-200 rounded-md p-3">
-                    <p className="text-xs text-red-700">
-                      ⚠️ <strong>Peringatan:</strong> Force Delete akan
-                      menghapus semua data absensi, gaji, cuti, dan pelanggaran.
-                      Data yang terhapus tidak dapat dikembalikan!
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {!showForceDeleteOption && (
-                <p className="text-sm text-gray-600">
-                  Aksi ini akan menghapus data karyawan. Jika karyawan memiliki
-                  data terkait, sistem akan memberikan opsi penghapusan yang
-                  sesuai.
+            <AlertDialogDescription>
+              <div className="space-y-3">
+                <p>
+                  Anda akan menghapus karyawan{" "}
+                  <span className="font-semibold">
+                    {employeeToDelete?.name}
+                  </span>
                 </p>
-              )}
+
+                {relatedDataInfo && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                    <p className="text-sm text-blue-800 font-medium">
+                      Informasi Data Terkait:
+                    </p>
+                    <p className="text-sm text-blue-700">{relatedDataInfo}</p>
+                  </div>
+                )}
+
+                {showForceDeleteOption && (
+                  <div className="space-y-3">
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                      <p className="text-sm text-yellow-800 font-medium">
+                        ⚠️ Pilih Mode Penghapusan:
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          id="safe-delete"
+                          name="deleteMode"
+                          value="safe"
+                          checked={deleteMode === "safe"}
+                          onChange={(e) =>
+                            setDeleteMode(e.target.value as "safe" | "force")
+                          }
+                          className="h-4 w-4"
+                        />
+                        <label htmlFor="safe-delete" className="text-sm">
+                          <span className="font-medium text-green-700">
+                            Safe Delete
+                          </span>
+                          <span className="text-gray-600">
+                            {" "}
+                            - Hanya hapus data karyawan (menjaga histori)
+                          </span>
+                        </label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          id="force-delete"
+                          name="deleteMode"
+                          value="force"
+                          checked={deleteMode === "force"}
+                          onChange={(e) =>
+                            setDeleteMode(e.target.value as "safe" | "force")
+                          }
+                          className="h-4 w-4"
+                        />
+                        <label htmlFor="force-delete" className="text-sm">
+                          <span className="font-medium text-red-700">
+                            Force Delete
+                          </span>
+                          <span className="text-gray-600">
+                            {" "}
+                            - Hapus semua data termasuk histori
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                      <p className="text-xs text-red-700">
+                        ⚠️ <strong>Peringatan:</strong> Force Delete akan
+                        menghapus semua data absensi, gaji, cuti, dan
+                        pelanggaran. Data yang terhapus tidak dapat
+                        dikembalikan!
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {!showForceDeleteOption && (
+                  <p className="text-sm text-gray-600">
+                    Aksi ini akan menghapus data karyawan. Jika karyawan
+                    memiliki data terkait, sistem akan memberikan opsi
+                    penghapusan yang sesuai.
+                  </p>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

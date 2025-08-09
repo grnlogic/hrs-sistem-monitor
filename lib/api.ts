@@ -148,27 +148,111 @@ export const employeeAPI = {
   },
 
   delete: async (id: string) => {
-    return apiRequest(`/karyawan/${id}`, {
-      method: "DELETE",
-    })
+    const token = getAuthToken()
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/karyawan/${id}`, {
+        method: "DELETE",
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        throw new Error(errorData || `HTTP error! status: ${response.status}`)
+      }
+
+      // Backend mungkin mengembalikan plain text
+      const contentType = response.headers.get("content-type")
+      if (contentType && contentType.includes("application/json")) {
+        return await response.json()
+      } else {
+        return await response.text()
+      }
+    } catch (error) {
+      clearTimeout(timeoutId)
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Request timeout after ${API_TIMEOUT}ms`)
+      }
+      throw error
+    }
   },
 
   // Force delete karyawan beserta semua data terkait
   forceDelete: async (id: string) => {
-    return apiRequest(`/karyawan/${id}/force`, {
-      method: "DELETE",
-    })
+    const token = getAuthToken()
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/karyawan/${id}/force`, {
+        method: "DELETE",
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        throw new Error(errorData || `HTTP error! status: ${response.status}`)
+      }
+
+      // Backend mungkin mengembalikan plain text
+      const contentType = response.headers.get("content-type")
+      if (contentType && contentType.includes("application/json")) {
+        return await response.json()
+      } else {
+        return await response.text()
+      }
+    } catch (error) {
+      clearTimeout(timeoutId)
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Request timeout after ${API_TIMEOUT}ms`)
+      }
+      throw error
+    }
   },
 
   // Cek data terkait karyawan sebelum delete
   checkRelatedData: async (id: string) => {
-    return apiRequest(`/karyawan/${id}/related-data`)
-  },
+    const token = getAuthToken()
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
 
-  deleteEmployee: async (id: string) => {
-    return apiRequest(`/karyawan/${id}`, {
-      method: "DELETE",
-    })
+    try {
+      const response = await fetch(`${API_BASE_URL}/karyawan/${id}/related-data`, {
+        method: "GET",
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        throw new Error(errorData || `HTTP error! status: ${response.status}`)
+      }
+
+      // Backend mengembalikan plain text, bukan JSON
+      return response.text()
+    } catch (error) {
+      clearTimeout(timeoutId)
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Request timeout after ${API_TIMEOUT}ms`)
+      }
+      throw error
+    }
   },
 
   // Upload foto karyawan
