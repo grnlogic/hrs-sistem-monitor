@@ -63,6 +63,8 @@ export default function LeavePage() {
   const [employeeLeaveInfo, setEmployeeLeaveInfo] = useState<{
     [key: string]: any;
   }>({});
+  const [rejectId, setRejectId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   useEffect(() => {
     setLoading(true);
@@ -138,26 +140,27 @@ export default function LeavePage() {
       );
     } catch {}
   };
-  const handleReject = async (id: string) => {
-    const reason = prompt("Masukkan alasan penolakan:");
-    if (!reason) return;
+  const handleReject = async () => {
+    if (!rejectId || !rejectReason.trim()) return;
     try {
-      await leaveAPI.reject(id, reason);
+      await leaveAPI.reject(rejectId, rejectReason);
       setLeaveData((prev) =>
         prev.map((item) =>
-          item.id === id
-            ? { ...item, status: "REJECTED", alasan: reason }
+          item.id === rejectId
+            ? { ...item, status: "REJECTED", alasan: rejectReason }
             : item
         )
       );
       setFilteredData((prev) =>
         prev.map((item) =>
-          item.id === id
-            ? { ...item, status: "REJECTED", alasan: reason }
+          item.id === rejectId
+            ? { ...item, status: "REJECTED", alasan: rejectReason }
             : item
         )
       );
     } catch {}
+    setRejectId(null);
+    setRejectReason("");
   };
 
   const getStatusBadge = (status: string) => {
@@ -472,7 +475,7 @@ export default function LeavePage() {
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   className="text-red-600"
-                                  onClick={() => handleReject(leave.id)}
+                                  onClick={() => { setRejectId(leave.id); setRejectReason(""); }}
                                 >
                                   <X className="mr-2 h-4 w-4" />
                                   Tolak
@@ -489,15 +492,34 @@ export default function LeavePage() {
             </div>
           )}
 
-          {filteredData.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={9} className="text-center">
-                Tidak ada data cuti yang ditemukan
-              </TableCell>
-            </TableRow>
+          {filteredData.length === 0 && !loading && (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">Tidak ada data cuti yang ditemukan</p>
+            </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Rejection Modal */}
+      {rejectId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6 space-y-4">
+            <h3 className="text-lg font-semibold">Tolak Pengajuan Cuti</h3>
+            <p className="text-sm text-slate-500">Masukkan alasan penolakan untuk karyawan ini.</p>
+            <textarea
+              className="w-full border rounded-lg p-3 text-sm min-h-[80px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Alasan penolakan..."
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => { setRejectId(null); setRejectReason(""); }}>Batal</Button>
+              <Button variant="destructive" size="sm" onClick={handleReject} disabled={!rejectReason.trim()}>Tolak Cuti</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

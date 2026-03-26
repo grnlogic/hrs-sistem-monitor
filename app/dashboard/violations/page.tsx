@@ -22,8 +22,15 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@/components/ui/display/avatar";
-import { Plus, AlertTriangle, Clock } from "lucide-react";
-import { getAllViolations, addViolation, employeeAPI } from "@/lib/api";
+import { Plus, AlertTriangle, Clock, Trash2 } from "lucide-react";
+import { getAllViolations, addViolation, deleteViolation, employeeAPI } from "@/lib/api";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/form/select";
 
 export default function ViolationsPage() {
   const [violations, setViolations] = useState<any[]>([]);
@@ -65,7 +72,7 @@ export default function ViolationsPage() {
     e.preventDefault();
     try {
       await addViolation({
-        karyawan: { id: Number(form.karyawanId) },
+        karyawanId: Number(form.karyawanId),
         jenisPelanggaran: form.jenisPelanggaran,
         tanggalKejadian: form.tanggalKejadian,
         jenisSanksi: form.jenisSanksi,
@@ -86,6 +93,16 @@ export default function ViolationsPage() {
       fetchData();
     } catch (err) {
       setError("Gagal menambah pelanggaran");
+    }
+  };
+
+  const handleDelete = async (id: string | number) => {
+    if (!confirm("Hapus data pelanggaran ini?")) return;
+    try {
+      await deleteViolation(id);
+      fetchData();
+    } catch (err) {
+      setError("Gagal menghapus pelanggaran");
     }
   };
 
@@ -137,22 +154,20 @@ export default function ViolationsPage() {
               className="grid grid-cols-1 md:grid-cols-2 gap-4"
             >
               <div>
-                <label>Karyawan</label>
-                <select
-                  className="w-full border rounded p-2"
+                <label className="text-sm font-medium">Karyawan</label>
+                <Select
                   value={form.karyawanId}
-                  onChange={(e) =>
-                    setForm({ ...form, karyawanId: e.target.value })
-                  }
-                  required
+                  onValueChange={(v) => setForm({ ...form, karyawanId: v })}
                 >
-                  <option value="">Pilih Karyawan</option>
-                  {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.name} ({emp.nip})
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger><SelectValue placeholder="Pilih Karyawan" /></SelectTrigger>
+                  <SelectContent>
+                    {employees.map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id.toString()}>
+                        {emp.namaLengkap || emp.name} ({emp.nip || "-"})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label>Jenis Pelanggaran</label>
@@ -176,13 +191,18 @@ export default function ViolationsPage() {
                 />
               </div>
               <div>
-                <label>Jenis Sanksi</label>
-                <Input
+                <label className="text-sm font-medium">Jenis Sanksi</label>
+                <Select
                   value={form.jenisSanksi}
-                  onChange={(e) =>
-                    setForm({ ...form, jenisSanksi: e.target.value })
-                  }
-                />
+                  onValueChange={(v) => setForm({ ...form, jenisSanksi: v })}
+                >
+                  <SelectTrigger><SelectValue placeholder="Pilih Sanksi" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Ringan">Ringan</SelectItem>
+                    <SelectItem value="Sedang">Sedang</SelectItem>
+                    <SelectItem value="Berat">Berat</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label>Dokumen Bukti</label>
@@ -315,6 +335,7 @@ export default function ViolationsPage() {
                   <TableHead>Jenis Sanksi</TableHead>
                   <TableHead>Dokumen Bukti</TableHead>
                   <TableHead>Tindak Lanjut</TableHead>
+                  <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -360,6 +381,16 @@ export default function ViolationsPage() {
                       <TableCell>{violation.jenisSanksi}</TableCell>
                       <TableCell>{violation.dokumenBukti}</TableCell>
                       <TableCell>{violation.tindakLanjut}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                          onClick={() => handleDelete(violation.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   );
                 })}

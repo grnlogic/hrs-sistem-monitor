@@ -70,7 +70,8 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`)
+      const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${response.status}`
+      throw new Error(errorMessage)
     }
 
     return response.json()
@@ -302,52 +303,81 @@ export const employeeAPI = {
 
   // Get foto URL
   getFotoUrl: (id: string) => `${API_BASE_URL}/karyawan/${id}/foto`,
+
+  // PKB (Perjanjian Kerja Bersama)
+  getPKB: (id: string) => apiRequest(`/karyawan/${id}/pkb`),
+  savePKB: (id: string, data: Record<string, unknown>) =>
+    apiRequest(`/karyawan/${id}/pkb`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  uploadPkbDokumen: async (id: string, file: File) => {
+    const token = getAuthToken();
+    const formData = new FormData();
+    formData.append("dokumen", file);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/karyawan/${id}/pkb/upload-dokumen`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(err || `HTTP ${response.status}`);
+      }
+      return response.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error("Request timeout");
+      }
+      throw error;
+    }
+  },
+
+  // Daftar file yang sudah di-upload untuk karyawan
+  getFiles: (id: string) => apiRequest(`/karyawan/${id}/files`),
+
+  // Get URL untuk serve file (dengan auth)
+  getFileServeUrl: (id: string, filePath: string) =>
+    `${API_BASE_URL}/karyawan/${id}/files/serve?path=${encodeURIComponent(filePath)}`,
 }
 
 // Attendance API
 export const attendanceAPI = {
   getAll: async () => {
     try {
-      // Ambil semua karyawan terlebih dahulu
-      const employees = await employeeAPI.getAll()
+      // Use bulk endpoint instead of N+1 per-employee queries
+      const allAttendanceData = await apiRequest("/absensi")
       
-      // Ambil data absensi untuk setiap karyawan dan gabungkan
-      const allAttendanceData: any[] = []
-      
-      for (const employee of employees) {
-        try {
-          const employeeAttendance = await apiRequest(`/absensi/karyawan/${employee.id}`)
-          
-          // Transform data untuk konsistensi
-          const transformedData = employeeAttendance.map((attendance: any) => ({
-            id: attendance.id,
-            karyawanId: attendance.karyawan?.id || employee.id,
-            tanggal: attendance.tanggal,
-            date: attendance.tanggal, // alias untuk kompatibilitas
-            status: attendance.status,
-            hadir: attendance.hadir,
-            setengahHari: attendance.setengahHari,
-            waktuMasuk: attendance.waktuMasuk,
-            waktuPulang: attendance.waktuPulang,
-            checkIn: attendance.waktuMasuk, // alias untuk kompatibilitas
-            checkOut: attendance.waktuPulang, // alias untuk kompatibilitas
-            keterangan: attendance.keterangan,
-            notes: attendance.keterangan, // alias untuk kompatibilitas
-            karyawan: attendance.karyawan || {
-              id: employee.id,
-              namaLengkap: employee.namaLengkap || employee.name,
-              nik: employee.nik || employee.nip
-            }
-          }))
-          
-          allAttendanceData.push(...transformedData)
-        } catch (empError) {
-          console.warn(`Gagal mengambil data absensi untuk karyawan ${employee.id}:`, empError)
-          // Lanjutkan ke karyawan berikutnya
+      // Transform data for consistency
+      return (allAttendanceData || []).map((attendance: any) => ({
+        id: attendance.id,
+        karyawanId: attendance.karyawan?.id || attendance.karyawanId,
+        tanggal: attendance.tanggal,
+        date: attendance.tanggal,
+        status: attendance.status,
+        hadir: attendance.hadir,
+        setengahHari: attendance.setengahHari,
+        waktuMasuk: attendance.waktuMasuk,
+        waktuPulang: attendance.waktuPulang,
+        checkIn: attendance.waktuMasuk,
+        checkOut: attendance.waktuPulang,
+        keterangan: attendance.keterangan,
+        notes: attendance.keterangan,
+        karyawan: attendance.karyawan || {
+          id: attendance.karyawanId,
+          namaLengkap: "Unknown",
+          nik: "-"
         }
-      }
-      
-      return allAttendanceData
+      }))
     } catch (error) {
       console.error("Error fetching all attendance data:", error)
       throw error
@@ -397,31 +427,65 @@ export const attendanceAPI = {
       method: "DELETE",
     });
   },
+
+  deleteToday: async (tanggal: string) => {
+    return apiRequest(`/absensi/clear-today?date=${encodeURIComponent(tanggal)}`, {
+      method: "DELETE",
+    });
+  },
 }
 
 // Salary API
 export const salaryAPI = {
+  getSalaryItems: async (type?: "BONUS" | "POTONGAN") => {
+    const params = new URLSearchParams()
+    if (type) params.append("type", type)
+    const query = params.toString()
+    return apiRequest(`/gaji/items${query ? `?${query}` : ""}`)
+  },
+
+  createSalaryItem: async (data: { type: "BONUS" | "POTONGAN", nama: string }) => {
+    return apiRequest("/gaji/items", {
+      method: "POST",
+      body: JSON.stringify(data),
+    })
+  },
+
   getAll: async (karyawanId: string) => {
     return apiRequest(`/gaji/rekap?karyawanId=${karyawanId}`)
   },
 
-  addBonus: async (data: { gajiId: string, bonus: number }) => {
-    return apiRequest(`/gaji/bonus?gajiId=${data.gajiId}&bonus=${data.bonus}`, {
+  addBonus: async (data: { gajiId: string, bonus: number, itemName?: string, saveAsMaster?: boolean }) => {
+    const params = new URLSearchParams()
+    params.append("gajiId", data.gajiId)
+    params.append("bonus", String(data.bonus))
+    if (data.itemName) params.append("itemName", data.itemName)
+    if (data.saveAsMaster) params.append("saveAsMaster", "true")
+
+    return apiRequest(`/gaji/bonus?${params.toString()}`, {
       method: "POST",
     })
   },
 
   // Bonus berdasarkan departemen (sama rata)
-  addBonusByDepartmentEqual: async (data: { departemen: string, bonus: number }) => {
-    return apiRequest(`/gaji/bonus/department/equal?departemen=${encodeURIComponent(data.departemen)}&bonus=${data.bonus}`, {
+  addBonusByDepartmentEqual: async (data: { departemen: string, bonus: number, itemName?: string, saveAsMaster?: boolean }) => {
+    const params = new URLSearchParams()
+    params.append("departemen", data.departemen)
+    params.append("bonus", String(data.bonus))
+    if (data.itemName) params.append("itemName", data.itemName)
+    if (data.saveAsMaster) params.append("saveAsMaster", "true")
+
+    return apiRequest(`/gaji/bonus/department/equal?${params.toString()}`, {
       method: "POST",
     })
   },
 
   // Bonus berdasarkan departemen (berbeda per karyawan)
-  addBonusByDepartmentDifferent: async (data: { departemen: string, bonuses: { [key: string]: number } }) => {
+  addBonusByDepartmentDifferent: async (data: { departemen: string, bonuses: { [key: string]: number }, itemName?: string, saveAsMaster?: boolean }) => {
     const params = new URLSearchParams()
     params.append('departemen', data.departemen)
+    if (data.itemName) params.append("itemName", data.itemName)
+    if (data.saveAsMaster) params.append("saveAsMaster", "true")
     
     // Convert bonuses object to query parameters
     Object.entries(data.bonuses).forEach(([gajiId, bonus]) => {
@@ -525,38 +589,79 @@ export const salaryAPI = {
   },
 
   // Potongan API
-  addPajakPph21: async (data: { gajiId: string, pajakPph21: number }) => {
-    return apiRequest(`/gaji/potongan/pph21?gajiId=${data.gajiId}&pajakPph21=${data.pajakPph21}`, {
+  addPajakPph21: async (data: { gajiId: string, pajakPph21: number, itemName?: string, saveAsMaster?: boolean }) => {
+    const params = new URLSearchParams()
+    params.append("gajiId", data.gajiId)
+    params.append("pajakPph21", String(data.pajakPph21))
+    if (data.itemName) params.append("itemName", data.itemName)
+    if (data.saveAsMaster) params.append("saveAsMaster", "true")
+    return apiRequest(`/gaji/potongan/pph21?${params.toString()}`, {
       method: "POST",
     })
   },
 
-  addPotonganKeterlambatan: async (data: { gajiId: string, potonganKeterlambatan: number }) => {
-    return apiRequest(`/gaji/potongan/keterlambatan?gajiId=${data.gajiId}&potonganKeterlambatan=${data.potonganKeterlambatan}`, {
+  addPotonganKeterlambatan: async (data: { gajiId: string, potonganKeterlambatan: number, itemName?: string, saveAsMaster?: boolean }) => {
+    const params = new URLSearchParams()
+    params.append("gajiId", data.gajiId)
+    params.append("potonganKeterlambatan", String(data.potonganKeterlambatan))
+    if (data.itemName) params.append("itemName", data.itemName)
+    if (data.saveAsMaster) params.append("saveAsMaster", "true")
+    return apiRequest(`/gaji/potongan/keterlambatan?${params.toString()}`, {
       method: "POST",
     })
   },
 
-  addPotonganPinjaman: async (data: { gajiId: string, potonganPinjaman: number }) => {
-    return apiRequest(`/gaji/potongan/pinjaman?gajiId=${data.gajiId}&potonganPinjaman=${data.potonganPinjaman}`, {
+  addPotonganPinjaman: async (data: { gajiId: string, potonganPinjaman: number, itemName?: string, saveAsMaster?: boolean }) => {
+    const params = new URLSearchParams()
+    params.append("gajiId", data.gajiId)
+    params.append("potonganPinjaman", String(data.potonganPinjaman))
+    if (data.itemName) params.append("itemName", data.itemName)
+    if (data.saveAsMaster) params.append("saveAsMaster", "true")
+    return apiRequest(`/gaji/potongan/pinjaman?${params.toString()}`, {
       method: "POST",
     })
   },
 
-  addPotonganSumbangan: async (data: { gajiId: string, potonganSumbangan: number }) => {
-    return apiRequest(`/gaji/potongan/sumbangan?gajiId=${data.gajiId}&potonganSumbangan=${data.potonganSumbangan}`, {
+  addPotonganSumbangan: async (data: { gajiId: string, potonganSumbangan: number, itemName?: string, saveAsMaster?: boolean }) => {
+    const params = new URLSearchParams()
+    params.append("gajiId", data.gajiId)
+    params.append("potonganSumbangan", String(data.potonganSumbangan))
+    if (data.itemName) params.append("itemName", data.itemName)
+    if (data.saveAsMaster) params.append("saveAsMaster", "true")
+    return apiRequest(`/gaji/potongan/sumbangan?${params.toString()}`, {
       method: "POST",
     })
   },
 
-  addPotonganBpjs: async (data: { gajiId: string, potonganBpjs: number }) => {
-    return apiRequest(`/gaji/potongan/bpjs?gajiId=${data.gajiId}&potonganBpjs=${data.potonganBpjs}`, {
+  addPotonganBpjs: async (data: { gajiId: string, potonganBpjs: number, itemName?: string, saveAsMaster?: boolean }) => {
+    const params = new URLSearchParams()
+    params.append("gajiId", data.gajiId)
+    params.append("potonganBpjs", String(data.potonganBpjs))
+    if (data.itemName) params.append("itemName", data.itemName)
+    if (data.saveAsMaster) params.append("saveAsMaster", "true")
+    return apiRequest(`/gaji/potongan/bpjs?${params.toString()}`, {
       method: "POST",
     })
   },
 
-  addPotonganUndangan: async (data: { gajiId: string, potonganUndangan: number }) => {
-    return apiRequest(`/gaji/potongan/undangan?gajiId=${data.gajiId}&potonganUndangan=${data.potonganUndangan}`, {
+  addPotonganUndangan: async (data: { gajiId: string, potonganUndangan: number, itemName?: string, saveAsMaster?: boolean }) => {
+    const params = new URLSearchParams()
+    params.append("gajiId", data.gajiId)
+    params.append("potonganUndangan", String(data.potonganUndangan))
+    if (data.itemName) params.append("itemName", data.itemName)
+    if (data.saveAsMaster) params.append("saveAsMaster", "true")
+    return apiRequest(`/gaji/potongan/undangan?${params.toString()}`, {
+      method: "POST",
+    })
+  },
+
+  addPotonganCustom: async (data: { gajiId: string, nominal: number, itemName?: string, saveAsMaster?: boolean }) => {
+    const params = new URLSearchParams()
+    params.append("gajiId", data.gajiId)
+    params.append("nominal", String(data.nominal))
+    if (data.itemName) params.append("itemName", data.itemName)
+    if (data.saveAsMaster) params.append("saveAsMaster", "true")
+    return apiRequest(`/gaji/potongan/custom?${params.toString()}`, {
       method: "POST",
     })
   },
@@ -744,6 +849,12 @@ export const addViolation = async (data: any) => {
   })
 }
 
+export const deleteViolation = async (id: string | number) => {
+  return apiRequest(`/pelanggaran?id=${id}`, {
+    method: "DELETE",
+  })
+}
+
 // Public Karyawan API
 export const publicKaryawanAPI = {
   getAll: async () => {
@@ -821,3 +932,47 @@ export const publicAbsensiAPI = {
     }
   },
 }
+
+// Public Setengah Hari API
+export const publicSetengahHariAPI = {
+  getList: async (params?: {
+    tanggal?: string;
+    startDate?: string;
+    endDate?: string;
+    departemen?: string;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.tanggal) query.append("tanggal", params.tanggal);
+    if (params?.startDate) query.append("startDate", params.startDate);
+    if (params?.endDate) query.append("endDate", params.endDate);
+    if (params?.departemen) query.append("departemen", params.departemen);
+
+    const qs = query.toString();
+    return apiRequest(`/public/absensi/setengah-hari${qs ? `?${qs}` : ""}`);
+  },
+
+  submitSingle: async (data: {
+    karyawanId: number | string;
+    tanggal?: string;
+    keterangan?: string;
+  }) => {
+    return apiRequest("/public/absensi/setengah-hari", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  submitBulk: async (data: {
+    tanggal?: string;
+    records: Array<{
+      karyawanId: number | string;
+      tanggal?: string;
+      keterangan?: string;
+    }>;
+  }) => {
+    return apiRequest("/public/absensi/setengah-hari", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+};

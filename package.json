@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3998",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3998",
     "lint": "next lint"
   },
   "dependencies": {
@@ -22,9 +22,11 @@
     "@radix-ui/react-tooltip": "^1.0.7",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
+    "html2pdf.js": "^0.14.0",
     "jspdf": "^3.0.1",
     "jspdf-autotable": "^5.0.2",
     "lucide-react": "^0.294.0",
+    "mammoth": "^1.11.0",
     "next": "15.4.3",
     "react": "^18",
     "react-dom": "^18",

@@ -1,0 +1,175 @@
+PANDUAN PENGGUNAAN ENDPOINT PUBLIC SETENGAH HARI
+=================================================
+
+Tujuan
+------
+Dokumen ini untuk website rekapan harian yang SUDAH berjalan,
+agar bisa:
+1) menampilkan daftar karyawan setengah hari
+2) mengirim data setengah hari (single / bulk)
+
+Endpoint yang digunakan
+-----------------------
+Base path:
+/api/public/absensi/setengah-hari
+
+Method:
+- GET  : ambil data setengah hari
+- POST : kirim data setengah hari (single / bulk)
+
+Catatan:
+- Endpoint ini public (tanpa login token).
+- CORS tetap harus mengizinkan origin website pemanggil.
+
+
+A. GET DATA SETENGAH HARI
+=========================
+
+1) Default (hari ini)
+GET /api/public/absensi/setengah-hari
+
+2) Per tanggal tertentu
+GET /api/public/absensi/setengah-hari?tanggal=2026-03-26
+
+3) Per rentang tanggal
+GET /api/public/absensi/setengah-hari?startDate=2026-03-01&endDate=2026-03-31
+
+4) Filter departemen
+GET /api/public/absensi/setengah-hari?tanggal=2026-03-26&departemen=PACKING%20PJP
+
+Response sukses (contoh):
+{
+  "total": 2,
+  "data": [
+    {
+      "id": "101",
+      "karyawanId": "12",
+      "tanggal": "2026-03-26T00:00:00.000Z",
+      "hadir": true,
+      "setengahHari": true,
+      "status": "HADIR",
+      "keterangan": "Pulang lebih awal",
+      "karyawan": {
+        "id": "12",
+        "namaLengkap": "Nama Karyawan",
+        "departemen": "PACKING PJP"
+      }
+    }
+  ]
+}
+
+
+B. POST DATA SETENGAH HARI
+==========================
+
+1) Single record
+POST /api/public/absensi/setengah-hari
+Content-Type: application/json
+
+Body:
+{
+  "karyawanId": 12,
+  "tanggal": "2026-03-26",
+  "keterangan": "Izin setengah hari"
+}
+
+2) Bulk records
+POST /api/public/absensi/setengah-hari
+Content-Type: application/json
+
+Body:
+{
+  "tanggal": "2026-03-26",
+  "records": [
+    { "karyawanId": 12, "keterangan": "Setengah hari shift pagi" },
+    { "karyawanId": 15, "keterangan": "Keperluan keluarga" }
+  ]
+}
+
+Response sukses (contoh):
+{
+  "summary": {
+    "created": 1,
+    "updated": 1,
+    "failed": 0,
+    "total": 2
+  },
+  "results": [
+    { "karyawanId": "12", "absensiId": "301", "status": "created" },
+    { "karyawanId": "15", "absensiId": "302", "status": "updated" }
+  ]
+}
+
+Perilaku endpoint:
+- Otomatis simpan sebagai:
+  hadir = true
+  status = HADIR
+  setengahHari = true
+- Jika data absensi (karyawan + tanggal) sudah ada, data di-UPDATE.
+- Jika belum ada, data di-CREATE.
+
+
+C. PEMAKAIAN DI FRONTEND YANG SUDAH JALAN
+=========================================
+
+Jika memakai helper dari hrd-sistem-monitor/lib/api.ts:
+- publicSetengahHariAPI.getList(...)
+- publicSetengahHariAPI.submitSingle(...)
+- publicSetengahHariAPI.submitBulk(...)
+
+Contoh alur:
+1) Saat buka halaman rekapan:
+   panggil getList({ tanggal: "YYYY-MM-DD" })
+2) Saat user centang setengah hari:
+   kirim submitSingle(...) atau submitBulk(...)
+3) Setelah submit berhasil:
+   refresh list getList(...) agar UI langsung sinkron
+
+
+D. CONTOH FETCH TANPA HELPER
+============================
+
+1) GET
+fetch("https://domain-anda/api/public/absensi/setengah-hari?tanggal=2026-03-26")
+  .then((r) => r.json())
+  .then((data) => console.log(data));
+
+2) POST single
+fetch("https://domain-anda/api/public/absensi/setengah-hari", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    karyawanId: 12,
+    tanggal: "2026-03-26",
+    keterangan: "Izin setengah hari"
+  })
+}).then((r) => r.json());
+
+3) POST bulk
+fetch("https://domain-anda/api/public/absensi/setengah-hari", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    tanggal: "2026-03-26",
+    records: [
+      { karyawanId: 12, keterangan: "Setengah hari" },
+      { karyawanId: 15, keterangan: "Setengah hari" }
+    ]
+  })
+}).then((r) => r.json());
+
+
+E. CHECKLIST GO-LIVE
+====================
+
+1) Pastikan CORS_ORIGIN backend sudah memuat domain website rekapan harian.
+2) Pastikan URL API di frontend mengarah ke backend yang benar.
+3) Uji 3 skenario:
+   - GET data hari ini
+   - POST single
+   - POST bulk
+4) Setelah POST, cek data muncul di:
+   - Rekapan harian attendance
+   - Generate gaji non-staff (kolom setengah hari)
+
+Selesai.

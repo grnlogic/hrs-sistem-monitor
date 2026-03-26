@@ -1,68 +1,63 @@
 import { formatCurrency } from './utils';
 
-// Helper function untuk mengecek apakah field memiliki nilai
 function hasValue(value: any): boolean {
-    // Convert to number and check if it's a valid positive number
     const numValue = Number(value);
     return !isNaN(numValue) && numValue > 0;
 }
 
-// Helper function untuk menghitung total potongan
-function calculateTotalPotongan(gaji: any): number {
-    return (gaji.pajakPph21 || 0) +
-        (gaji.potonganKeterlambatan || 0) +
-        (gaji.potonganPinjaman || 0) +
-        (gaji.potonganSumbangan || 0) +
-        (gaji.potonganBpjs || 0) +
-        (gaji.potonganUndangan || 0);
+function normalizeItems(raw: any): Array<{ nama: string; nominal: number; linkedField?: string }> {
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .map((item) => {
+            if (!item || typeof item !== 'object') return null;
+            const nama = String(item.nama || '').trim();
+            const nominal = Number(item.nominal || 0);
+            if (!nama || !hasValue(nominal)) return null;
+            return {
+                nama,
+                nominal,
+                linkedField: item.linkedField ? String(item.linkedField) : undefined,
+            };
+        })
+        .filter(Boolean) as Array<{ nama: string; nominal: number; linkedField?: string }>;
 }
 
-// Helper function untuk menghitung gaji bersih yang benar
-function calculateGajiBersih(gaji: any): number {
-    // PERBAIKAN: Prioritaskan nilai yang sudah dihitung dari halaman web
-    // 1. Gunakan totalGajiBersih yang sudah dihitung dengan benar di halaman web
-    // 2. Fallback ke gajiBersih jika totalGajiBersih tidak ada
-    // 3. Terakhir, hitung manual jika kedua nilai tidak ada
-    
-    if (typeof gaji.totalGajiBersih === 'number' && gaji.totalGajiBersih > 0) {
-        console.log('Menggunakan totalGajiBersih dari halaman web untuk:', gaji.karyawan?.namaLengkap, {
-            totalGajiBersih: gaji.totalGajiBersih,
-            source: 'web calculation'
-        });
-        return gaji.totalGajiBersih;
-    }
-    
-    if (typeof gaji.gajiBersih === 'number' && gaji.gajiBersih > 0) {
-        console.log('Menggunakan gajiBersih dari halaman web untuk:', gaji.karyawan?.namaLengkap, {
-            gajiBersih: gaji.gajiBersih,
-            source: 'web fallback'
-        });
-        return gaji.gajiBersih;
-    }
-    
-    // Fallback: hitung manual (seperti di halaman web)
-    const totalPendapatan = gaji.totalGaji || ((gaji.gajiPokok || 0) + (gaji.bonus || 0));
-    const totalPotongan = calculateTotalPotongan(gaji);
-    const calculatedGajiBersih = totalPendapatan - totalPotongan;
-    
-    // Debug log untuk memastikan perhitungan benar
-    console.log('Menghitung gaji bersih manual untuk:', gaji.karyawan?.namaLengkap, {
-        gajiPokok: gaji.gajiPokok,
-        bonus: gaji.bonus,
-        totalGaji: gaji.totalGaji,
-        totalPendapatan,
-        totalPotongan,
-        gajiBersihHitung: calculatedGajiBersih,
-        source: 'manual calculation'
+function groupItemsByName(items: Array<{ nama: string; nominal: number }>): Array<{ nama: string; nominal: number }> {
+    const grouped = new Map<string, number>();
+    items.forEach((item) => {
+        grouped.set(item.nama, (grouped.get(item.nama) || 0) + Number(item.nominal || 0));
     });
-    
-    return calculatedGajiBersih;
+    return Array.from(grouped.entries()).map(([nama, nominal]) => ({ nama, nominal }));
 }
 
-// Helper function untuk generate potongan HTML
+function calculateTotalPotongan(gaji: any): number {
+    if (hasValue(gaji.potongan)) return Number(gaji.potongan || 0);
+    const dynamicItems = normalizeItems(gaji.potonganItems);
+    if (dynamicItems.length > 0) return dynamicItems.reduce((sum, item) => sum + Number(item.nominal || 0), 0);
+    return (gaji.pajakPph21 || 0) + (gaji.potonganKeterlambatan || 0) + (gaji.potonganPinjaman || 0) +
+        (gaji.potonganSumbangan || 0) + (gaji.potonganBpjs || 0) + (gaji.potonganUndangan || 0);
+}
+
+function calculateTotalPendapatan(gaji: any): number {
+    return (gaji.gajiPokok || 0) + (gaji.bonus || 0);
+}
+
+function calculateGajiBersih(gaji: any): number {
+    return calculateTotalPendapatan(gaji) - calculateTotalPotongan(gaji);
+}
+
 function generatePotonganHTML(gaji: any): string {
+    const dynamicItems = groupItemsByName(normalizeItems(gaji.potonganItems));
+    if (dynamicItems.length > 0) {
+        return dynamicItems.map(item => `
+        <div class="info-row">
+            <span class="label">${item.nama}:</span>
+            <span class="value">- ${formatCurrency(item.nominal)}</span>
+        </div>`).join('');
+    }
+
     const potonganItems = [
-        { label: 'PPH21', value: gaji.pajakPph21 },
+        { label: 'PPh 21', value: gaji.pajakPph21 },
         { label: 'Terlambat', value: gaji.potonganKeterlambatan },
         { label: 'Pinjaman', value: gaji.potonganPinjaman },
         { label: 'Sumbangan', value: gaji.potonganSumbangan },
@@ -70,362 +65,338 @@ function generatePotonganHTML(gaji: any): string {
         { label: 'Undangan', value: gaji.potonganUndangan }
     ];
 
-    // Debug: Log data potongan yang diterima
-    console.log('Data potongan untuk PDF:', {
-        karyawan: gaji.karyawan?.namaLengkap,
-        potonganItems: potonganItems.map(item => ({ label: item.label, value: item.value, hasValue: hasValue(item.value) }))
-    });
-
-    // Tampilkan semua potongan yang memiliki nilai > 0
     const activePotongan = potonganItems.filter(item => hasValue(item.value));
-
-    if (activePotongan.length === 0) {
-        return `
-      <div class="no-data">Tidak ada potongan</div>
-    `;
-    }
-
-    // Tambahan: jika semua potongan 0 tapi ada potongan di data, tampilkan semua
-    const totalPotongan = potonganItems.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
-    if (totalPotongan > 0 && activePotongan.length < potonganItems.length) {
-        // Ada potongan total tapi tidak semua ter-detect, tampilkan semua yang ada nilainya
-        console.log('Warning: Total potongan > 0 tapi tidak semua ter-detect, showing all non-zero items');
-    }
+    if (activePotongan.length === 0) return `<div class="no-data">Tidak ada potongan</div>`;
 
     return activePotongan.map(item => `
     <div class="info-row">
-      <span class="label">${item.label}:</span>
-      <span class="value">${formatCurrency(item.value)}</span>
-    </div>
-  `).join('');
+        <span class="label">${item.label}:</span>
+        <span class="value">- ${formatCurrency(item.value)}</span>
+    </div>`).join('');
+}
+
+function generateBonusHTML(gaji: any): string {
+    const dynamicBonusItems = groupItemsByName(normalizeItems(gaji.bonusItems));
+    if (dynamicBonusItems.length > 0) {
+        return dynamicBonusItems.map(item => `
+        <div class="info-row">
+            <span class="label">${item.nama}:</span>
+            <span class="value">${formatCurrency(item.nominal)}</span>
+        </div>`).join('');
+    }
+    if (!hasValue(gaji.bonus)) return '';
+    return `
+    <div class="info-row">
+        <span class="label">Bonus:</span>
+        <span class="value">${formatCurrency(gaji.bonus)}</span>
+    </div>`;
+}
+
+function getSlipDate(gaji: any): string {
+    if (gaji?.periodeAkhir) return String(gaji.periodeAkhir).split('T')[0];
+    if (gaji?.periodeAwal) return String(gaji.periodeAwal).split('T')[0];
+    if (gaji?.tanggalGaji) return String(gaji.tanggalGaji).split('T')[0];
+    return '-';
 }
 
 export function generateSalarySlipHTML(salaryData: any[]): string {
-    // Debug: Log data yang akan diproses untuk PDF
-    console.log('=== GENERATING PDF TEMPLATE ===');
-    console.log('Total data items:', salaryData.length);
-    salaryData.forEach((item, index) => {
-        console.log(`Data ${index + 1}:`, {
-            nama: item.karyawan?.namaLengkap,
-            periodeDisplay: item.periodeDisplay,
-            periodeAwal: item.periodeAwal,
-            periodeAkhir: item.periodeAkhir,
-            totalHari: item.totalHari,
-            // Gaji details
-            gajiPokok: item.gajiPokok,
-            totalGaji: item.totalGaji,
-            bonus: item.bonus,
-            // Gaji bersih comparisons
-            gajiBersih: item.gajiBersih,
-            totalGajiBersih: item.totalGajiBersih,
-            // Potongan details
-            pajakPph21: item.pajakPph21,
-            potonganKeterlambatan: item.potonganKeterlambatan,
-            potonganPinjaman: item.potonganPinjaman,
-            potonganSumbangan: item.potonganSumbangan,
-            potonganBpjs: item.potonganBpjs,
-            potonganUndangan: item.potonganUndangan,
-            totalPotonganCalculated: (item.pajakPph21 || 0) + (item.potonganKeterlambatan || 0) + (item.potonganPinjaman || 0) + (item.potonganSumbangan || 0) + (item.potonganBpjs || 0) + (item.potonganUndangan || 0),
-            potongan: item.potongan
-        });
-    });
-    console.log('=== END DEBUG ===');
+    // 12 slip per page (3 col x 4 row)
+    const pageChunks: any[][] = [];
+    for (let i = 0; i < salaryData.length; i += 12) {
+        pageChunks.push(salaryData.slice(i, i + 12));
+    }
 
     const template = `<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slip Gaji Export PDF</title>
+    <title>Slip Gaji</title>
     <style>
         @page {
             size: A4;
-            margin: 10mm;
+            margin: 8mm;
         }
-        
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
             font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
             background: white;
-            color: black;
+            color: #000;
+            font-size: 9px;
         }
-        
-        .page-container {
+
+        .print-page {
+            width: 194mm;
+            min-height: 281mm;
+            margin: 0 auto 8mm auto;
+            page-break-after: always;
+            break-after: page;
+        }
+
+        .print-page:last-child {
+            page-break-after: auto;
+            break-after: auto;
+        }
+
+        /* 3 kolom x 4 baris = 12 slip per halaman A4 */
+        .slip-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 3mm;
             width: 100%;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10mm;
-            padding: 5mm;
-            box-sizing: border-box;
         }
-        
+
+        /* ─── SLIP CARD ──────────────────────────── */
         .slip-gaji {
-            width: calc(33.33% - 7mm);
-            min-height: 350px;
-            border: 2px solid black;
-            padding: 8px;
-            box-sizing: border-box;
-            background: white;
-            font-size: 11px;
-            line-height: 1.3;
+            border: 1.5px solid #000;
+            padding: 5px 6px;
             display: flex;
             flex-direction: column;
-            margin-bottom: 10mm;
+            gap: 3px;
+            /* Tinggi tetap agar mudah digunting */
+            min-height: 66mm;
+            max-height: 66mm;
+            overflow: hidden;
         }
-        
+
+        /* ─── HEADER ─────────────────────────────── */
         .slip-header {
-            text-align: center;
-            border-bottom: 2px solid black;
-            padding-bottom: 6px;
-            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            border-bottom: 1.5px solid #000;
+            padding-bottom: 3px;
         }
-        
-        .logo {
-            width: 30px;
-            height: 30px;
-            margin: 0 auto 4px auto;
-            display: block;
-        }
-        
-        .logo img {
-            width: 100%;
-            height: 100%;
+
+        .slip-header img {
+            width: 20px;
+            height: 20px;
             object-fit: contain;
         }
-        
-        .company-name {
+
+        .header-text .company-name {
             font-weight: bold;
-            font-size: 14px;
-            margin-bottom: 2px;
+            font-size: 9px;
+            line-height: 1.2;
         }
-        
-        .slip-title {
-            font-size: 10px;
-            font-weight: bold;
+
+        .header-text .slip-title {
+            font-size: 7.5px;
+            color: #333;
         }
-        
+
+        /* ─── EMPLOYEE INFO ──────────────────────── */
         .employee-info {
-            margin-bottom: 8px;
-            border-bottom: 1px solid black;
-            padding-bottom: 6px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1px 4px;
+            font-size: 8px;
+            border-bottom: 1px dashed #666;
+            padding-bottom: 3px;
         }
-        
+
+        .emp-field {
+            display: flex;
+            gap: 3px;
+        }
+
+        .emp-field .lbl { font-weight: bold; white-space: nowrap; }
+        .emp-field .val { color: #000; }
+
+        /* ─── PERIOD ─────────────────────────────── */
+        .period-bar {
+            font-size: 7.5px;
+            text-align: center;
+            border: 1px solid #ccc;
+            padding: 1px 3px;
+            background: #f5f5f5;
+        }
+
+        /* ─── RINCIAN GAJI ───────────────────────── */
+        .rincian {
+            border: 1px solid #000;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .rincian-title {
+            font-weight: bold;
+            text-align: center;
+            font-size: 8.5px;
+            border-bottom: 1px solid #000;
+            padding: 1px 0;
+            background: #f0f0f0;
+            letter-spacing: 0.3px;
+        }
+
+        .rincian-body {
+            padding: 2px 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            flex: 1;
+        }
+
+        .section-label {
+            font-weight: bold;
+            font-size: 8px;
+            margin-top: 2px;
+            border-bottom: 1px dotted #999;
+            padding-bottom: 1px;
+        }
+
         .info-row {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 2px;
-            align-items: flex-start;
-        }
-        
-        .label {
-            font-weight: bold;
-            width: 50%;
-            font-size: 10px;
-        }
-        
-        .value {
-            text-align: right;
-            width: 50%;
-            font-size: 10px;
-            word-wrap: break-word;
-        }
-        
-        .salary-details {
-            flex: 1;
-            font-size: 10px;
-        }
-        
-        .section {
-            margin-bottom: 8px;
-            border: 1px solid black;
-            padding: 4px;
-        }
-        
-        .section-title {
-            font-weight: bold;
-            border-bottom: 1px solid black;
-            margin-bottom: 4px;
-            padding-bottom: 2px;
-            font-size: 11px;
-            text-align: center;
-            text-transform: uppercase;
-        }
-        
-        .total-row {
-            border-top: 1px solid black;
-            padding-top: 3px;
-            margin-top: 4px;
-            font-weight: bold;
-        }
-        
-        .grand-total {
-            border: 2px solid black;
-            padding: 4px;
-            margin-top: 8px;
-            font-weight: bold;
-            text-align: center;
-            font-size: 11px;
-        }
-        
-        .footer {
-            margin-top: auto;
             font-size: 8px;
-            text-align: center;
-            border-top: 1px solid black;
-            padding-top: 4px;
-            font-style: italic;
-            position: relative;
+            line-height: 1.3;
         }
-        
-        .footer::after {
-            content: '';
-            display: block;
-            width: 5cm;
-            height: 1px;
-            background-color: black;
-            margin: 3px auto 0 auto;
+
+        .info-row .label { font-weight: normal; }
+        .info-row .value { text-align: right; }
+
+        /* Subtotal baris */
+        .subtotal-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 8px;
+            font-weight: bold;
+            border-top: 1px solid #999;
+            padding-top: 1px;
+            margin-top: 1px;
         }
-        
-        .period-info {
-            border: 1px solid black;
-            padding: 4px;
-            margin-bottom: 6px;
-            text-align: center;
+
+        /* Grand total */
+        .grand-total {
+            border-top: 1.5px solid #000;
+            margin-top: 2px;
+            padding: 2px 5px;
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
             font-size: 9px;
+            background: #f0f0f0;
         }
-        
+
         .no-data {
             font-style: italic;
+            font-size: 7.5px;
+            color: #666;
             text-align: center;
-            padding: 2px;
-            font-size: 9px;
+            padding: 1px 0;
         }
-        
+
+        /* ─── FOOTER ─────────────────────────────── */
+        .slip-footer {
+            font-size: 7px;
+            color: #555;
+            text-align: center;
+            border-top: 1px dotted #999;
+            padding-top: 2px;
+            font-style: italic;
+        }
+
         @media print {
-            body {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-            
-            .page-container {
-                min-height: 100vh;
-            }
-            
-            .slip-gaji {
-                break-inside: avoid;
-                page-break-inside: avoid;
-            }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .print-page { width: 100%; margin: 0; }
         }
     </style>
 </head>
 <body>
-    <div class="page-container">
-        ${salaryData.map((gaji, index) => {
-        // Hitung ulang total potongan dan gaji bersih
-        const totalPotongan = calculateTotalPotongan(gaji);
-        const gajiBersih = calculateGajiBersih(gaji);
+<div class="page-container">
+    ${pageChunks.map((chunk, pageIndex) => `
+    <div class="print-page">
+        <div class="slip-grid">
+            ${chunk.map((gaji, indexInPage) => {
+                const totalPendapatan = calculateTotalPendapatan(gaji);
+                const totalPotongan   = calculateTotalPotongan(gaji);
+                const gajiBersih      = calculateGajiBersih(gaji);
 
-        return `
-        <!-- Slip Gaji ${index + 1} -->
+                const periodeText = gaji.periodeDisplay
+                    ? gaji.periodeDisplay
+                    : (gaji.periodeAwal === gaji.periodeAkhir || !gaji.periodeAkhir)
+                        ? `${gaji.periodeAwal || '-'} (1 hari)`
+                        : `${gaji.periodeAwal || '-'} s/d ${gaji.periodeAkhir || '-'} (${gaji.totalHari || 1} hari)`;
+
+                return `
         <div class="slip-gaji">
+
+            <!-- HEADER -->
             <div class="slip-header">
-                <div class="logo">
-                    <img src="/png.png" alt="Logo" onerror="this.style.display='none'" />
+                <img src="/png.png" alt="Logo" onerror="this.style.display='none'" />
+                <div class="header-text">
+                    <div class="company-name">PT. PADUD JAYA</div>
+                    <div class="slip-title">SLIP GAJI KARYAWAN</div>
                 </div>
-                <div class="company-name">PT. PADUD JAYA</div>
-                <div class="slip-title">SLIP GAJI KARYAWAN</div>
             </div>
-            
+
+            <!-- EMPLOYEE INFO -->
             <div class="employee-info">
-                <div class="info-row">
-                    <span class="label">Nama:</span>
-                    <span class="value">${gaji.karyawan?.namaLengkap || '-'}</span>
+                <div class="emp-field">
+                    <span class="lbl">Nama:</span>
+                    <span class="val">${gaji.karyawan?.namaLengkap || '-'}</span>
                 </div>
-                <div class="info-row">
-                    <span class="label">ID Karyawan:</span>
-                    <span class="value">${gaji.karyawan?.id || '-'}</span>
+                <div class="emp-field">
+                    <span class="lbl">Tgl:</span>
+                    <span class="val">${getSlipDate(gaji)}</span>
                 </div>
-                <div class="info-row">
-                    <span class="label">Dept:</span>
-                    <span class="value">${gaji.karyawan?.departemen || '-'}</span>
+                <div class="emp-field">
+                    <span class="lbl">Divisi:</span>
+                    <span class="val">${gaji.karyawan?.departemen || '-'}</span>
                 </div>
             </div>
-            
-            <div class="period-info">
-                <strong>Detail Kehadiran:</strong><br>
-                ${(() => {
-                    // Debug log untuk melihat data yang diterima
-                    console.log('Template PDF - Data periode untuk', gaji.karyawan?.namaLengkap, {
-                        periodeDisplay: gaji.periodeDisplay,
-                        periodeAwal: gaji.periodeAwal,
-                        periodeAkhir: gaji.periodeAkhir,
-                        totalHari: gaji.totalHari,
-                        totalHariMasuk: gaji.totalHariMasuk,
-                        totalHariSetengahHari: gaji.totalHariSetengahHari
-                    });
-                    
-                    // PERBAIKAN: Gunakan periodeDisplay yang sudah benar dari halaman utama
-                    // Jika periodeDisplay tersedia, gunakan itu. Jika tidak, buat dari data periode
-                    if (gaji.periodeDisplay) {
-                        return gaji.periodeDisplay;
-                    }
-                    
-                    // Fallback: buat format yang sama dengan halaman utama
-                    const totalHari = gaji.totalHari || 1;
-                    
-                    if (gaji.periodeAwal === gaji.periodeAkhir || !gaji.periodeAkhir) {
-                        return `${gaji.periodeAwal || '-'} (1 hari)`;
-                    } else {
-                        return `${gaji.periodeAwal || '-'} - ${gaji.periodeAkhir || '-'} (${totalHari} hari)`;
-                    }
-                })()}
-            </div>
-            
-            <div class="salary-details">
-                <div class="section">
-                    <div class="section-title">PENDAPATAN</div>
+
+            <!-- PERIODE -->
+            <div class="period-bar">${periodeText}</div>
+
+            <!-- RINCIAN GAJI -->
+            <div class="rincian">
+                <div class="rincian-title">RINCIAN GAJI</div>
+                <div class="rincian-body">
+
+                    <!-- PENDAPATAN -->
+                    <div class="section-label">Pendapatan</div>
                     <div class="info-row">
-                        <span class="label">Gaji Pokok:</span>
+                        <span class="label">Gaji Pokok</span>
                         <span class="value">${formatCurrency(gaji.gajiPokok || 0)}</span>
                     </div>
-                    ${hasValue(gaji.bonus) ? `
-                    <div class="info-row">
-                        <span class="label">Bonus:</span>
-                        <span class="value">${formatCurrency(gaji.bonus)}</span>
+                    ${generateBonusHTML(gaji)}
+                    <div class="subtotal-row">
+                        <span>Subtotal Pendapatan</span>
+                        <span>${formatCurrency(totalPendapatan)}</span>
                     </div>
-                    ` : ''}
-                    <div class="info-row total-row">
-                        <span class="label">Jumlah:</span>
-                        <span class="value">${formatCurrency(gaji.totalGaji || ((gaji.gajiPokok || 0) + (gaji.bonus || 0)))}</span>
-                    </div>
-                </div>
-                
-                <div class="section">
-                    <div class="section-title">POTONGAN</div>
+
+                    <!-- POTONGAN -->
+                    <div class="section-label">Potongan</div>
                     ${generatePotonganHTML(gaji)}
-                    <div class="info-row total-row">
-                        <span class="label">Jumlah:</span>
-                        <span class="value">${formatCurrency(totalPotongan)}</span>
+                    <div class="subtotal-row">
+                        <span>Subtotal Potongan</span>
+                        <span>- ${formatCurrency(totalPotongan)}</span>
                     </div>
+
                 </div>
-                
+
+                <!-- TOTAL DITERIMA -->
                 <div class="grand-total">
-                    <div class="info-row">
-                        <span class="label">GAJI BERSIH:</span>
-                        <span class="value">${formatCurrency(gajiBersih)}</span>
-                    </div>
+                    <span>Total Diterima</span>
+                    <span>${formatCurrency(gajiBersih)}</span>
                 </div>
             </div>
-            
-            <div class="footer">
-                Dicetak: ${new Date().toLocaleDateString('id-ID')} | ${new Date().toLocaleTimeString('id-ID')}
+
+            <!-- FOOTER -->
+            <div class="slip-footer">
+                Dicetak: ${new Date().toLocaleDateString('id-ID')} ${new Date().toLocaleTimeString('id-ID')}
             </div>
+
+        </div>`;
+            }).join('')}
         </div>
-        `}).join('')}
-    </div>
+    </div>`).join('')}
+</div>
 </body>
 </html>`;
 
     return template;
-} 
+}

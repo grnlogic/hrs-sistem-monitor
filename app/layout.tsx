@@ -1,9 +1,9 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Sora } from "next/font/google"
 import "./globals.css"
 
-const inter = Inter({ subsets: ["latin"] })
+const sora = Sora({ subsets: ["latin"], display: "swap" })
 
 export const metadata: Metadata = {
   title: "Employee Monitoring System",
@@ -17,7 +17,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id">
-      <body className={inter.className}>{children}</body>
+      <body className={sora.className}>{children}</body>
     </html>
   )
 }

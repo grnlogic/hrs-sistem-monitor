@@ -1,18 +1,19 @@
 "use client";
 
+import * as React from "react";
+import Image from "next/image";
 import {
   Calendar,
   DollarSign,
   Home,
   LogOut,
-  Settings,
   Shield,
   Users,
   Clock,
   AlertTriangle,
   Factory,
-  Zap,
-  ChevronRight,
+  ChevronUp,
+  Banknote,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 
@@ -29,18 +30,19 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/overlay/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-// Tipe data untuk menu items
 type MenuItem = {
   title: string;
   url: string;
   icon: any;
   description: string;
-  submenu?: {
-    title: string;
-    url: string;
-    description: string;
-  }[];
 };
 
 const menuItems: MenuItem[] = [
@@ -48,307 +50,606 @@ const menuItems: MenuItem[] = [
     title: "Dashboard",
     url: "/dashboard",
     icon: Home,
-    description: "Overview & Analytics",
+    description: "Ringkasan & Statistik",
   },
   {
     title: "Karyawan",
     url: "/dashboard/employees",
     icon: Users,
-    description: "Manajemen SDM",
+    description: "Data & PKB Karyawan",
   },
   {
     title: "Absensi",
     url: "/dashboard/attendance",
     icon: Clock,
-    description: "Kehadiran & Waktu",
-  },
-  {
-    title: "Gaji",
-    url: "/dashboard/salary",
-    icon: DollarSign,
-    description: "Payroll & Benefit",
-    submenu: [
-      {
-        title: "Rekap Gaji",
-        url: "/dashboard/salary",
-        description: "Lihat semua gaji",
-      },
-      {
-        title: "Proses Gaji",
-        url: "/dashboard/salary/process",
-        description: "Generate gaji STAFF & non-STAFF",
-      },
-      {
-        title: "Tambah Bonus",
-        url: "/dashboard/salary/bonus",
-        description: "Kelola bonus karyawan",
-      },
-      {
-        title: "Kelola Potongan",
-        url: "/dashboard/salary/potongan",
-        description: "Kelola potongan gaji",
-      },
-      {
-        title: "Update Gaji STAFF",
-        url: "/dashboard/salary/update-staff",
-        description: "Update gaji per bulan STAFF",
-      },
-    ],
+    description: "Kehadiran Harian",
   },
   {
     title: "Cuti",
     url: "/dashboard/leave",
     icon: Calendar,
-    description: "Leave Management",
+    description: "Pengajuan & Approval",
   },
   {
     title: "Pelanggaran",
     url: "/dashboard/violations",
     icon: AlertTriangle,
-    description: "Violations & Report",
+    description: "Catatan Pelanggaran",
+  },
+];
+
+const gajiMenuItems: MenuItem[] = [
+  {
+    title: "Gaji Staff",
+    url: "/dashboard/salary/staff",
+    icon: Banknote,
+    description: "Proses & Rekap Staff",
+  },
+  {
+    title: "Gaji Non-Staff",
+    url: "/dashboard/salary/non-staff",
+    icon: DollarSign,
+    description: "Proses & Rekap Non-Staff",
   },
 ];
 
 export function AppSidebar() {
   const router = useRouter();
   const pathname = usePathname();
+  const [user, setUser] = React.useState<{
+    name: string;
+    email: string;
+  } | null>(null);
+
+  React.useEffect(() => {
+    const savedUser = localStorage.getItem("user");
+    if (!savedUser || savedUser === "undefined" || savedUser === "null") return;
+    try {
+      const parsedUser = JSON.parse(savedUser);
+      if (parsedUser && typeof parsedUser === "object") setUser(parsedUser);
+    } catch (e) {
+      console.error("Error parsing user data", e);
+      localStorage.removeItem("user");
+    }
+  }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem("auth_token");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
     router.push("/");
   };
 
+  const isMenuActive = (url: string) => {
+    if (url === "/dashboard") {
+      return pathname === "/dashboard" || pathname === "/dashboard/";
+    }
+
+    return pathname === url || pathname.startsWith(url + "/");
+  };
+
   return (
-    <Sidebar
-      collapsible="icon"
-      className="border-r border-slate-200/60 bg-white shadow-sm"
-    >
-      {/* Header */}
-      <SidebarHeader className="border-b border-slate-200/60 bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 text-white relative overflow-hidden">
-        {/* Background decoration */}
-        <div
-          className="absolute inset-0 opacity-50"
-          style={{
-            backgroundImage:
-              "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")",
-          }}
-        ></div>
+    <>
+      {/* Inject global styles */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap');
 
-        <div className="relative flex items-center gap-4 px-6 py-6">
-          <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-sm shadow-lg border border-white/20">
-            <Factory className="h-6 w-6 text-white" />
-            <div className="absolute -top-1 -right-1 h-4 w-4 bg-gradient-to-r from-orange-400 to-orange-500 rounded-full flex items-center justify-center shadow-sm">
-              <Zap className="h-2.5 w-2.5 text-white" />
+        .padud-sidebar {
+          font-family: 'Geist', system-ui, sans-serif;
+          --sidebar-bg: #0f1117;
+          --sidebar-surface: #181b23;
+          --sidebar-border: rgba(255,255,255,0.06);
+          --sidebar-accent: #3b82f6;
+          --sidebar-accent-glow: rgba(59, 130, 246, 0.15);
+          --sidebar-text-primary: #f1f5f9;
+          --sidebar-text-secondary: #64748b;
+          --sidebar-text-muted: #374151;
+          background: var(--sidebar-bg) !important;
+          border-right: 1px solid var(--sidebar-border) !important;
+        }
+
+        .padud-header {
+          background: var(--sidebar-bg);
+          border-bottom: 1px solid var(--sidebar-border);
+          padding: 20px 16px 16px;
+        }
+
+        .padud-logo-wrap {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .padud-logo-icon {
+          width: 38px;
+          height: 38px;
+          border-radius: 10px;
+          background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          box-shadow: 0 0 0 1px rgba(59,130,246,0.3), 0 4px 12px rgba(37,99,235,0.3);
+        }
+
+        .padud-logo-text {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          overflow: hidden;
+        }
+
+        .padud-logo-title {
+          font-size: 13px;
+          font-weight: 700;
+          color: #f1f5f9;
+          letter-spacing: -0.01em;
+          line-height: 1;
+        }
+
+        .padud-logo-sub {
+          font-size: 9.5px;
+          font-weight: 600;
+          color: #3b82f6;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          line-height: 1;
+        }
+
+        .padud-section-label {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 9.5px;
+          font-weight: 600;
+          color: var(--sidebar-text-muted);
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          padding: 0 8px;
+          margin-bottom: 6px;
+        }
+
+        .padud-section-label svg {
+          opacity: 0.5;
+        }
+
+        .padud-divider {
+          height: 1px;
+          background: var(--sidebar-border);
+          margin: 16px 8px;
+        }
+
+        /* Menu item styles */
+        .padud-menu-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 9px 10px;
+          border-radius: 8px;
+          border: 1px solid transparent;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          text-decoration: none;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .padud-menu-item:not(.active):hover {
+          background: rgba(255,255,255,0.04);
+          border-color: rgba(255,255,255,0.06);
+        }
+
+        .padud-menu-item.active {
+          background: var(--sidebar-accent-glow);
+          border-color: rgba(59, 130, 246, 0.25);
+        }
+
+        .padud-menu-item.active::before {
+          content: '';
+          position: absolute;
+          left: 0;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 2.5px;
+          height: 60%;
+          background: var(--sidebar-accent);
+          border-radius: 0 2px 2px 0;
+        }
+
+        .padud-item-icon {
+          width: 32px;
+          height: 32px;
+          border-radius: 7px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          transition: all 0.15s ease;
+        }
+
+        .padud-menu-item:not(.active) .padud-item-icon {
+          background: rgba(255,255,255,0.04);
+        }
+
+        .padud-menu-item.active .padud-item-icon {
+          background: rgba(59, 130, 246, 0.2);
+        }
+
+        .padud-item-icon svg {
+          transition: color 0.15s ease;
+        }
+
+        .padud-menu-item:not(.active) .padud-item-icon svg {
+          color: #4b5563;
+        }
+
+        .padud-menu-item:not(.active):hover .padud-item-icon svg {
+          color: #9ca3af;
+        }
+
+        .padud-menu-item.active .padud-item-icon svg {
+          color: #60a5fa;
+        }
+
+        .padud-item-text {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          overflow: hidden;
+        }
+
+        .padud-item-title {
+          font-size: 12.5px;
+          font-weight: 500;
+          line-height: 1;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .padud-menu-item:not(.active) .padud-item-title {
+          color: #94a3b8;
+        }
+
+        .padud-menu-item:not(.active):hover .padud-item-title {
+          color: #e2e8f0;
+        }
+
+        .padud-menu-item.active .padud-item-title {
+          color: #bfdbfe;
+        }
+
+        .padud-item-desc {
+          font-size: 9.5px;
+          line-height: 1;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .padud-menu-item:not(.active) .padud-item-desc {
+          color: #374151;
+        }
+
+        .padud-menu-item.active .padud-item-desc {
+          color: rgba(96, 165, 250, 0.6);
+        }
+
+        /* Footer / User area */
+        .padud-footer {
+          padding: 12px;
+          border-top: 1px solid var(--sidebar-border);
+          background: var(--sidebar-bg);
+        }
+
+        .padud-user-btn {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 9px 10px;
+          border-radius: 10px;
+          border: 1px solid rgba(255,255,255,0.06);
+          background: var(--sidebar-surface);
+          cursor: pointer;
+          width: 100%;
+          transition: all 0.15s ease;
+        }
+
+        .padud-user-btn:hover {
+          background: rgba(255,255,255,0.05);
+          border-color: rgba(255,255,255,0.1);
+        }
+
+        .padud-user-avatar {
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          background: linear-gradient(135deg, #1e3a5f, #2563eb);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 11px;
+          font-weight: 700;
+          color: #93c5fd;
+          flex-shrink: 0;
+          letter-spacing: 0.05em;
+        }
+
+        .padud-user-info {
+          flex: 1;
+          overflow: hidden;
+          text-align: left;
+        }
+
+        .padud-user-name {
+          font-size: 12px;
+          font-weight: 600;
+          color: #cbd5e1;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: 1;
+          margin-bottom: 3px;
+        }
+
+        .padud-user-email {
+          font-size: 9.5px;
+          color: #374151;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: 1;
+        }
+
+        .padud-version-badge {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+          margin-top: 10px;
+          padding: 5px 8px;
+          border-radius: 6px;
+          background: rgba(255,255,255,0.02);
+          border: 1px solid rgba(255,255,255,0.04);
+        }
+
+        .padud-version-badge span {
+          font-size: 9px;
+          font-weight: 500;
+          color: #1f2937;
+          letter-spacing: 0.05em;
+          font-family: 'Geist Mono', monospace;
+        }
+
+        /* Dropdown override */
+        .padud-dropdown {
+          background: #181b23 !important;
+          border: 1px solid rgba(255,255,255,0.08) !important;
+          border-radius: 12px !important;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important;
+          padding: 6px !important;
+        }
+
+        .padud-dropdown-header {
+          padding: 8px 10px 4px;
+        }
+
+        .padud-dropdown-label {
+          font-size: 9px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          color: #374151;
+        }
+
+        .padud-dropdown-name {
+          font-size: 12px;
+          font-weight: 600;
+          color: #94a3b8;
+          padding: 4px 10px 8px;
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+          margin-bottom: 4px;
+        }
+
+        .padud-logout-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 10px;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 500;
+          color: #f87171;
+          transition: all 0.15s ease;
+        }
+
+        .padud-logout-item:hover {
+          background: rgba(239, 68, 68, 0.1);
+        }
+
+        /* Collapsed icon state */
+        [data-collapsible=icon] .padud-logo-text,
+        [data-collapsible=icon] .padud-item-text,
+        [data-collapsible=icon] .padud-user-info,
+        [data-collapsible=icon] .padud-section-label span,
+        [data-collapsible=icon] .padud-version-badge,
+        [data-collapsible=icon] .padud-chevron {
+          display: none !important;
+        }
+
+        [data-collapsible=icon] .padud-logo-wrap {
+          justify-content: center;
+        }
+
+        [data-collapsible=icon] .padud-menu-item {
+          justify-content: center;
+          padding: 9px;
+        }
+
+        [data-collapsible=icon] .padud-menu-item.active::before {
+          display: none;
+        }
+
+        [data-collapsible=icon] .padud-user-btn {
+          justify-content: center;
+          padding: 9px;
+        }
+      `}</style>
+
+      <Sidebar
+        collapsible="icon"
+        className="padud-sidebar border-r-0"
+      >
+        <SidebarHeader className="padud-header p-0">
+          <div className="padud-header">
+            <div className="padud-logo-wrap group-data-[collapsible=icon]:justify-center">
+              <div className="padud-logo-icon">
+                <Image
+                  src="/png.png"
+                  alt="Logo"
+                  width={20}
+                  height={20}
+                  className="brightness-0 invert object-contain"
+                  priority
+                />
+              </div>
+              <div className="padud-logo-text group-data-[collapsible=icon]:hidden">
+                <span className="padud-logo-title">PT. PADUD</span>
+                <span className="padud-logo-sub">Management System</span>
+              </div>
             </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <h1 className="font-bold text-white text-xl tracking-tight">
-              PT. PADUD
-            </h1>
-            <p className="text-blue-100/80 text-sm font-medium mt-0.5">
-              Employee Management System
-            </p>
-          </div>
-        </div>
+        </SidebarHeader>
 
-        {/* Status indicator */}
-        <div className="relative px-6 pb-4">
-          <div className="flex items-center gap-3 text-sm text-blue-100/90 bg-white/10 rounded-lg px-3 py-2 backdrop-blur-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 bg-green-400 rounded-full animate-pulse shadow-sm"></div>
-              <span className="font-medium">System Online</span>
+        <SidebarContent className="px-2 py-3" style={{ background: "#0f1117" }}>
+          {/* Menu Utama */}
+          <SidebarGroup className="p-0">
+            <div className="padud-section-label group-data-[collapsible=icon]:hidden">
+              <Shield size={10} />
+              <span>Menu Utama</span>
             </div>
-            <div className="ml-auto text-xs text-blue-200/70">v1.0.0</div>
-          </div>
-        </div>
-      </SidebarHeader>
-
-      {/* Content */}
-      <SidebarContent className="px-3 py-6">
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-slate-500 font-semibold text-xs uppercase tracking-wider px-4 py-3 flex items-center gap-2 mb-2">
-            <Shield className="h-3.5 w-3.5" />
-            Menu Utama
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu className="space-y-2">
-              {menuItems.map((item) => {
-                const isActive =
-                  pathname === item.url ||
-                  (item.submenu &&
-                    item.submenu.some((sub) => pathname === sub.url));
-                const hasSubmenu = item.submenu && item.submenu.length > 0;
-
-                return (
-                  <div key={item.title}>
-                    <SidebarMenuItem>
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-0.5">
+                {menuItems.map((item) => {
+                  const isActive = isMenuActive(item.url);
+                  return (
+                    <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
                         asChild
-                        isActive={isActive}
                         tooltip={item.title}
-                        className={`
-                          mx-1 rounded-xl transition-all duration-300 group relative overflow-hidden min-h-[60px]
-                          ${
-                            isActive
-                              ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20 scale-[1.02] border border-blue-400/30"
-                              : "hover:bg-slate-50 hover:scale-[1.01] text-slate-700 hover:text-slate-900 border border-transparent hover:border-slate-200/60"
-                          }
-                        `}
+                        className="h-auto p-0 hover:bg-transparent data-[active=true]:bg-transparent"
                       >
                         <a
                           href={item.url}
-                          className="flex items-center gap-4 px-4 py-3 w-full"
+                          className={`padud-menu-item ${isActive ? "active" : ""}`}
                         >
-                          <div
-                            className={`
-                              flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-300 shrink-0
-                              ${
-                                isActive
-                                  ? "bg-white/20 text-white shadow-sm"
-                                  : "bg-slate-100 text-slate-600 group-hover:bg-slate-200 group-hover:text-slate-800 group-hover:scale-110"
-                              }
-                            `}
-                          >
-                            <item.icon className="h-5 w-5" />
+                          <div className="padud-item-icon">
+                            <item.icon size={15} />
                           </div>
-                          <div className="flex flex-col flex-1 min-w-0">
-                            <span className="font-semibold text-sm truncate leading-tight">
-                              {item.title}
-                            </span>
-                            <span
-                              className={`text-xs truncate mt-0.5 leading-tight ${
-                                isActive
-                                  ? "text-blue-100"
-                                  : "text-slate-500 group-hover:text-slate-600"
-                              }`}
-                            >
-                              {item.description}
-                            </span>
+                          <div className="padud-item-text group-data-[collapsible=icon]:hidden">
+                            <span className="padud-item-title">{item.title}</span>
+                            <span className="padud-item-desc">{item.description}</span>
                           </div>
-                          {hasSubmenu && (
-                            <ChevronRight
-                              className={`h-4 w-4 transition-transform duration-200 ${
-                                isActive
-                                  ? "text-white rotate-90"
-                                  : "text-slate-400 opacity-0 group-hover:opacity-100"
-                              }`}
-                            />
-                          )}
-                          {isActive && !hasSubmenu && (
-                            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-white rounded-l-full shadow-sm"></div>
-                          )}
                         </a>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
 
-                    {/* Submenu */}
-                    {hasSubmenu && isActive && (
-                      <div className="ml-4 mt-2 space-y-1">
-                        {item.submenu!.map((subItem) => {
-                          const isSubActive = pathname === subItem.url;
-                          return (
-                            <SidebarMenuItem key={subItem.title}>
-                              <SidebarMenuButton
-                                asChild
-                                isActive={isSubActive}
-                                tooltip={subItem.title}
-                                className={`
-                                  mx-1 rounded-lg transition-all duration-300 group relative overflow-hidden min-h-[50px]
-                                  ${
-                                    isSubActive
-                                      ? "bg-blue-100 text-blue-700 shadow-sm border border-blue-200"
-                                      : "hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-transparent hover:border-slate-200"
-                                  }
-                                `}
-                              >
-                                <a
-                                  href={subItem.url}
-                                  className="flex items-center gap-3 px-3 py-2 w-full"
-                                >
-                                  <div className="flex flex-col flex-1 min-w-0">
-                                    <span className="font-medium text-sm truncate leading-tight">
-                                      {subItem.title}
-                                    </span>
-                                    <span
-                                      className={`text-xs truncate mt-0.5 leading-tight ${
-                                        isSubActive
-                                          ? "text-blue-600"
-                                          : "text-slate-500 group-hover:text-slate-600"
-                                      }`}
-                                    >
-                                      {subItem.description}
-                                    </span>
-                                  </div>
-                                  {isSubActive && (
-                                    <div className="w-1 h-6 bg-blue-500 rounded-l-full"></div>
-                                  )}
-                                </a>
-                              </SidebarMenuButton>
-                            </SidebarMenuItem>
-                          );
-                        })}
-                      </div>
-                    )}
+          <div className="padud-divider" />
+
+          {/* Gaji */}
+          <SidebarGroup className="p-0">
+            <div className="padud-section-label group-data-[collapsible=icon]:hidden">
+              <DollarSign size={10} />
+              <span>Penggajian</span>
+            </div>
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-0.5">
+                {gajiMenuItems.map((item) => {
+                  const isActive = isMenuActive(item.url);
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        asChild
+                        tooltip={item.title}
+                        className="h-auto p-0 hover:bg-transparent data-[active=true]:bg-transparent"
+                      >
+                        <a
+                          href={item.url}
+                          className={`padud-menu-item ${isActive ? "active" : ""}`}
+                        >
+                          <div className="padud-item-icon">
+                            <item.icon size={15} />
+                          </div>
+                          <div className="padud-item-text group-data-[collapsible=icon]:hidden">
+                            <span className="padud-item-title">{item.title}</span>
+                            <span className="padud-item-desc">{item.description}</span>
+                          </div>
+                        </a>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+
+        <SidebarFooter className="padud-footer p-0">
+          <div className="padud-footer">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="padud-user-btn group-data-[collapsible=icon]:justify-center">
+                  <div className="padud-user-avatar">
+                    {user?.name?.slice(0, 2).toUpperCase() || "AD"}
                   </div>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-
-      {/* Footer */}
-      <SidebarFooter className="border-t border-slate-200/60 bg-slate-50/50 p-3">
-        <SidebarMenu className="space-y-2">
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              tooltip="Pengaturan Profil"
-              className="mx-1 rounded-xl hover:bg-slate-100 transition-all duration-300 text-slate-700 hover:text-slate-900 min-h-[50px] group"
-            >
-              <a
-                href="/dashboard/profile"
-                className="flex items-center gap-3 px-4 py-3"
+                  <div className="padud-user-info group-data-[collapsible=icon]:hidden">
+                    <div className="padud-user-name">
+                      {user?.name || "Administrator"}
+                    </div>
+                    <div className="padud-user-email">
+                      {user?.email || "admin@padud.com"}
+                    </div>
+                  </div>
+                  <ChevronUp
+                    size={13}
+                    className="padud-chevron ml-auto text-slate-600 group-data-[collapsible=icon]:hidden"
+                  />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                side="top"
+                align="start"
+                className="padud-dropdown w-[--radix-popper-anchor-width] min-w-52 mb-1"
               >
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600 group-hover:bg-slate-200 group-hover:scale-110 transition-all duration-300">
-                  <Settings className="h-4 w-4" />
+                <div className="padud-dropdown-header">
+                  <div className="padud-dropdown-label">Akun Saya</div>
                 </div>
-                <span className="font-medium text-sm">Pengaturan</span>
-                <ChevronRight className="h-4 w-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ml-auto" />
-              </a>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              onClick={handleLogout}
-              tooltip="Keluar Sistem"
-              className="mx-1 rounded-xl hover:bg-red-50 transition-all duration-300 text-slate-700 hover:text-red-600 group min-h-[50px] border border-transparent hover:border-red-200/60"
-            >
-              <div className="flex items-center gap-3 px-4 py-3 w-full">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600 group-hover:bg-red-100 group-hover:text-red-600 group-hover:scale-110 transition-all duration-300">
-                  <LogOut className="h-4 w-4" />
+                <div className="padud-dropdown-name">
+                  {user?.name || "Administrator"}
                 </div>
-                <span className="font-medium text-sm">Logout</span>
-                <ChevronRight className="h-4 w-4 text-slate-400 opacity-0 group-hover:opacity-100 group-hover:text-red-400 transition-all duration-200 ml-auto" />
-              </div>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  className="padud-logout-item focus:bg-red-500/10"
+                >
+                  <LogOut size={13} />
+                  <span>Keluar dari akun</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-        {/* Footer info */}
-        <div className="mt-4 px-4 py-3 text-center bg-white rounded-xl border border-slate-200/60">
-          <div className="flex items-center justify-center gap-2 text-slate-600 mb-1">
-            <Factory className="h-4 w-4" />
-            <span className="font-semibold text-sm">Industrial EMS</span>
+            <div className="padud-version-badge group-data-[collapsible=icon]:hidden">
+              <Factory size={9} className="text-gray-700" />
+              <span>PT. PADUD · v1.0</span>
+            </div>
           </div>
-          <div className="text-xs text-slate-400 font-medium">
-            Powered by PT. PADUD
-          </div>
-        </div>
-      </SidebarFooter>
-
-      <SidebarRail className="bg-slate-200/80" />
-    </Sidebar>
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
+    </>
   );
 }

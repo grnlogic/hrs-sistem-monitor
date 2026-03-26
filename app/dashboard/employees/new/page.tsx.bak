@@ -1,0 +1,728 @@
+"use client";
+
+import React, { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/form/button";
+import { Input } from "@/components/ui/form/input";
+import { Label } from "@/components/ui/form/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/display/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/form/select";
+import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/display/avatar";
+import { Upload, X, Crop, RotateCcw, Check, Printer } from "lucide-react";
+import { employeeAPI } from "@/lib/api";
+import { printPKBPDF } from "@/lib/utils";
+import type { PKBData, TipeUpahPKB } from "@/lib/pkb-template";
+import { getDefaultPKBData } from "@/lib/pkb-template";
+import type { PKBDocxPayload, PKBDivision } from "@/lib/pkb-docx";
+import ReactCrop, {
+  Crop as CropType,
+  PixelCrop,
+  centerCrop,
+  makeAspectCrop,
+} from "react-image-crop";
+import "react-image-crop/dist/ReactCrop.css";
+
+const statusOptions = [
+  { label: "Aktif", value: "AKTIF" },
+  { label: "Kontrak", value: "KONTRAK" },
+  { label: "Cuti", value: "CUTI" },
+  { label: "Resign", value: "RESIGN" },
+  { label: "Tidak Aktif", value: "TIDAK_AKTIF" },
+];
+
+const departmentOptions = [
+  { label: "STAFF PJP", value: "STAFF PJP" },
+  { label: "STAFF CPD", value: "STAFF CPD" },
+  { label: "BLANDING PJP", value: "BLANDING PJP" },
+  { label: "PACKING PJP", value: "PACKING PJP" },
+  { label: "MARKET PJP", value: "MARKET PJP" },
+  { label: "MARKET CPD", value: "MARKET CPD" },
+];
+
+// Infer tipe upah dari departemen
+function inferTipeUpah(departemen?: string, jabatan?: string): TipeUpahPKB {
+  const dept = (departemen || "").toLowerCase();
+  const jab = (jabatan || "").toLowerCase();
+  if (dept.includes("market") || dept.includes("staff") || jab.includes("marketing") || jab.includes("staff")) return "per_hari";
+  if (dept.includes("tembakau") || jab.includes("tembakau") || jab.includes("pengolahan")) return "per_kg";
+  return "per_pack";
+}
+
+function inferDivision(tipeUpah: TipeUpahPKB, departemen?: string): PKBDivision {
+  const dept = (departemen || "").toLowerCase();
+  if (dept.includes("pack")) return "packing";
+  if (dept.includes("blend") || dept.includes("tembakau")) return "blending";
+  if (dept.includes("market") || dept.includes("sales") || dept.includes("staff")) return "sales";
+  if (tipeUpah === "per_pack") return "packing";
+  if (tipeUpah === "per_kg") return "blending";
+  return "sales";
+}
+
+// Aspect ratio untuk foto profil (1:1 square)
+const ASPECT_RATIO = 1;
+const MIN_DIMENSION = 150;
+
+function centerAspectCrop(
+  mediaWidth: number,
+  mediaHeight: number,
+  aspect: number
+) {
+  return centerCrop(
+    makeAspectCrop(
+      {
+        unit: "%",
+        width: 90,
+      },
+      aspect,
+      mediaWidth,
+      mediaHeight
+    ),
+    mediaWidth,
+    mediaHeight
+  );
+}
+
+export default function NewEmployeePage() {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [showCrop, setShowCrop] = useState(false);
+  const [crop, setCrop] = useState<CropType>();
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
+  const [imgSrc, setImgSrc] = useState("");
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validasi tipe file
+      if (!file.type.startsWith("image/")) {
+        setError("File harus berupa gambar (JPG, PNG, GIF, dll)");
+        return;
+      }
+
+      // Validasi ukuran file (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        setError("Ukuran file maksimal 10MB");
+        return;
+      }
+
+      setSelectedFile(file);
+      setError("");
+
+      // Buat preview untuk crop
+      const url = URL.createObjectURL(file);
+      setImgSrc(url);
+      setShowCrop(true);
+    }
+  };
+
+  const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const { width, height } = e.currentTarget;
+    const crop = centerAspectCrop(width, height, ASPECT_RATIO);
+    setCrop(crop);
+  };
+
+  const getCroppedImg = (
+    image: HTMLImageElement,
+    crop: PixelCrop
+  ): Promise<Blob> => {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+      throw new Error("No 2d context");
+    }
+
+    const scaleX = image.naturalWidth / image.width;
+    const scaleY = image.naturalHeight / image.height;
+
+    canvas.width = crop.width;
+    canvas.height = crop.height;
+
+    ctx.imageSmoothingQuality = "high";
+
+    ctx.drawImage(
+      image,
+      crop.x * scaleX,
+      crop.y * scaleY,
+      crop.width * scaleX,
+      crop.height * scaleY,
+      0,
+      0,
+      crop.width,
+      crop.height
+    );
+
+    return new Promise((resolve) => {
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(blob);
+          }
+        },
+        "image/jpeg",
+        0.9
+      );
+    });
+  };
+
+  const handleCropComplete = async () => {
+    if (!imgRef.current || !completedCrop) return;
+
+    try {
+      const croppedBlob = await getCroppedImg(imgRef.current, completedCrop);
+      const croppedFile = new File(
+        [croppedBlob],
+        selectedFile?.name || "cropped.jpg",
+        {
+          type: "image/jpeg",
+        }
+      );
+
+      setSelectedFile(croppedFile);
+      const croppedUrl = URL.createObjectURL(croppedBlob);
+      setPreviewUrl(croppedUrl);
+      setShowCrop(false);
+      setImgSrc("");
+    } catch (error) {
+      setError("Gagal memproses foto. Silakan coba lagi.");
+    }
+  };
+
+  const handleCancelCrop = () => {
+    setShowCrop(false);
+    setImgSrc("");
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    if (imgSrc) {
+      URL.revokeObjectURL(imgSrc);
+    }
+  };
+
+  const removeFile = () => {
+    setSelectedFile(null);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+    if (imgSrc) {
+      URL.revokeObjectURL(imgSrc);
+      setImgSrc("");
+    }
+    setShowCrop(false);
+  };
+
+  /** Print PKB dahulu (sebelum simpan) - untuk dicetak & ditandatangani karyawan */
+  const handlePrintPKB = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setError("");
+
+    const form = document.querySelector("form");
+    if (!form) return;
+
+    const formData = new FormData(form);
+    const nik = formData.get("nik") as string;
+    const namaLengkap = formData.get("namaLengkap") as string;
+    const jabatan = formData.get("jabatan") as string;
+    const departemen = formData.get("departemen") as string;
+    const alamat = formData.get("alamat") as string;
+    const gajiPerHari = Number(formData.get("gajiPerHari")) || 3000;
+
+    if (!nik?.trim() || !namaLengkap?.trim() || !departemen || !formData.get("tanggalMasuk") || !gajiPerHari) {
+      setError("Lengkapi data wajib (NIK, Nama, Departemen, Tanggal Masuk, Gaji) terlebih dahulu untuk print PKB.");
+      return;
+    }
+
+    const defaults = getDefaultPKBData();
+    const tipeUpah = inferTipeUpah(departemen, jabatan);
+    const nominalDefault = tipeUpah === "per_hari" ? 68450 : tipeUpah === "per_kg" ? 3400 : 3000;
+
+    const pkbData: PKBData = {
+      ...defaults,
+      pihak2Nama: namaLengkap,
+      pihak2Nik: nik || "",
+      pihak2Jabatan: jabatan || departemen || "",
+      pihak2Alamat: alamat || "",
+      pihak2TandaTangan: namaLengkap,
+      tipeUpah,
+      nominalUpah: nominalDefault,
+      bonusNominal: tipeUpah === "per_pack" ? 250 : undefined,
+      catatanPembayaran: tipeUpah === "per_hari" ? "yang akan dibayarkan setiap hari Sabtu" : undefined,
+      tanggalPerjanjian: (formData.get("tanggalMasuk") as string) || new Date().toISOString().split("T")[0],
+    } as PKBData;
+
+    try {
+      const payload: PKBDocxPayload = {
+        ...pkbData,
+        division: inferDivision(tipeUpah, departemen),
+      };
+      printPKBPDF(payload);
+      setSuccess("PKB berhasil dibuka untuk print. Cetak, minta karyawan tandatangani, lalu klik Tambah Karyawan.");
+      setTimeout(() => setSuccess(""), 5000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal print PKB");
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+    setSuccess("");
+
+    const formData = new FormData(e.currentTarget);
+    const employeeData = {
+      nik: formData.get("nik") as string,
+      namaLengkap: formData.get("namaLengkap") as string,
+      email: formData.get("email") as string,
+      noHp: formData.get("noHp") as string,
+      jabatan: formData.get("jabatan") as string,
+      departemen: formData.get("departemen") as string,
+      tanggalMasuk: formData.get("tanggalMasuk") as string,
+      gajiPerHari: Number(formData.get("gajiPerHari")),
+      statusKaryawan: formData.get("statusKaryawan") as string,
+      // Field opsional
+      tempatLahir: formData.get("tempatLahir") || null,
+      tanggalLahir: formData.get("tanggalLahir") || null,
+      jenisKelamin: formData.get("jenisKelamin") || null,
+      alamat: formData.get("alamat") || null,
+      noKtp: formData.get("noKtp") || null,
+      npwp: formData.get("npwp") || null,
+      bpjsKesehatan: formData.get("bpjsKesehatan") || null,
+      bpjsKetenagakerjaan: formData.get("bpjsKetenagakerjaan") || null,
+      statusPernikahan: formData.get("statusPernikahan") || null,
+      jumlahTanggungan: formData.get("jumlahTanggungan") || null,
+      tanggalKontrak: formData.get("tanggalKontrak") || null,
+      batasKontrak: formData.get("batasKontrak") || null,
+      fotoProfil: formData.get("fotoProfil") || null,
+      pendidikanTerakhir: formData.get("pendidikanTerakhir") || null,
+      atasanLangsung: formData.get("atasanLangsung") || null,
+      lokasiKerja: formData.get("lokasiKerja") || null,
+      tanggalKeluar: formData.get("tanggalKeluar") || null,
+      namaKontakDarurat: formData.get("namaKontakDarurat") || null,
+      hubunganKontakDarurat: formData.get("hubunganKontakDarurat") || null,
+      noTeleponKontakDarurat: formData.get("noTeleponKontakDarurat") || null,
+    };
+
+    try {
+      // Buat karyawan terlebih dahulu
+      const newEmployee = await employeeAPI.create(employeeData);
+
+      // Jika ada file foto, upload foto
+      if (selectedFile && newEmployee.id) {
+        try {
+          await employeeAPI.uploadFoto(newEmployee.id.toString(), selectedFile);
+          setSuccess("Karyawan berhasil ditambahkan dengan foto!");
+        } catch (uploadError) {
+          setSuccess(
+            "Karyawan berhasil ditambahkan, tetapi gagal upload foto."
+          );
+          console.error("Upload foto error:", uploadError);
+        }
+      } else {
+        setSuccess("Karyawan berhasil ditambahkan!");
+      }
+
+      // Redirect ke halaman PKB untuk upload dokumen tandatangan & simpan perjanjian
+      setTimeout(() => {
+        router.push(`/dashboard/employees/${newEmployee.id}/pkb`);
+      }, 1500);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Gagal menambahkan karyawan. Silakan coba lagi.";
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-1 flex-col gap-4 p-4">
+      <h1 className="text-3xl font-bold tracking-tight mb-4">
+        Tambah Karyawan Baru
+      </h1>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        {success && (
+          <Alert className="border-green-200 bg-green-50">
+            <AlertDescription className="text-green-800">
+              {success}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Crop Modal */}
+        {showCrop && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">Crop Foto Profil</h3>
+                <div className="flex space-x-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCancelCrop}
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Batal
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleCropComplete}
+                    disabled={!completedCrop}
+                  >
+                    <Check className="h-4 w-4 mr-2" />
+                    Selesai
+                  </Button>
+                </div>
+              </div>
+              <div className="max-h-96 overflow-auto">
+                <ReactCrop
+                  crop={crop}
+                  onChange={(_, percentCrop) => setCrop(percentCrop)}
+                  onComplete={(c) => setCompletedCrop(c)}
+                  aspect={ASPECT_RATIO}
+                  minWidth={MIN_DIMENSION}
+                  minHeight={MIN_DIMENSION}
+                >
+                  <img
+                    ref={imgRef}
+                    alt="Crop me"
+                    src={imgSrc}
+                    onLoad={onImageLoad}
+                    className="max-w-full h-auto"
+                  />
+                </ReactCrop>
+              </div>
+              <p className="text-sm text-gray-600 mt-2">
+                Drag untuk mengatur area crop. Foto akan dipotong menjadi bentuk
+                persegi.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Foto Upload Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Foto Profil</CardTitle>
+            <CardDescription>
+              Upload foto profil karyawan (opsional) - Foto akan di-crop menjadi
+              persegi
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center space-x-4">
+              <div className="flex-shrink-0">
+                <Avatar className="h-24 w-24">
+                  <AvatarImage
+                    src={previewUrl || "/placeholder.svg"}
+                    alt="Preview"
+                    onError={(e) => {
+                      // Jika gambar gagal dimuat, gunakan fallback
+                      const target = e.target as HTMLImageElement;
+                      target.src = "/placeholder.svg";
+                    }}
+                  />
+                  <AvatarFallback className="text-lg">
+                    {previewUrl ? "Foto" : "Upload"}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+              <div className="flex-1">
+                {!selectedFile ? (
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        document.getElementById("foto-upload")?.click()
+                      }
+                    >
+                      <Crop className="h-4 w-4 mr-2" />
+                      Pilih & Crop Foto
+                    </Button>
+                    <span className="text-sm text-gray-500">
+                      JPG, PNG, GIF (max 10MB) - Akan di-crop menjadi persegi
+                    </span>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-medium">
+                        {selectedFile.name}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={removeFile}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                    <p className="text-xs text-green-600">
+                      ✓ Foto sudah di-crop menjadi persegi
+                    </p>
+                  </div>
+                )}
+                <input
+                  id="foto-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Data Karyawan</CardTitle>
+            <CardDescription>
+              Isi data sesuai dengan identitas karyawan
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Bagian Wajib */}
+            <div className="mb-2">
+              <h2 className="text-lg font-semibold mb-2 text-red-700">
+                Data Wajib
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="nik">NIK *</Label>
+                <Input id="nik" name="nik" required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="namaLengkap">Nama Lengkap *</Label>
+                <Input id="namaLengkap" name="namaLengkap" required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="departemen">Departemen *</Label>
+                <Select name="departemen" required>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih departemen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departmentOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tanggalMasuk">Tanggal Masuk *</Label>
+                <Input
+                  id="tanggalMasuk"
+                  name="tanggalMasuk"
+                  type="date"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="gajiPerHari">Gaji Per Hari *</Label>
+                <Input
+                  id="gajiPerHari"
+                  name="gajiPerHari"
+                  type="number"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="statusKaryawan">Status Karyawan *</Label>
+                <Select name="statusKaryawan" required defaultValue="AKTIF">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Bagian Opsional */}
+            <div className="mt-6 mb-2">
+              <h2 className="text-lg font-semibold mb-2 text-blue-700">
+                Data Opsional
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="noHp">Nomor HP</Label>
+                <Input id="noHp" name="noHp" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input id="email" name="email" type="email" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="namaKontakDarurat">Nama Kontak Darurat</Label>
+                <Input id="namaKontakDarurat" name="namaKontakDarurat" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="hubunganKontakDarurat">
+                  Hubungan Kontak Darurat
+                </Label>
+                <Input
+                  id="hubunganKontakDarurat"
+                  name="hubunganKontakDarurat"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="noTeleponKontakDarurat">
+                  Nomor Telepon Kontak Darurat
+                </Label>
+                <Input
+                  id="noTeleponKontakDarurat"
+                  name="noTeleponKontakDarurat"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tempatLahir">Tempat Lahir</Label>
+                <Input id="tempatLahir" name="tempatLahir" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tanggalLahir">Tanggal Lahir</Label>
+                <Input id="tanggalLahir" name="tanggalLahir" type="date" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="jenisKelamin">Jenis Kelamin</Label>
+                <Input id="jenisKelamin" name="jenisKelamin" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="alamat">Alamat</Label>
+                <Input id="alamat" name="alamat" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="noKtp">No KTP</Label>
+                <Input id="noKtp" name="noKtp" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="npwp">NPWP</Label>
+                <Input id="npwp" name="npwp" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bpjsKesehatan">BPJS Kesehatan</Label>
+                <Input id="bpjsKesehatan" name="bpjsKesehatan" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bpjsKetenagakerjaan">
+                  BPJS Ketenagakerjaan
+                </Label>
+                <Input id="bpjsKetenagakerjaan" name="bpjsKetenagakerjaan" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="statusPernikahan">Status Pernikahan</Label>
+                <Input id="statusPernikahan" name="statusPernikahan" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="jumlahTanggungan">Jumlah Tanggungan</Label>
+                <Input
+                  id="jumlahTanggungan"
+                  name="jumlahTanggungan"
+                  type="number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tanggalKontrak">Tanggal Kontrak</Label>
+                <Input id="tanggalKontrak" name="tanggalKontrak" type="date" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="batasKontrak">Batas Kontrak</Label>
+                <Input id="batasKontrak" name="batasKontrak" type="date" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="jabatan">Jabatan</Label>
+                <Input id="jabatan" name="jabatan" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pendidikanTerakhir">Pendidikan Terakhir</Label>
+                <Input id="pendidikanTerakhir" name="pendidikanTerakhir" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="atasanLangsung">Atasan Langsung</Label>
+                <Input id="atasanLangsung" name="atasanLangsung" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lokasiKerja">Lokasi Kerja</Label>
+                <Input id="lokasiKerja" name="lokasiKerja" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tanggalKeluar">Tanggal Keluar</Label>
+                <Input id="tanggalKeluar" name="tanggalKeluar" type="date" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            Alur: Isi data wajib → <strong>Print PKB</strong> → Karyawan tanda tangan → <strong>Tambah Karyawan</strong> → Upload PKB tandatangan
+          </p>
+          <div className="flex justify-end gap-4">
+            <Button type="button" variant="outline" onClick={() => router.back()}>
+              Batal
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handlePrintPKB}
+            >
+              <Printer className="h-4 w-4 mr-2" />
+              Print PKB (Dahulu)
+            </Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                  Menyimpan...
+                </>
+              ) : (
+                <>Tambah Karyawan</>
+              )}
+            </Button>
+          </div>
+        </div>
+      </form>
+    </div>
+  );
+}

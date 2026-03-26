@@ -1,0 +1,37 @@
+In HTML, whitespace text nodes cannot be a child of <tr>. Make sure you don't have any extra whitespace between tags on each line of your source code.
+This will cause a hydration error.
+
+  ...
+    <ClientPageRoot Component={function ViolationsPage} searchParams={{}} params={{}}>
+      <ViolationsPage params={Promise} searchParams={Promise}>
+        <div className="flex flex-...">
+          <div>
+          <div>
+          <_c>
+            <div ref={null} className="rounded-lg...">
+              <_c2>
+              <_c8>
+                <div ref={null} className="p-6 pt-0">
+                  <div className="rounded-md...">
+                    <_c>
+                      <div className="relative w...">
+                        <table ref={null} className="w-full cap...">
+                          <_c2>
+                            <thead ref={null} className={"[&_tr]:b..."}>
+                              <_c8>
+>                               <tr
+>                                 ref={null}
+>                                 className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
+>                               >
+                                  <_c10>
+                                  <_c10>
+                                  <_c10>
+                                  <_c10>
+                                  <_c10>
+                                  <_c10>
+                                  <_c10>
+>                                 {"                    "}
+                                  ...
+                          ...
+                  ...
+    ...

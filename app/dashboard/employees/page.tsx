@@ -72,7 +72,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/overlay/dialog";
 import { Checkbox } from "@/components/ui/form/checkbox";
 import { employeeAPI } from "@/lib/api";
@@ -109,6 +108,14 @@ export default function EmployeesPage() {
   const [exportFormat, setExportFormat] = useState<"pdf" | "excel">("pdf");
   const [isExporting, setIsExporting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [isSensitiveUnlocked, setIsSensitiveUnlocked] = useState(false);
+  const [unlockDialogOpen, setUnlockDialogOpen] = useState(false);
+  const [unlockPassword, setUnlockPassword] = useState("");
+  const [unlockError, setUnlockError] = useState("");
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const [pendingUnlockAction, setPendingUnlockAction] = useState<
+    "preview" | "export"
+  >("preview");
 
   useEffect(() => {
     fetchEmployees();
@@ -214,8 +221,13 @@ export default function EmployeesPage() {
     const token = localStorage.getItem("token");
     if (!token || !avatarUrl) return;
 
+    const avatarWithVersion = `${avatarUrl}${
+      avatarUrl.includes("?") ? "&" : "?"
+    }v=${Date.now()}`;
+
     try {
-      const response = await fetch(avatarUrl, {
+      const response = await fetch(avatarWithVersion, {
+        cache: "no-store",
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -311,6 +323,99 @@ export default function EmployeesPage() {
     }
 
     setFilteredEmployees(filtered);
+  };
+
+  const maskName = (name?: string | null) => {
+    if (!name || name === "-") return "-";
+    const trimmed = name.trim();
+    if (trimmed.length <= 2) return `${trimmed[0] || "*"}*`;
+    return `${trimmed.slice(0, 2)}${"*".repeat(Math.max(trimmed.length - 2, 2))}`;
+  };
+
+  const maskNIK = (nik?: string | null) => {
+    if (!nik || nik === "-") return "-";
+    const clean = nik.trim();
+    if (clean.length <= 4) return "*".repeat(clean.length);
+    return `${"*".repeat(clean.length - 4)}${clean.slice(-4)}`;
+  };
+
+  const maskEmail = (email?: string | null) => {
+    if (!email || email === "-") return "-";
+    const atIndex = email.indexOf("@");
+    if (atIndex <= 1) return "***";
+    const local = email.slice(0, atIndex);
+    const domain = email.slice(atIndex);
+    return `${local[0]}${"*".repeat(Math.max(local.length - 1, 2))}${domain}`;
+  };
+
+  const verifySensitivePassword = async (password: string) => {
+    const response = await fetch("/api/security/sensitive-access", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ password }),
+    });
+
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}));
+      throw new Error(result.message || "Password tidak valid");
+    }
+
+    return true;
+  };
+
+  const askUnlockForAction = (action: "preview" | "export") => {
+    setPendingUnlockAction(action);
+    setUnlockPassword("");
+    setUnlockError("");
+    setUnlockDialogOpen(true);
+  };
+
+  const handleUnlockSensitiveData = async () => {
+    if (!unlockPassword.trim()) {
+      setUnlockError("Password wajib diisi");
+      return;
+    }
+
+    setIsUnlocking(true);
+    setUnlockError("");
+    try {
+      await verifySensitivePassword(unlockPassword.trim());
+      setIsSensitiveUnlocked(true);
+      setUnlockDialogOpen(false);
+      setUnlockPassword("");
+      setSuccessMessage("Data sensitif berhasil dibuka");
+      setTimeout(() => setSuccessMessage(""), 5000);
+
+      if (pendingUnlockAction === "export") {
+        setExportDialogOpen(true);
+      }
+    } catch (err: any) {
+      setUnlockError(err.message || "Password tidak valid");
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
+
+  const handlePreviewAllClick = () => {
+    if (isSensitiveUnlocked) {
+      setIsSensitiveUnlocked(false);
+      setSuccessMessage("Data sensitif berhasil dikunci kembali");
+      setTimeout(() => setSuccessMessage(""), 5000);
+      return;
+    }
+
+    askUnlockForAction("preview");
+  };
+
+  const handleOpenExportDialog = () => {
+    if (!isSensitiveUnlocked) {
+      askUnlockForAction("export");
+      return;
+    }
+
+    setExportDialogOpen(true);
   };
 
   const getStatusBadge = (status: string) => {
@@ -563,13 +668,17 @@ export default function EmployeesPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant={isSensitiveUnlocked ? "secondary" : "outline"}
+            onClick={handlePreviewAllClick}
+          >
+            {isSensitiveUnlocked ? "Kunci Data Sensitif" : "Preview All Data"}
+          </Button>
           <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Download className="h-4 w-4 mr-2" />
-                Export Data
-              </Button>
-            </DialogTrigger>
+            <Button variant="outline" onClick={handleOpenExportDialog}>
+              <Download className="h-4 w-4 mr-2" />
+              Export Data
+            </Button>
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>Export Data Karyawan</DialogTitle>
@@ -665,6 +774,15 @@ export default function EmployeesPage() {
                     {filteredEmployees.length} dari {employees.length} karyawan.
                   </p>
                 </div>
+
+                {!isSensitiveUnlocked && (
+                  <div className="bg-yellow-50 p-3 rounded-md border border-yellow-200">
+                    <p className="text-sm text-yellow-800">
+                      Data sensitif terkunci. Masukkan password untuk membuka
+                      akses export data penuh.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <DialogFooter>
@@ -852,14 +970,24 @@ export default function EmployeesPage() {
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <div className="font-medium">{employee.name}</div>
+                          <div className="font-medium">
+                            {isSensitiveUnlocked
+                              ? employee.name
+                              : maskName(employee.name)}
+                          </div>
                           <div className="text-sm text-muted-foreground">
-                            {employee.email}
+                            {isSensitiveUnlocked
+                              ? employee.email
+                              : maskEmail(employee.email)}
                           </div>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="font-mono">{employee.nip}</TableCell>
+                    <TableCell className="font-mono">
+                      {isSensitiveUnlocked
+                        ? employee.nip
+                        : maskNIK(employee.nip)}
+                    </TableCell>
                     <TableCell>{employee.position}</TableCell>
                     <TableCell>{employee.department}</TableCell>
                     <TableCell>
@@ -1055,6 +1183,58 @@ export default function EmployeesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={unlockDialogOpen} onOpenChange={setUnlockDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Verifikasi Akses Data Sensitif</DialogTitle>
+            <DialogDescription>
+              Masukkan password operator untuk membuka data sensitif pada mode
+              {pendingUnlockAction === "export"
+                ? " export"
+                : " preview all data"}
+              .
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <Input
+              type="password"
+              placeholder="Masukkan password"
+              value={unlockPassword}
+              onChange={(e) => setUnlockPassword(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleUnlockSensitiveData();
+                }
+              }}
+            />
+
+            {unlockError && (
+              <Alert variant="destructive">
+                <AlertDescription>{unlockError}</AlertDescription>
+              </Alert>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setUnlockDialogOpen(false);
+                setUnlockPassword("");
+                setUnlockError("");
+              }}
+              disabled={isUnlocking}
+            >
+              Batal
+            </Button>
+            <Button onClick={handleUnlockSensitiveData} disabled={isUnlocking}>
+              {isUnlocking ? "Memverifikasi..." : "Buka Akses"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

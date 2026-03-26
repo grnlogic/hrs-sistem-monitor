@@ -28,6 +28,7 @@ import {
 import {
   ArrowLeft,
   Edit,
+  FileText,
   Phone,
   Mail,
   Calendar,
@@ -38,6 +39,13 @@ import {
   Crop,
   RotateCcw,
   Check,
+  File as FileIcon,
+  UserRound,
+  Image,
+  Download,
+  Eye,
+  X,
+  Paperclip,
 } from "lucide-react";
 import { employeeAPI, leaveAPI } from "@/lib/api";
 import ReactCrop, {
@@ -51,6 +59,7 @@ import "react-image-crop/dist/ReactCrop.css";
 // Aspect ratio untuk foto profil (1:1 square)
 const ASPECT_RATIO = 1;
 const MIN_DIMENSION = 150;
+const HUMAN_FALLBACK_AVATAR = "/images/fallbacks/avatar-human.svg";
 
 function centerAspectCrop(
   mediaWidth: number,
@@ -83,6 +92,10 @@ export default function EmployeeDetailPage() {
   const [leaveHistory, setLeaveHistory] = useState<any[]>([]);
   const [violationHistory, setViolationHistory] = useState<any[]>([]);
   const [leaveInfo, setLeaveInfo] = useState<any>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [previewFile, setPreviewFile] = useState<any>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [showCrop, setShowCrop] = useState(false);
@@ -100,7 +113,7 @@ export default function EmployeeDetailPage() {
   };
 
   // Function untuk menampilkan foto dengan authentication
-  const [avatarSrc, setAvatarSrc] = useState<string>("/placeholder.svg");
+  const [avatarSrc, setAvatarSrc] = useState<string>(HUMAN_FALLBACK_AVATAR);
 
   useEffect(() => {
     if (employee?.avatar) {
@@ -108,6 +121,7 @@ export default function EmployeeDetailPage() {
       if (token) {
         // Load foto dengan fetch dan token
         fetch(employee.avatar, {
+          cache: "no-store",
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -125,11 +139,13 @@ export default function EmployeeDetailPage() {
           })
           .catch((error) => {
             console.error("Gagal memuat foto:", error);
-            setAvatarSrc("/placeholder.svg");
+            setAvatarSrc(HUMAN_FALLBACK_AVATAR);
           });
       } else {
-        setAvatarSrc("/placeholder.svg");
+        setAvatarSrc(HUMAN_FALLBACK_AVATAR);
       }
+    } else {
+      setAvatarSrc(HUMAN_FALLBACK_AVATAR);
     }
   }, [employee?.avatar]);
 
@@ -189,7 +205,7 @@ export default function EmployeeDetailPage() {
 
     try {
       const croppedBlob = await getCroppedImg(imgRef.current, completedCrop);
-      const croppedFile = new File(
+      const croppedFile = new window.File(
         [croppedBlob],
         selectedFile?.name || "cropped.jpg",
         {
@@ -310,7 +326,9 @@ export default function EmployeeDetailPage() {
           avatar: (() => {
             console.log("Foto profil dari DB:", karyawan.fotoProfil);
             if (karyawan.fotoProfil) {
-              const fotoUrl = getFotoUrl(karyawan.id.toString());
+              const fotoUrl = `${getFotoUrl(
+                karyawan.id.toString()
+              )}?v=${encodeURIComponent(String(karyawan.fotoProfil))}`;
               console.log("Generated foto URL:", fotoUrl);
               return fotoUrl;
             }
@@ -354,6 +372,18 @@ export default function EmployeeDetailPage() {
         } catch (err) {
           console.error("Gagal mengambil informasi cuti:", err);
           setLeaveInfo(null);
+        }
+
+        // Ambil daftar file yang sudah di-upload
+        try {
+          setFilesLoading(true);
+          const filesData = await employeeAPI.getFiles(id);
+          setUploadedFiles(filesData.files || []);
+        } catch (err) {
+          console.error("Gagal mengambil daftar file:", err);
+          setUploadedFiles([]);
+        } finally {
+          setFilesLoading(false);
         }
       } catch (err) {
         setError("Gagal memuat data karyawan");
@@ -434,12 +464,20 @@ export default function EmployeeDetailPage() {
             <p className="text-gray-600">Informasi lengkap karyawan</p>
           </div>
         </div>
-        <Button asChild>
-          <a href={`/dashboard/employees/${employee.id}/edit`}>
-            <Edit className="h-4 w-4 mr-2" />
-            Edit Data
-          </a>
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <a href={`/dashboard/employees/${employee.id}/pkb`}>
+              <FileText className="h-4 w-4 mr-2" />
+              Generate PKB
+            </a>
+          </Button>
+          <Button asChild>
+            <a href={`/dashboard/employees/${employee.id}/edit`}>
+              <Edit className="h-4 w-4 mr-2" />
+              Edit Data
+            </a>
+          </Button>
+        </div>
       </div>
 
       {/* Crop Modal */}
@@ -507,17 +545,14 @@ export default function EmployeeDetailPage() {
                   onError={(e) => {
                     // Jika gambar gagal dimuat, gunakan fallback
                     const target = e.target as HTMLImageElement;
-                    target.src = "/placeholder.svg";
+                    target.src = HUMAN_FALLBACK_AVATAR;
                   }}
                   onLoad={() => {
                     // Tidak perlu log apa-apa di sini
                   }}
                 />
-                <AvatarFallback className="text-2xl">
-                  {employee.name
-                    .split(" ")
-                    .map((n: string) => n[0])
-                    .join("")}
+                <AvatarFallback className="bg-slate-100 text-slate-500">
+                  <UserRound className="h-10 w-10" />
                 </AvatarFallback>
               </Avatar>
 
@@ -612,12 +647,16 @@ export default function EmployeeDetailPage() {
         onValueChange={setActiveTab}
         className="space-y-4"
       >
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="personal">Data Pribadi</TabsTrigger>
           <TabsTrigger value="salary">Riwayat Gaji</TabsTrigger>
           <TabsTrigger value="attendance">Riwayat Absensi</TabsTrigger>
           <TabsTrigger value="leave">Riwayat Cuti</TabsTrigger>
           <TabsTrigger value="violations">Pelanggaran</TabsTrigger>
+          <TabsTrigger value="files">
+            <Paperclip className="h-4 w-4 mr-1" />
+            Dokumen ({uploadedFiles.length})
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="personal" className="space-y-4">
@@ -769,8 +808,12 @@ export default function EmployeeDetailPage() {
                   <tbody>
                     {employee &&
                       employee._rawKaryawan &&
-                      Object.entries(employee._rawKaryawan).map(
-                        ([key, value]) => {
+                      Object.entries(employee._rawKaryawan)
+                        .filter(
+                          ([key]) =>
+                            !["absensi", "cuti", "gaji", "pelanggaran"].includes(key)
+                        )
+                        .map(([key, value]) => {
                           // Tentukan apakah ini field encrypted atau tidak
                           const isEncrypted =
                             key.includes("encrypted") ||
@@ -786,6 +829,18 @@ export default function EmployeeDetailPage() {
                               employee._rawKaryawan[originalKey] ||
                               "Tidak ada data asli";
                           }
+
+                          // Format value untuk tampilan (hindari [object Object])
+                          const formatValue = (v: unknown): string => {
+                            if (v === null || v === undefined) return "-";
+                            if (Array.isArray(v))
+                              return `${v.length} item`;
+                            if (typeof v === "object" && v instanceof Date)
+                              return v.toLocaleDateString("id-ID");
+                            if (typeof v === "object")
+                              return "[Data objek]";
+                            return String(v);
+                          };
 
                           return (
                             <tr
@@ -807,18 +862,14 @@ export default function EmployeeDetailPage() {
                                   </span>
                                 ) : (
                                   <span className="text-gray-600">
-                                    {value === null || value === undefined
-                                      ? "-"
-                                      : String(value)}
+                                    {formatValue(value)}
                                   </span>
                                 )}
                               </td>
                               <td className="border px-2 py-1 font-mono text-xs">
                                 {isEncrypted ? (
                                   <span className="text-red-600 font-bold">
-                                    {value === null || value === undefined
-                                      ? "-"
-                                      : String(value)}
+                                    {formatValue(value)}
                                   </span>
                                 ) : (
                                   <span className="text-gray-400">-</span>
@@ -1088,7 +1139,243 @@ export default function EmployeeDetailPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Tab Dokumen / File Upload */}
+        <TabsContent value="files">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Paperclip className="h-5 w-5" />
+                Daftar Dokumen
+              </CardTitle>
+              <CardDescription>
+                File yang sudah di-upload untuk karyawan ini
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {filesLoading ? (
+                <div className="flex justify-center items-center h-32">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+                  <span className="ml-2 text-gray-600">Memuat daftar file...</span>
+                </div>
+              ) : uploadedFiles.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+                  <FileIcon className="h-12 w-12 mb-3" />
+                  <p className="text-lg font-medium">Belum ada file yang di-upload</p>
+                  <p className="text-sm">File foto profil, dokumen PKB, bukti pelanggaran, dan slip gaji akan muncul di sini</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Summary by category */}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {Array.from(new Set(uploadedFiles.map(f => f.kategori))).map(kategori => {
+                      const count = uploadedFiles.filter(f => f.kategori === kategori).length;
+                      return (
+                        <Badge key={kategori} variant="outline" className="text-sm">
+                          {kategori} ({count})
+                        </Badge>
+                      );
+                    })}
+                  </div>
+
+                  {/* File list table */}
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10"></TableHead>
+                        <TableHead>Nama File</TableHead>
+                        <TableHead>Kategori</TableHead>
+                        <TableHead>Tipe</TableHead>
+                        <TableHead>Ukuran</TableHead>
+                        <TableHead>Tanggal</TableHead>
+                        <TableHead>Keterangan</TableHead>
+                        <TableHead className="text-right">Aksi</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {uploadedFiles.map((file) => (
+                        <TableRow key={file.id}>
+                          <TableCell>
+                            {file.tipe === 'image' ? (
+                              <Image className="h-5 w-5 text-blue-500" />
+                            ) : file.tipe === 'pdf' ? (
+                              <FileText className="h-5 w-5 text-red-500" />
+                            ) : (
+                              <FileIcon className="h-5 w-5 text-gray-500" />
+                            )}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {file.nama}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={
+                              file.kategori === 'Foto Profil' ? 'bg-blue-50 text-blue-700' :
+                              file.kategori === 'PKB' ? 'bg-green-50 text-green-700' :
+                              file.kategori === 'Pelanggaran' ? 'bg-red-50 text-red-700' :
+                              file.kategori === 'Slip Gaji' ? 'bg-yellow-50 text-yellow-700' :
+                              ''
+                            }>
+                              {file.kategori}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="uppercase text-xs text-gray-500">
+                            {file.tipe}
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-600">
+                            {file.ukuran
+                              ? file.ukuran > 1024 * 1024
+                                ? `${(file.ukuran / (1024 * 1024)).toFixed(1)} MB`
+                                : `${(file.ukuran / 1024).toFixed(1)} KB`
+                              : '-'}
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-600">
+                            {file.tanggal
+                              ? new Date(file.tanggal).toLocaleDateString('id-ID')
+                              : '-'}
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-500">
+                            {file.keterangan || '-'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              {(file.tipe === 'image' || file.tipe === 'pdf') && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  title="Preview"
+                                  onClick={() => {
+                                    setPreviewFile(file);
+                                    // Load file with auth token
+                                    const token = localStorage.getItem('token');
+                                    const baseUrl = process.env.NEXT_PUBLIC_API_URL
+                                      ? (process.env.NEXT_PUBLIC_API_URL.endsWith('/') ? process.env.NEXT_PUBLIC_API_URL.slice(0, -1) : process.env.NEXT_PUBLIC_API_URL)
+                                        + (!process.env.NEXT_PUBLIC_API_URL.endsWith('/api') ? '/api' : '')
+                                      : 'http://localhost:8084/api';
+                                    const fileUrl = file.kategori === 'Foto Profil'
+                                      ? `${baseUrl}/karyawan/${employee.id}/foto`
+                                      : `${baseUrl}/karyawan/${employee.id}/files/serve?path=${encodeURIComponent(file.path)}`;
+                                    if (token) {
+                                      fetch(fileUrl, {
+                                        headers: { Authorization: `Bearer ${token}` },
+                                      })
+                                        .then(res => {
+                                          if (res.ok) return res.blob();
+                                          throw new Error('Failed to load');
+                                        })
+                                        .then(blob => {
+                                          const url = URL.createObjectURL(blob);
+                                          setPreviewUrl(url);
+                                        })
+                                        .catch(() => setPreviewUrl(null));
+                                    }
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                title="Download"
+                                onClick={() => {
+                                  const token = localStorage.getItem('token');
+                                  const baseUrl = process.env.NEXT_PUBLIC_API_URL
+                                    ? (process.env.NEXT_PUBLIC_API_URL.endsWith('/') ? process.env.NEXT_PUBLIC_API_URL.slice(0, -1) : process.env.NEXT_PUBLIC_API_URL)
+                                      + (!process.env.NEXT_PUBLIC_API_URL.endsWith('/api') ? '/api' : '')
+                                    : 'http://localhost:8084/api';
+                                  const fileUrl = file.kategori === 'Foto Profil'
+                                    ? `${baseUrl}/karyawan/${employee.id}/foto`
+                                    : `${baseUrl}/karyawan/${employee.id}/files/serve?path=${encodeURIComponent(file.path)}`;
+                                  if (token) {
+                                    fetch(fileUrl, {
+                                      headers: { Authorization: `Bearer ${token}` },
+                                    })
+                                      .then(res => {
+                                        if (res.ok) return res.blob();
+                                        throw new Error('Failed');
+                                      })
+                                      .then(blob => {
+                                        const url = URL.createObjectURL(blob);
+                                        const a = document.createElement('a');
+                                        a.href = url;
+                                        a.download = file.nama.replace(/[^a-zA-Z0-9.-]/g, '_');
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        document.body.removeChild(a);
+                                        URL.revokeObjectURL(url);
+                                      })
+                                      .catch(() => alert('Gagal download file'));
+                                  }
+                                }}
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* File Preview Modal */}
+      {previewFile && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-4 max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-lg font-semibold">{previewFile.nama}</h3>
+                <p className="text-sm text-gray-500">{previewFile.kategori} &bull; {previewFile.tipe}</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setPreviewFile(null);
+                  if (previewUrl) {
+                    URL.revokeObjectURL(previewUrl);
+                    setPreviewUrl(null);
+                  }
+                }}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="flex-1 overflow-auto flex items-center justify-center bg-gray-50 rounded min-h-[300px]">
+              {!previewUrl ? (
+                <div className="flex flex-col items-center text-gray-400">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400 mb-2"></div>
+                  <p>Memuat preview...</p>
+                </div>
+              ) : previewFile.tipe === 'image' ? (
+                <img
+                  src={previewUrl}
+                  alt={previewFile.nama}
+                  className="max-w-full max-h-[70vh] object-contain"
+                />
+              ) : previewFile.tipe === 'pdf' ? (
+                <iframe
+                  src={previewUrl}
+                  className="w-full h-[70vh] border-0"
+                  title={previewFile.nama}
+                />
+              ) : (
+                <div className="flex flex-col items-center text-gray-400">
+                  <FileIcon className="h-16 w-16 mb-3" />
+                  <p>Preview tidak tersedia untuk tipe file ini</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

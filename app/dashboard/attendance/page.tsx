@@ -58,6 +58,7 @@ export default function AttendancePage() {
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [statsTab, setStatsTab] = useState<"today" | "all">("today");
   const [editingItem, setEditingItem] = useState<any>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -73,33 +74,30 @@ export default function AttendancePage() {
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      // Ambil semua karyawan
-      const employeesResponse = await employeeAPI.getAll();
-      // Mapping agar FE konsisten pakai namaLengkap dan nik
+      // Fetch employees and attendance in parallel (single request each)
+      const [employeesResponse, allAttendance] = await Promise.all([
+        employeeAPI.getAll(),
+        attendanceAPI.getAll(),
+      ]);
       const mappedEmployees = employeesResponse.map((emp: any) => ({
         ...emp,
         namaLengkap: emp.namaLengkap || emp.name || "",
         nik: emp.nik || emp.nip || "",
       }));
       setEmployees(mappedEmployees);
-      // Ambil absensi per karyawan, lalu gabungkan
-      const allAttendance: any[] = [];
-      for (const emp of mappedEmployees) {
-        const absensiList = await attendanceAPI.getByEmployee(emp.id);
-        for (const absensi of absensiList) {
-          allAttendance.push({
-            id: absensi.id,
-            karyawanId: absensi.karyawan.id,
-            tanggal: absensi.tanggal,
-            status: absensi.status, // gunakan status dari backend!
-            hadir: absensi.hadir,
-            checkIn: absensi.waktuMasuk || "-",
-            checkOut: absensi.waktuPulang || "-",
-            notes: absensi.keterangan || "-",
-          });
-        }
-      }
-      setAttendanceData(allAttendance);
+      setAttendanceData(
+        allAttendance.map((a: any) => ({
+          id: a.id,
+          karyawanId: a.karyawanId,
+          tanggal: a.tanggal,
+          status: a.status,
+          hadir: a.hadir,
+          setengahHari: Boolean(a.setengahHari),
+          checkIn: a.waktuMasuk || a.checkIn || "-",
+          checkOut: a.waktuPulang || a.checkOut || "-",
+          notes: a.keterangan || a.notes || "-",
+        }))
+      );
     } catch (err) {
       setError("Gagal memuat data absensi");
     } finally {
@@ -109,6 +107,7 @@ export default function AttendancePage() {
 
   const filterData = () => {
     let filtered = attendanceData;
+    const todayString = new Date().toLocaleDateString("en-CA");
 
     if (searchTerm) {
       filtered = filtered.filter((item) => {
@@ -123,7 +122,13 @@ export default function AttendancePage() {
     }
 
     if (statusFilter !== "all") {
-      filtered = filtered.filter((item) => item.status === statusFilter);
+      if (statusFilter === "SETENGAH_HARI") {
+        filtered = filtered.filter(
+          (item) => item.status === "HADIR" && Boolean(item.setengahHari)
+        );
+      } else {
+        filtered = filtered.filter((item) => item.status === statusFilter);
+      }
     }
 
     if (departmentFilter !== "all") {
@@ -133,12 +138,11 @@ export default function AttendancePage() {
       });
     }
 
-    if (dateFilter) {
-      filtered = filtered.filter((item) => {
-        const itemDate = new Date(item.tanggal).toISOString().split("T")[0];
-        return itemDate === dateFilter;
-      });
-    }
+    const activeDateFilter = dateFilter || todayString;
+    filtered = filtered.filter((item) => {
+      const itemDate = new Date(item.tanggal).toLocaleDateString("en-CA");
+      return itemDate === activeDateFilter;
+    });
 
     setFilteredData(filtered);
   };
@@ -154,13 +158,26 @@ export default function AttendancePage() {
     }
   };
 
+  const todayString = new Date().toLocaleDateString("en-CA");
+  const statsSource =
+    statsTab === "today"
+      ? attendanceData.filter(
+          (item) =>
+            new Date(item.tanggal || item.date).toLocaleDateString("en-CA") ===
+            todayString
+        )
+      : attendanceData;
+
   const attendanceStats = {
-    total: attendanceData.length,
-    hadir: attendanceData.filter((item) => item.status === "HADIR").length,
-    alpha: attendanceData.filter((item) => item.status === "ALPA").length,
-    sakit: attendanceData.filter((item) => item.status === "SAKIT").length,
-    izin: attendanceData.filter((item) => item.status === "IZIN").length,
-    off: attendanceData.filter((item) => item.status === "OFF").length,
+    total: statsSource.length,
+    hadir: statsSource.filter((item) => item.status === "HADIR").length,
+    setengahHari: statsSource.filter(
+      (item) => item.status === "HADIR" && Boolean(item.setengahHari)
+    ).length,
+    alpha: statsSource.filter((item) => item.status === "ALPA").length,
+    sakit: statsSource.filter((item) => item.status === "SAKIT").length,
+    izin: statsSource.filter((item) => item.status === "IZIN").length,
+    off: statsSource.filter((item) => item.status === "OFF").length,
   };
 
   // Get unique departments for filter
@@ -184,11 +201,13 @@ export default function AttendancePage() {
 
     try {
       setIsLoading(true);
+      const isPresent = editingItem.status === "HADIR" && Boolean(editingItem.hadir);
+
       // Gunakan endpoint PUT yang baru
       await attendanceAPI.update(editingItem.id, {
-        hadir: editingItem.hadir,
+        hadir: isPresent,
         status: editingItem.status,
-        setengahHari: editingItem.setengahHari || false,
+        setengahHari: isPresent ? Boolean(editingItem.setengahHari) : false,
         keterangan: editingItem.notes,
       });
 
@@ -215,6 +234,24 @@ export default function AttendancePage() {
       setDeleteConfirm(null);
     } catch (err) {
       setError("Gagal menghapus data absensi");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteToday = async () => {
+    const todayString = new Date().toLocaleDateString("en-CA");
+    const confirmDelete = window.confirm(
+      "Yakin ingin menghapus semua data absensi hari ini?"
+    );
+    if (!confirmDelete) return;
+
+    try {
+      setIsLoading(true);
+      await attendanceAPI.deleteToday(todayString);
+      await fetchData();
+    } catch (err) {
+      setError("Gagal menghapus data absensi hari ini");
     } finally {
       setIsLoading(false);
     }
@@ -249,6 +286,10 @@ export default function AttendancePage() {
               Form Absensi Publik
             </a>
           </Button>
+          <Button variant="destructive" onClick={handleDeleteToday}>
+            <Trash2 className="w-4 h-4 mr-2" />
+            Hapus Absensi Hari Ini
+          </Button>
           <Button asChild>
             <a href="/dashboard/attendance/new">
               <Plus className="w-4 h-4 mr-2" />
@@ -265,7 +306,38 @@ export default function AttendancePage() {
       )}
 
       {/* Statistics Cards */}
-      <div className="grid gap-4 md:grid-cols-5">
+      <Card>
+        <CardContent className="pt-4 pb-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-sm font-semibold">Scope Statistik</p>
+              <p className="text-xs text-muted-foreground">
+                {statsTab === "today"
+                  ? "Menampilkan statistik absensi hari ini"
+                  : "Menampilkan statistik semua data absensi"}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant={statsTab === "today" ? "default" : "outline"}
+                onClick={() => setStatsTab("today")}
+              >
+                Hari Ini
+              </Button>
+              <Button
+                size="sm"
+                variant={statsTab === "all" ? "default" : "outline"}
+                onClick={() => setStatsTab("all")}
+              >
+                Keseluruhan
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Absensi</CardTitle>
@@ -298,6 +370,18 @@ export default function AttendancePage() {
               {attendanceStats.sakit}
             </div>
             <p className="text-xs text-muted-foreground">Karyawan</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">🌓 Setengah Hari</CardTitle>
+            <Clock className="h-4 w-4 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">
+              {attendanceStats.setengahHari}
+            </div>
+            <p className="text-xs text-muted-foreground">Dari status hadir</p>
           </CardContent>
         </Card>
         <Card>
@@ -366,6 +450,7 @@ export default function AttendancePage() {
                 <SelectContent>
                   <SelectItem value="all">Semua Status</SelectItem>
                   <SelectItem value="HADIR">✅ Hadir</SelectItem>
+                  <SelectItem value="SETENGAH_HARI">🌓 Setengah Hari</SelectItem>
                   <SelectItem value="SAKIT">🤒 Sakit</SelectItem>
                   <SelectItem value="IZIN">📝 Izin</SelectItem>
                   <SelectItem value="ALPA">❌ Alpha</SelectItem>
@@ -416,6 +501,7 @@ export default function AttendancePage() {
                   <TableHead className="w-[250px]">👤 Karyawan</TableHead>
                   <TableHead>📅 Tanggal</TableHead>
                   <TableHead>📊 Status</TableHead>
+                  <TableHead>⏱️ Durasi Kerja</TableHead>
                   <TableHead>🏢 Departemen</TableHead>
                   <TableHead>📝 Keterangan</TableHead>
                   <TableHead className="text-center">⚙️ Aksi</TableHead>
@@ -464,9 +550,14 @@ export default function AttendancePage() {
                       </TableCell>
                       <TableCell>
                         {/* Status badges with better styling */}
-                        {attendance.status === "HADIR" && (
+                        {attendance.status === "HADIR" && !attendance.setengahHari && (
                           <Badge className="bg-green-100 text-green-800 border-green-200">
                             ✅ Hadir
+                          </Badge>
+                        )}
+                        {attendance.status === "HADIR" && attendance.setengahHari && (
+                          <Badge className="bg-orange-100 text-orange-800 border-orange-200">
+                            🌓 Hadir Setengah Hari
                           </Badge>
                         )}
                         {attendance.status === "ALPA" && (
@@ -493,6 +584,21 @@ export default function AttendancePage() {
                           attendance.status
                         ) && (
                           <Badge variant="outline">{attendance.status}</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {attendance.status === "HADIR" ? (
+                          attendance.setengahHari ? (
+                            <Badge variant="outline" className="border-orange-200 text-orange-700 bg-orange-50">
+                              0.5 Hari
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="border-green-200 text-green-700 bg-green-50">
+                              1 Hari
+                            </Badge>
+                          )
+                        ) : (
+                          <span className="text-sm text-gray-500">-</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -606,9 +712,15 @@ export default function AttendancePage() {
                 </label>
                 <Select
                   value={editingItem.status}
-                  onValueChange={(value) =>
-                    setEditingItem({ ...editingItem, status: value })
-                  }
+                  onValueChange={(value) => {
+                    const isHadir = value === "HADIR";
+                    setEditingItem({
+                      ...editingItem,
+                      status: value,
+                      hadir: isHadir,
+                      setengahHari: isHadir ? editingItem.setengahHari : false,
+                    });
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -644,6 +756,8 @@ export default function AttendancePage() {
                     setEditingItem({
                       ...editingItem,
                       setengahHari: e.target.checked,
+                      hadir: e.target.checked ? true : editingItem.hadir,
+                      status: e.target.checked ? "HADIR" : editingItem.status,
                     })
                   }
                   disabled={!editingItem.hadir || editingItem.status === "OFF"}
