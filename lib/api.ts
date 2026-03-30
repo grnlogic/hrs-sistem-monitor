@@ -667,6 +667,38 @@ export const salaryAPI = {
   },
 }
 
+// Salary Slip Editor API (Slate JSON -> Database)
+export const salarySlipEditorAPI = {
+  getTemplate: async () => {
+    return apiRequest("/salary-slip/template")
+  },
+
+  saveTemplate: async (data: { name: string; content: unknown }) => {
+    return apiRequest("/salary-slip/template", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    })
+  },
+
+  getDocument: async (id: string) => {
+    return apiRequest(`/salary-slip/document/${id}`)
+  },
+
+  createDocument: async (data: { title: string; content: unknown; karyawanId?: string | number; division?: string }) => {
+    return apiRequest("/salary-slip/document", {
+      method: "POST",
+      body: JSON.stringify(data),
+    })
+  },
+
+  updateDocument: async (id: string, data: { title?: string; content: unknown; division?: string }) => {
+    return apiRequest(`/salary-slip/document/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    })
+  },
+}
+
 // Tambahkan fungsi untuk rekap gaji semua karyawan
 export const getAllSalaries = async () => {
   return apiRequest("/gaji/rekap-all")

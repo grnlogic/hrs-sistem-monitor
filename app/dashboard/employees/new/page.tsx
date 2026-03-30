@@ -30,6 +30,7 @@ import {
   Crop,
   RotateCcw,
   Check,
+  Loader2,
   Printer,
   ChevronRight,
   ChevronLeft,
@@ -156,6 +157,8 @@ export default function NewEmployeePage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [pkbPrinted, setPkbPrinted] = useState(false);
+  const [printingPkb, setPrintingPkb] = useState(false);
+  const [pkbSnapshot, setPkbSnapshot] = useState<string | null>(null);
   const [savedEmployeeId, setSavedEmployeeId] = useState<string | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [docUploaded, setDocUploaded] = useState(false);
@@ -245,12 +248,14 @@ export default function NewEmployeePage() {
     if (!formData.departemen) return "Departemen harus dipilih";
     if (!formData.tanggalMasuk) return "Tanggal Masuk harus diisi";
     if (!formData.gajiPerHari || Number(formData.gajiPerHari) <= 0) return "Gaji Per Hari harus diisi";
+    if (!formData.alamat.trim()) return "Alamat harus diisi";
     return null;
   };
 
   // ---- Step 2: Print PKB ----
-  const handlePrintPKB = () => {
+  const handlePrintPKB = async () => {
     setError("");
+    setPrintingPkb(true);
     const defaults = getDefaultPKBData();
     const tipeUpah = inferTipeUpah(formData.departemen, formData.jabatan);
     const nominalDefault = tipeUpah === "per_hari" ? 68450 : tipeUpah === "per_kg" ? 3400 : 3000;
@@ -271,12 +276,15 @@ export default function NewEmployeePage() {
 
     try {
       const payload: PKBDocxPayload = { ...pkbData, division: inferDivision(tipeUpah, formData.departemen) };
-      printPKBPDF(payload);
+      const html = await printPKBPDF(payload);
+      setPkbSnapshot(html);
       setPkbPrinted(true);
       setSuccess("PKB dibuka untuk print. Cetak dan minta karyawan tanda tangan.");
       setTimeout(() => setSuccess(""), 4000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal print PKB");
+    } finally {
+      setPrintingPkb(false);
     }
   };
 
@@ -341,6 +349,7 @@ export default function NewEmployeePage() {
           nominalUpah: nominalDefault,
           bonusNominal: tipeUpah === "per_pack" ? 250 : undefined,
           tanggalPerjanjian: formData.tanggalMasuk,
+          dokumenHtml: pkbSnapshot ?? undefined,
         });
       } catch (e) { console.error("Save PKB error:", e); }
 
@@ -381,6 +390,10 @@ export default function NewEmployeePage() {
       if (err) { setError(err); return; }
       setStep(2);
     } else if (step === 2) {
+      if (!pkbPrinted) {
+        setError("Silakan cetak PKB terlebih dahulu sebelum lanjut.");
+        return;
+      }
       handleSaveEmployee();
     } else if (step === 3) {
       setStep(4);
@@ -389,7 +402,11 @@ export default function NewEmployeePage() {
 
   const goBack = () => {
     setError("");
-    if (step === 2) setStep(1);
+    if (step === 2) {
+      setPkbPrinted(false);
+      setPkbSnapshot(null);
+      setStep(1);
+    }
   };
 
   return (
@@ -513,6 +530,15 @@ export default function NewEmployeePage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label htmlFor="alamat" className="text-sm">Alamat *</Label>
+                  <Input
+                    id="alamat"
+                    value={formData.alamat}
+                    onChange={(e) => updateField("alamat", e.target.value)}
+                    placeholder="Contoh: Dusun Cikadu RT 03/RW 05, Desa Maju Jaya"
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -535,7 +561,6 @@ export default function NewEmployeePage() {
                     { id: "jabatan", label: "Jabatan" },
                     { id: "noHp", label: "Nomor HP" },
                     { id: "email", label: "Email", type: "email" },
-                    { id: "alamat", label: "Alamat" },
                     { id: "noKtp", label: "No KTP" },
                     { id: "tempatLahir", label: "Tempat Lahir" },
                     { id: "tanggalLahir", label: "Tanggal Lahir", type: "date" },
@@ -585,6 +610,7 @@ export default function NewEmployeePage() {
                 <div><span className="text-slate-500">NIK:</span> <span className="font-medium">{formData.nik}</span></div>
                 <div><span className="text-slate-500">Departemen:</span> <span className="font-medium">{formData.departemen}</span></div>
                 <div><span className="text-slate-500">Jabatan:</span> <span className="font-medium">{formData.jabatan || "-"}</span></div>
+                <div><span className="text-slate-500">Alamat:</span> <span className="font-medium">{formData.alamat || "-"}</span></div>
                 <div><span className="text-slate-500">Tgl Masuk:</span> <span className="font-medium">{formData.tanggalMasuk}</span></div>
                 <div><span className="text-slate-500">Gaji/Hari:</span> <span className="font-medium">Rp {Number(formData.gajiPerHari).toLocaleString("id-ID")}</span></div>
                 <div><span className="text-slate-500">Tipe Upah:</span> <span className="font-medium capitalize">{inferTipeUpah(formData.departemen, formData.jabatan).replace("_", " ")}</span></div>
@@ -607,9 +633,18 @@ export default function NewEmployeePage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button onClick={handlePrintPKB} variant={pkbPrinted ? "outline" : "default"} className="w-full">
-                <Printer className="h-4 w-4 mr-2" />
-                {pkbPrinted ? "Cetak Ulang PKB" : "Cetak PKB"}
+              <Button
+                onClick={handlePrintPKB}
+                variant={pkbPrinted ? "outline" : "default"}
+                className="w-full"
+                disabled={printingPkb}
+              >
+                {printingPkb ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Printer className="h-4 w-4 mr-2" />
+                )}
+                {printingPkb ? "Menyiapkan PKB..." : pkbPrinted ? "Cetak Ulang PKB" : "Cetak PKB"}
               </Button>
             </CardContent>
           </Card>
@@ -686,6 +721,8 @@ export default function NewEmployeePage() {
                   hubunganKontakDarurat: "", noTeleponKontakDarurat: "",
                 });
                 setPkbPrinted(false);
+                setPkbSnapshot(null);
+                setPrintingPkb(false);
                 setSavedEmployeeId(null);
                 setDocUploaded(false);
                 removeFile();
@@ -714,7 +751,7 @@ export default function NewEmployeePage() {
               </Button>
             )}
             {step === 2 && (
-              <Button onClick={goNext} disabled={isLoading}>
+              <Button onClick={goNext} disabled={isLoading || !pkbPrinted}>
                 {isLoading ? (
                   <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />Menyimpan...</>
                 ) : (

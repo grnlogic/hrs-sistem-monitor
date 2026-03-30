@@ -50,20 +50,20 @@ export function getDefaultPKBData(): Partial<PKBData> {
   return { ...DEFAULT_PKB_DATA };
 }
 
-function formatCurrency(amount: number): string {
+export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("id-ID", {
     style: "decimal",
     minimumFractionDigits: 0,
   }).format(amount);
 }
 
-function formatDate(dateStr: string): string {
+export function formatDate(dateStr: string): string {
   if (!dateStr) return new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
   const d = new Date(dateStr);
   return d.toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
 }
 
-function getClause2AndRole(data: PKBData): { clause2: string; role: string } {
+export function getClause2AndRole(data: PKBData): { clause2: string; role: string } {
   const nominal = data.nominalUpah ?? data.upahPerPack ?? 3000;
   const upahFormatted = formatCurrency(nominal);
 

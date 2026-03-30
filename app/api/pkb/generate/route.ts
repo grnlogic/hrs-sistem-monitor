@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { generatePKBHTML } from "@/lib/pkb-template";
 import type { PKBDocxPayload } from "@/lib/pkb-docx";
-import type { TipeUpahPKB } from "@/lib/pkb-template";
+import type { PKBData, TipeUpahPKB } from "@/lib/pkb-template";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { getPKBTemplate } from "@/lib/pkb-template-store";
+import { renderPKBTemplate } from "@/lib/pkb-template-engine";
 
 let cachedLogoBase64: string | null = null;
 
@@ -34,7 +36,7 @@ export async function POST(req: Request) {
 
     const tipeUpah = divisionToTipeUpah(body.division);
     const logoBase64 = await getLogoBase64();
-    let html = generatePKBHTML({
+    const pkbData: PKBData = {
       pihak1Nama: body.pihak1Nama,
       pihak1Nik: body.pihak1Nik,
       pihak1Jabatan: body.pihak1Jabatan,
@@ -49,10 +51,16 @@ export async function POST(req: Request) {
       bonusNominal: body.bonusNominal,
       catatanPembayaran: body.catatanPembayaran,
       tanggalPerjanjian: body.tanggalPerjanjian,
-    });
+    };
 
-    // Embed logo as base64 to avoid image loading issues in print/download
-    html = html.replace(/src="\/png\.png"/g, `src="${logoBase64}"`);
+    let html: string;
+    try {
+      const template = getPKBTemplate();
+      html = renderPKBTemplate(template.content, pkbData, { division: body.division, logoDataUrl: logoBase64 });
+    } catch (templateError) {
+      console.error("Dynamic PKB template error, falling back to legacy HTML", templateError);
+      html = generatePKBHTML(pkbData).replace(/src="\/png\.png"/g, `src="${logoBase64}"`);
+    }
 
     return new NextResponse(html, {
       status: 200,

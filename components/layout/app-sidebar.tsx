@@ -14,6 +14,7 @@ import {
   Factory,
   ChevronUp,
   Banknote,
+  FileText,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 
@@ -75,6 +76,12 @@ const menuItems: MenuItem[] = [
     url: "/dashboard/violations",
     icon: AlertTriangle,
     description: "Catatan Pelanggaran",
+  },
+  {
+    title: "Template PKB",
+    url: "/dashboard/pkb-template",
+    icon: FileText,
+    description: "Editor Template PKB",
   },
 ];
 
