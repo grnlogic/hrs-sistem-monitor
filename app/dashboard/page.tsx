@@ -51,7 +51,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [recentEmployees, setRecentEmployees] = useState<any[]>([]);
-  const [todayAttendance, setTodayAttendance] = useState<any[]>([]);
+  const [recentAttendance, setRecentAttendance] = useState<any[]>([]);
   const [recentLeaves, setRecentLeaves] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
 
@@ -71,20 +71,23 @@ export default function DashboardPage() {
         setRecentEmployees((emps || []).slice(0, 5));
         setRecentLeaves((lvs || []).slice(0, 4));
 
-        const today = new Date().toISOString().split("T")[0];
-        const todayAtts = (atts || []).filter(
-          (a: any) => (a.tanggal || a.date) === today
-        );
-        setTodayAttendance(todayAtts.slice(0, 6));
+        const sortedAttendance = (atts || [])
+          .slice()
+          .sort((a: any, b: any) => {
+            const da = new Date(a.tanggal || a.date || a.createdAt || 0).getTime();
+            const db = new Date(b.tanggal || b.date || b.createdAt || 0).getTime();
+            return db - da;
+          });
+        setRecentAttendance(sortedAttendance.slice(0, 6));
 
-        const present = todayAtts.filter((a: any) =>
-          isStatus(a.status, "Hadir", "Present", "HADIR")
+        const present = (atts || []).filter((a: any) =>
+          isStatus(a.status, "Hadir", "Present", "HADIR", "LEMBUR")
         ).length;
-        const late = todayAtts.filter((a: any) =>
+        const late = (atts || []).filter((a: any) =>
           isStatus(a.status, "Terlambat", "Late", "TERLAMBAT")
         ).length;
-        const absent = todayAtts.filter((a: any) =>
-          isStatus(a.status, "Sakit", "Alpha", "Cuti", "Absent", "SAKIT", "ALPHA", "CUTI", "TIDAK HADIR", "OFF")
+        const absent = (atts || []).filter((a: any) =>
+          isStatus(a.status, "Sakit", "Alpha", "Cuti", "Absent", "SAKIT", "ALPA", "CUTI", "TIDAK HADIR", "OFF", "IZIN")
         ).length;
 
         const now = new Date();
@@ -169,6 +172,42 @@ export default function DashboardPage() {
         </p>
       </div>
 
+      {/* User-first Section */}
+      <Card>
+        <CardContent className="pt-5 pb-4">
+          <div className="mb-4">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Mulai Kerja Hari Ini</p>
+            <p className="text-sm text-slate-600 mt-1">Akses fitur yang paling sering dipakai dulu, lalu scroll ke bawah untuk summary analisis.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/dashboard/employees/new">
+              <Button size="sm">+ Tambah Karyawan</Button>
+            </Link>
+            <Link href="/dashboard/attendance/new">
+              <Button size="sm">+ Input Absensi Massal</Button>
+            </Link>
+            <Link href="/dashboard/attendance">
+              <Button size="sm" variant="outline">Export Laporan Harian</Button>
+            </Link>
+            <Link href="/dashboard/salary">
+              <Button size="sm" variant="outline">Proses Gaji</Button>
+            </Link>
+            <Link href="/dashboard/leave">
+              <Button size="sm" variant="outline">Kelola Cuti</Button>
+            </Link>
+            <Link href="/dashboard/violations">
+              <Button size="sm" variant="outline">Pelanggaran</Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Summary Section */}
+      <div>
+        <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Summary Analisis</p>
+        <p className="text-sm text-slate-600 mt-1">Gunakan data berikut untuk monitoring, analisis tren, dan bahan rapat.</p>
+      </div>
+
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
@@ -180,9 +219,9 @@ export default function DashboardPage() {
           href="/dashboard/employees"
         />
         <StatCard
-          title="Hadir Hari Ini"
+          title="Kehadiran Total"
           value={stats?.todayPresent || 0}
-          sub={`Terlambat: ${stats?.todayLate || 0} · Absent: ${stats?.todayAbsent || 0}`}
+          sub={`Terlambat: ${stats?.todayLate || 0} · Tidak Hadir: ${stats?.todayAbsent || 0}`}
           icon={<Clock className="h-5 w-5" />}
           color="green"
           href="/dashboard/attendance"
@@ -205,37 +244,13 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Quick Actions */}
-      <Card>
-        <CardContent className="pt-5 pb-4">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Aksi Cepat</p>
-          <div className="flex flex-wrap gap-2">
-            <Link href="/dashboard/employees/new">
-              <Button size="sm">+ Tambah Karyawan</Button>
-            </Link>
-            <Link href="/dashboard/salary">
-              <Button size="sm" variant="outline">Proses Gaji</Button>
-            </Link>
-            <Link href="/dashboard/attendance">
-              <Button size="sm" variant="outline">Lihat Absensi</Button>
-            </Link>
-            <Link href="/dashboard/leave">
-              <Button size="sm" variant="outline">Kelola Cuti</Button>
-            </Link>
-            <Link href="/dashboard/violations">
-              <Button size="sm" variant="outline">Pelanggaran</Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Two Column: Attendance Today + Recent Employees */}
+      {/* Two Column: Recent Attendance + Recent Employees */}
       <div className="grid lg:grid-cols-2 gap-4">
-        {/* Today Attendance */}
+        {/* Recent Attendance */}
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold">Absensi Hari Ini</CardTitle>
+              <CardTitle className="text-sm font-semibold">Absensi Terbaru</CardTitle>
               <Link href="/dashboard/attendance">
                 <Button variant="ghost" size="sm" className="text-xs h-7">
                   Lihat Semua <ArrowRight className="h-3 w-3 ml-1" />
@@ -244,24 +259,26 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            {todayAttendance.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-6">Belum ada data absensi hari ini</p>
+            {recentAttendance.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-6">Belum ada data absensi</p>
             ) : (
-              todayAttendance.map((a: any) => (
+              recentAttendance.map((a: any) => (
                 <div key={a.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
                   <div className="flex items-center gap-2.5">
                     <div className={`w-2 h-2 rounded-full ${
-                      isStatus(a.status, "Hadir", "Present", "HADIR") ? "bg-green-500" :
+                      isStatus(a.status, "Hadir", "Present", "HADIR", "LEMBUR") ? "bg-green-500" :
                       isStatus(a.status, "Terlambat", "Late", "TERLAMBAT") ? "bg-amber-500" : "bg-red-500"
                     }`} />
                     <div>
                       <p className="text-sm font-medium">{empName(a.karyawanId || a.karyawan?.id)}</p>
-                      <p className="text-[11px] text-slate-400">{a.waktuMasuk || a.checkIn || "-"} — {a.waktuPulang || a.checkOut || "-"}</p>
+                      <p className="text-[11px] text-slate-400">
+                        {new Date(a.tanggal || a.date || a.createdAt).toLocaleDateString("id-ID")} · {a.waktuMasuk || a.checkIn || "-"} — {a.waktuPulang || a.checkOut || "-"}
+                      </p>
                     </div>
                   </div>
                   <Badge
                     variant={
-                      isStatus(a.status, "Hadir", "Present", "HADIR") ? "default" :
+                      isStatus(a.status, "Hadir", "Present", "HADIR", "LEMBUR") ? "default" :
                       isStatus(a.status, "Terlambat", "Late", "TERLAMBAT") ? "secondary" : "destructive"
                     }
                     className="text-[10px]"

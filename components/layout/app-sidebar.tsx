@@ -15,8 +15,10 @@ import {
   ChevronUp,
   Banknote,
   FileText,
+  Settings,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
+import { signOut, useSession } from "next-auth/react";
 
 import {
   Sidebar,
@@ -37,7 +39,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/overlay/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { removeAuthToken } from "@/lib/api";
+import { UserRole } from "@/lib/auth/roles";
 
 type MenuItem = {
   title: string;
@@ -100,35 +103,59 @@ const gajiMenuItems: MenuItem[] = [
   },
 ];
 
+const settingsMenuItems: MenuItem[] = [
+  {
+    title: "Manajemen User",
+    url: "/dashboard/settings/users",
+    icon: Settings,
+    description: "Kelola akun HRD & Akuntansi",
+  },
+];
+
 export function AppSidebar() {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = React.useState<{
-    name: string;
-    email: string;
-  } | null>(null);
+  const { data: session } = useSession();
 
-  React.useEffect(() => {
-    const savedUser = localStorage.getItem("user");
-    if (!savedUser || savedUser === "undefined" || savedUser === "null") return;
-    try {
-      const parsedUser = JSON.parse(savedUser);
-      if (parsedUser && typeof parsedUser === "object") setUser(parsedUser);
-    } catch (e) {
-      console.error("Error parsing user data", e);
-      localStorage.removeItem("user");
-    }
-  }, []);
+  const user = React.useMemo(
+    () => ({
+      name: session?.user?.name || "Administrator",
+      email: session?.user?.email || "admin@padud.com",
+      role: (session?.user?.role || "HRD") as UserRole,
+    }),
+    [session]
+  );
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    router.push("/");
+  const isAccounting = user.role === "AKUNTANSI";
+
+  const handleLogout = async () => {
+    removeAuthToken();
+    await signOut({ redirect: false });
+    router.replace("/");
+    router.refresh();
   };
 
   const isMenuActive = (url: string) => {
     if (url === "/dashboard") {
       return pathname === "/dashboard" || pathname === "/dashboard/";
+    }
+
+    if (url === "/dashboard/salary/staff") {
+      return (
+        pathname === url ||
+        pathname.startsWith(url + "/") ||
+        pathname === "/penggajian/gaji-staff" ||
+        pathname.startsWith("/penggajian/gaji-staff/")
+      );
+    }
+
+    if (url === "/dashboard/salary/non-staff") {
+      return (
+        pathname === url ||
+        pathname.startsWith(url + "/") ||
+        pathname === "/penggajian/gaji-nonstaff" ||
+        pathname.startsWith("/penggajian/gaji-nonstaff/")
+      );
     }
 
     return pathname === url || pathname.startsWith(url + "/");
@@ -529,44 +556,48 @@ export function AppSidebar() {
         </SidebarHeader>
 
         <SidebarContent className="px-2 py-3" style={{ background: "#0f1117" }}>
-          {/* Menu Utama */}
-          <SidebarGroup className="p-0">
-            <div className="padud-section-label group-data-[collapsible=icon]:hidden">
-              <Shield size={10} />
-              <span>Menu Utama</span>
-            </div>
-            <SidebarGroupContent>
-              <SidebarMenu className="gap-0.5">
-                {menuItems.map((item) => {
-                  const isActive = isMenuActive(item.url);
-                  return (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton
-                        asChild
-                        tooltip={item.title}
-                        className="h-auto p-0 hover:bg-transparent data-[active=true]:bg-transparent"
-                      >
-                        <a
-                          href={item.url}
-                          className={`padud-menu-item ${isActive ? "active" : ""}`}
-                        >
-                          <div className="padud-item-icon">
-                            <item.icon size={15} />
-                          </div>
-                          <div className="padud-item-text group-data-[collapsible=icon]:hidden">
-                            <span className="padud-item-title">{item.title}</span>
-                            <span className="padud-item-desc">{item.description}</span>
-                          </div>
-                        </a>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          {!isAccounting && (
+            <>
+              {/* Menu Utama */}
+              <SidebarGroup className="p-0">
+                <div className="padud-section-label group-data-[collapsible=icon]:hidden">
+                  <Shield size={10} />
+                  <span>Menu Utama</span>
+                </div>
+                <SidebarGroupContent>
+                  <SidebarMenu className="gap-0.5">
+                    {menuItems.map((item) => {
+                      const isActive = isMenuActive(item.url);
+                      return (
+                        <SidebarMenuItem key={item.title}>
+                          <SidebarMenuButton
+                            asChild
+                            tooltip={item.title}
+                            className="h-auto p-0 hover:bg-transparent data-[active=true]:bg-transparent"
+                          >
+                            <a
+                              href={item.url}
+                              className={`padud-menu-item ${isActive ? "active" : ""}`}
+                            >
+                              <div className="padud-item-icon">
+                                <item.icon size={15} />
+                              </div>
+                              <div className="padud-item-text group-data-[collapsible=icon]:hidden">
+                                <span className="padud-item-title">{item.title}</span>
+                                <span className="padud-item-desc">{item.description}</span>
+                              </div>
+                            </a>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
 
-          <div className="padud-divider" />
+              <div className="padud-divider" />
+            </>
+          )}
 
           {/* Gaji */}
           <SidebarGroup className="p-0">
@@ -604,6 +635,47 @@ export function AppSidebar() {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+
+          {!isAccounting && (
+            <>
+              <div className="padud-divider" />
+              <SidebarGroup className="p-0">
+                <div className="padud-section-label group-data-[collapsible=icon]:hidden">
+                  <Settings size={10} />
+                  <span>Pengaturan</span>
+                </div>
+                <SidebarGroupContent>
+                  <SidebarMenu className="gap-0.5">
+                    {settingsMenuItems.map((item) => {
+                      const isActive = isMenuActive(item.url);
+                      return (
+                        <SidebarMenuItem key={item.title}>
+                          <SidebarMenuButton
+                            asChild
+                            tooltip={item.title}
+                            className="h-auto p-0 hover:bg-transparent data-[active=true]:bg-transparent"
+                          >
+                            <a
+                              href={item.url}
+                              className={`padud-menu-item ${isActive ? "active" : ""}`}
+                            >
+                              <div className="padud-item-icon">
+                                <item.icon size={15} />
+                              </div>
+                              <div className="padud-item-text group-data-[collapsible=icon]:hidden">
+                                <span className="padud-item-title">{item.title}</span>
+                                <span className="padud-item-desc">{item.description}</span>
+                              </div>
+                            </a>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            </>
+          )}
         </SidebarContent>
 
         <SidebarFooter className="padud-footer p-0">

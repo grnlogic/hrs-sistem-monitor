@@ -132,9 +132,18 @@ function tipeUpahLabel(tipe?: string | null) {
   }
 }
 
+function parseNominal(value: unknown): number {
+  const raw = String(value ?? "").replace(/[^0-9]/g, "");
+  return raw ? Number(raw) : 0;
+}
+
 export function buildPlaceholderContext(data: PKBData, options?: { division?: string; logoDataUrl?: string }): PlaceholderContext {
   const { clause2, role } = getClause2AndRole(data);
   const catatan = data.catatanPembayaran?.trim() || "yang akan dibayarkan setiap hari Sabtu";
+  const bpjs = data.bpjs?.trim() || "-";
+  const bpjsKesehatan = parseNominal(data.bpjsKesehatanNominal);
+  const bpjsKetenagakerjaan = parseNominal(data.bpjsKetenagakerjaanNominal);
+  const nominalPotonganBpjs = bpjsKesehatan + bpjsKetenagakerjaan;
 
   const context: PlaceholderContext = {
     LOGO_IMAGE: options?.logoDataUrl ? `<img src="${options.logoDataUrl}" alt="Logo" class="pkb-logo" />` : "",
@@ -155,8 +164,12 @@ export function buildPlaceholderContext(data: PKBData, options?: { division?: st
     NOMINAL_UPAH: `Rp. ${formatCurrency(data.nominalUpah || 0)}`,
     BONUS_NOMINAL: data.bonusNominal ? `Rp. ${formatCurrency(data.bonusNominal)}` : "-",
     CATATAN_PEMBAYARAN: catatan,
+    BPJS: bpjs,
+    BPJS_KESEHATAN_NOMINAL: `Rp. ${formatCurrency(bpjsKesehatan)}`,
+    BPJS_KETENAGAKERJAAN_NOMINAL: `Rp. ${formatCurrency(bpjsKetenagakerjaan)}`,
+    NOMINAL_POTONGAN_BPJS: `Rp. ${formatCurrency(nominalPotonganBpjs)}`,
     TANGGAL_PERJANJIAN: formatDate(data.tanggalPerjanjian),
-    PERAN_KARYAWAN: role,
+    PERAN_KARYAWAN: data.peranKaryawan || role,
     PASAL_2: clause2,
     PASAL_3: `Pihak II akan menerima upah ${catatan}`,
   };
@@ -165,7 +178,8 @@ export function buildPlaceholderContext(data: PKBData, options?: { division?: st
 }
 
 export function applyPlaceholderContext(html: string, context: PlaceholderContext): string {
-  return html.replace(/{{([A-Z0-9_]+)}}/g, (_, key: string) => {
+  return html.replace(/{{([a-zA-Z0-9_]+)}}/g, (_, rawKey: string) => {
+    const key = rawKey.toUpperCase();
     const value = context[key];
     if (!value) return "";
     if (NON_ESCAPED_KEYS.has(key)) {

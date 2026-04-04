@@ -160,3 +160,58 @@ export async function downloadPKBPDF(pkbData: PKBDocxPayload): Promise<string> {
 
   return html;
 }
+
+type SalaryLike = {
+  karyawan?: { namaLengkap?: string; departemen?: string };
+  gajiPokok?: number;
+  bonus?: number;
+  potongan?: number;
+  totalGajiBersih?: number;
+  periode?: string;
+  periodeAwal?: string;
+  periodeAkhir?: string;
+};
+
+async function buildSalaryPdf(data: SalaryLike[]) {
+  const jsPDF = (await import("jspdf")).default;
+  const autoTable = (await import("jspdf-autotable")).default;
+
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+  doc.setFontSize(14);
+  doc.text("Rekap Penggajian PT. PADUD JAYA", 14, 14);
+  doc.setFontSize(9);
+  doc.text(`Tanggal Cetak: ${new Date().toLocaleDateString("id-ID")}`, 14, 20);
+
+  autoTable(doc, {
+    startY: 25,
+    head: [["Nama", "Divisi", "Periode", "Gaji Pokok", "Bonus", "Potongan", "Gaji Bersih"]],
+    body: data.map((row) => [
+      row.karyawan?.namaLengkap || "-",
+      row.karyawan?.departemen || "-",
+      row.periode || `${row.periodeAwal || "-"} s/d ${row.periodeAkhir || "-"}`,
+      formatCurrency(Number(row.gajiPokok || 0)),
+      formatCurrency(Number(row.bonus || 0)),
+      formatCurrency(Number(row.potongan || 0)),
+      formatCurrency(Number(row.totalGajiBersih || 0)),
+    ]),
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [15, 23, 42] },
+    theme: "grid",
+  });
+
+  return doc;
+}
+
+export async function downloadSalaryPDF(data: SalaryLike[]) {
+  const doc = await buildSalaryPdf(data);
+  doc.save(`rekap-gaji-${Date.now()}.pdf`);
+}
+
+export async function printSalaryPDF(data: SalaryLike[]) {
+  const doc = await buildSalaryPdf(data);
+  const blobUrl = doc.output("bloburl");
+  if (typeof window !== "undefined") {
+    window.open(blobUrl, "_blank");
+  }
+}

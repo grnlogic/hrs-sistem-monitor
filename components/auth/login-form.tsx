@@ -4,6 +4,7 @@ import type React from "react";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/form/button";
 import { Input } from "@/components/ui/form/input";
 import { Label } from "@/components/ui/form/label";
@@ -14,9 +15,9 @@ import {
 } from "@/components/ui/display/card";
 import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
 import { Eye, EyeOff, LogIn, User, Lock } from "lucide-react";
-import { authAPI } from "@/lib/api";
 import Image from "next/image";
 import Logo from "@/app/image/png.png";
+import { normalizeRole } from "@/lib/auth/roles";
 
 export function LoginForm() {
   const router = useRouter();
@@ -36,12 +37,22 @@ export function LoginForm() {
     };
 
     try {
-      const response = await authAPI.login(credentials);
+      const result = await signIn("credentials", {
+        username: credentials.username,
+        password: credentials.password,
+        redirect: false,
+      });
 
-      localStorage.setItem("token", response.token);
-      localStorage.setItem("user", JSON.stringify(response.user));
+      if (!result || result.error) {
+        throw new Error("invalid_credentials");
+      }
 
-      router.push("/dashboard");
+      const sessionRes = await fetch("/api/auth/session");
+      const sessionData = await sessionRes.json();
+      const role = normalizeRole(sessionData?.user?.role);
+      const redirectPath = role === "AKUNTANSI" ? "/penggajian/gaji-staff" : "/dashboard";
+      router.push(redirectPath);
+      router.refresh();
     } catch (err) {
       setError("Username atau password salah. Silakan coba lagi.");
     } finally {
@@ -88,7 +99,7 @@ export function LoginForm() {
                 id="username"
                 name="username"
                 type="text"
-                placeholder="Username"
+                placeholder="Masukkan username"
                 className="pl-10"
                 required
                 disabled={isLoading}

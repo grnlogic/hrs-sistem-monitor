@@ -34,7 +34,10 @@ export const DEFAULT_PKB_TEMPLATE_NODES: Descendant[] = [
   { type: "paragraph", children: [{ text: "" }] },
   { type: "paragraph", children: [{ text: "Nama      : {{PIHAK_2_NAMA}}" }] },
   { type: "paragraph", children: [{ text: "NIK       : {{PIHAK_2_NIK}}" }] },
-  { type: "paragraph", children: [{ text: "Jabatan   : {{PIHAK_2_JABATAN}}" }] },
+  { type: "paragraph", children: [{ text: "Divisi    : {{PIHAK_2_JABATAN}}" }] },
+  { type: "paragraph", children: [{ text: "Role      : {{PERAN_KARYAWAN}}" }] },
+  { type: "paragraph", children: [{ text: "BPJS      : {{bpjs}}" }] },
+  { type: "paragraph", children: [{ text: "Potongan BPJS/Bulan : {{nominal_potongan_bpjs}}" }] },
   { type: "paragraph", children: [{ text: "Alamat    : {{PIHAK_2_ALAMAT}}" }] },
   { type: "paragraph", children: [{ text: "Selanjutnya disebut Pihak II" }] },
   { type: "paragraph", children: [{ text: "Telah bersepakat:" }] },
@@ -48,7 +51,7 @@ export const DEFAULT_PKB_TEMPLATE_NODES: Descendant[] = [
             type: "paragraph",
             children: [
               {
-                text: "Bahwa Pihak II menerima pekerjaan sebagai {{PERAN_KARYAWAN}} di PT. Padud Jaya Putera yang dikelola Pihak I.",
+                text: "Bahwa Pihak II menerima pekerjaan sebagai karyawan PT. Padud Jaya Putera yang dikelola Pihak I.",
               },
             ],
           },

@@ -34,7 +34,7 @@ import {
   AlertCircle,
   Trash2,
   Edit,
-  Eye,
+  Download,
   Filter,
 } from "lucide-react";
 import {
@@ -47,6 +47,29 @@ import {
 import { attendanceAPI, employeeAPI } from "@/lib/api";
 import type { Employee } from "@/lib/types";
 import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
+
+const isPresentStatus = (status?: string) => status === "HADIR" || status === "LEMBUR";
+
+const getStatusLabel = (status?: string) => {
+  switch (status) {
+    case "HADIR":
+      return "Hadir";
+    case "LEMBUR":
+      return "Lembur";
+    case "IZIN":
+      return "Izin";
+    case "SAKIT":
+      return "Sakit";
+    case "ALPA":
+      return "Alpa";
+    case "OFF":
+      return "Off";
+    case "BELUM_ABSEN":
+      return "Belum Absen";
+    default:
+      return status || "-";
+  }
+};
 
 export default function AttendancePage() {
   const [attendanceData, setAttendanceData] = useState<any[]>([]);
@@ -124,7 +147,7 @@ export default function AttendancePage() {
     if (statusFilter !== "all") {
       if (statusFilter === "SETENGAH_HARI") {
         filtered = filtered.filter(
-          (item) => item.status === "HADIR" && Boolean(item.setengahHari)
+          (item) => isPresentStatus(item.status) && Boolean(item.setengahHari)
         );
       } else {
         filtered = filtered.filter((item) => item.status === statusFilter);
@@ -170,9 +193,10 @@ export default function AttendancePage() {
 
   const attendanceStats = {
     total: statsSource.length,
-    hadir: statsSource.filter((item) => item.status === "HADIR").length,
+    hadir: statsSource.filter((item) => isPresentStatus(item.status)).length,
+    lembur: statsSource.filter((item) => item.status === "LEMBUR").length,
     setengahHari: statsSource.filter(
-      (item) => item.status === "HADIR" && Boolean(item.setengahHari)
+      (item) => isPresentStatus(item.status) && Boolean(item.setengahHari)
     ).length,
     alpha: statsSource.filter((item) => item.status === "ALPA").length,
     sakit: statsSource.filter((item) => item.status === "SAKIT").length,
@@ -184,6 +208,49 @@ export default function AttendancePage() {
   const departments = Array.from(
     new Set(employees.map((emp) => emp.departemen).filter(Boolean))
   );
+
+  const reportDate = dateFilter || todayString;
+  const attendanceTodayByEmployeeId = attendanceData
+    .filter(
+      (item) =>
+        new Date(item.tanggal || item.date).toLocaleDateString("en-CA") === reportDate
+    )
+    .reduce((acc, item) => {
+      acc.set(Number(item.karyawanId), item);
+      return acc;
+    }, new Map<number, any>());
+
+  const dailyDepartmentReports = departments
+    .slice()
+    .sort((a, b) => a.localeCompare(b))
+    .map((departemen) => {
+      const deptEmployees = employees.filter((emp) => emp.departemen === departemen);
+      const exceptions = deptEmployees
+        .map((emp) => {
+          const attendance = attendanceTodayByEmployeeId.get(Number(emp.id));
+          const status = attendance?.status || "BELUM_ABSEN";
+          return {
+            id: Number(emp.id),
+            namaLengkap: emp.namaLengkap || "(Tanpa Nama)",
+            nik: emp.nik || "-",
+            status,
+            notes: attendance?.notes || attendance?.keterangan || "-",
+          };
+        })
+        .filter((item) => !isPresentStatus(item.status));
+
+      const hadirCount = deptEmployees.reduce((count, emp) => {
+        const attendance = attendanceTodayByEmployeeId.get(Number(emp.id));
+        return isPresentStatus(attendance?.status) ? count + 1 : count;
+      }, 0);
+
+      return {
+        departemen,
+        totalKaryawan: deptEmployees.length,
+        hadirCount,
+        exceptions,
+      };
+    });
 
   const handleEdit = (attendance: any) => {
     const employee = employees.find((emp) => emp.id === attendance.karyawanId);
@@ -201,7 +268,7 @@ export default function AttendancePage() {
 
     try {
       setIsLoading(true);
-      const isPresent = editingItem.status === "HADIR" && Boolean(editingItem.hadir);
+      const isPresent = isPresentStatus(editingItem.status) && Boolean(editingItem.hadir);
 
       // Gunakan endpoint PUT yang baru
       await attendanceAPI.update(editingItem.id, {
@@ -257,6 +324,81 @@ export default function AttendancePage() {
     }
   };
 
+  const handleExportDailyReportPDF = async () => {
+    if (dailyDepartmentReports.length === 0) {
+      setError("Belum ada data divisi untuk diekspor");
+      return;
+    }
+
+    try {
+      setError("");
+      const jsPDF = (await import("jspdf")).default;
+      const autoTable = (await import("jspdf-autotable")).default;
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+      doc.setFontSize(14);
+      doc.text("Laporan Harian Absensi per Divisi", 14, 14);
+      doc.setFontSize(10);
+      doc.text(
+        `Tanggal: ${new Date(reportDate).toLocaleDateString("id-ID")}`,
+        14,
+        21
+      );
+
+      let cursorY = 28;
+
+      dailyDepartmentReports.forEach((report, index) => {
+        if (index > 0 && cursorY > 245) {
+          doc.addPage();
+          cursorY = 14;
+        }
+
+        doc.setFontSize(11);
+        doc.text(`Divisi: ${report.departemen}`, 14, cursorY);
+
+        autoTable(doc, {
+          startY: cursorY + 2,
+          head: [["Total Karyawan", "Hadir", "Tidak Hadir"]],
+          body: [
+            [
+              String(report.totalKaryawan),
+              String(report.hadirCount),
+              String(report.exceptions.length),
+            ],
+          ],
+          styles: { fontSize: 9 },
+          margin: { left: 14, right: 14 },
+        });
+
+        cursorY = (doc as any).lastAutoTable.finalY + 4;
+
+        if (report.exceptions.length > 0) {
+          autoTable(doc, {
+            startY: cursorY,
+            head: [["Nama", "NIK", "Status", "Keterangan"]],
+            body: report.exceptions.map((item) => [
+              item.namaLengkap,
+              item.nik,
+              getStatusLabel(item.status),
+              item.notes || "-",
+            ]),
+            styles: { fontSize: 9 },
+            margin: { left: 14, right: 14 },
+          });
+          cursorY = (doc as any).lastAutoTable.finalY + 8;
+        } else {
+          doc.setFontSize(9);
+          doc.text("Semua karyawan di divisi ini hadir/lembur.", 14, cursorY + 2);
+          cursorY += 10;
+        }
+      });
+
+      doc.save(`laporan-harian-absensi-${reportDate}.pdf`);
+    } catch (err) {
+      setError("Gagal export PDF laporan harian");
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-1 flex-col gap-4 p-4">
@@ -280,11 +422,9 @@ export default function AttendancePage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" asChild>
-            <a href="/dashboard/attendance/public-form">
-              <Plus className="w-4 h-4 mr-2" />
-              Form Absensi Publik
-            </a>
+          <Button variant="outline" onClick={handleExportDailyReportPDF}>
+            <Download className="w-4 h-4 mr-2" />
+            Export PDF Laporan Harian
           </Button>
           <Button variant="destructive" onClick={handleDeleteToday}>
             <Trash2 className="w-4 h-4 mr-2" />
@@ -337,7 +477,7 @@ export default function AttendancePage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-6">
+      <div className="grid gap-4 md:grid-cols-7">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Absensi</CardTitle>
@@ -368,6 +508,18 @@ export default function AttendancePage() {
           <CardContent>
             <div className="text-2xl font-bold text-yellow-600">
               {attendanceStats.sakit}
+            </div>
+            <p className="text-xs text-muted-foreground">Karyawan</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">🕒 Lembur</CardTitle>
+            <Clock className="h-4 w-4 text-purple-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-600">
+              {attendanceStats.lembur}
             </div>
             <p className="text-xs text-muted-foreground">Karyawan</p>
           </CardContent>
@@ -450,6 +602,7 @@ export default function AttendancePage() {
                 <SelectContent>
                   <SelectItem value="all">Semua Status</SelectItem>
                   <SelectItem value="HADIR">✅ Hadir</SelectItem>
+                  <SelectItem value="LEMBUR">🕒 Lembur</SelectItem>
                   <SelectItem value="SETENGAH_HARI">🌓 Setengah Hari</SelectItem>
                   <SelectItem value="SAKIT">🤒 Sakit</SelectItem>
                   <SelectItem value="IZIN">📝 Izin</SelectItem>
@@ -560,6 +713,16 @@ export default function AttendancePage() {
                             🌓 Hadir Setengah Hari
                           </Badge>
                         )}
+                        {attendance.status === "LEMBUR" && !attendance.setengahHari && (
+                          <Badge className="bg-purple-100 text-purple-800 border-purple-200">
+                            🕒 Lembur
+                          </Badge>
+                        )}
+                        {attendance.status === "LEMBUR" && attendance.setengahHari && (
+                          <Badge className="bg-violet-100 text-violet-800 border-violet-200">
+                            🌓🕒 Setengah Hari + Lembur
+                          </Badge>
+                        )}
                         {attendance.status === "ALPA" && (
                           <Badge className="bg-red-100 text-red-800 border-red-200">
                             ❌ Alpha
@@ -580,17 +743,21 @@ export default function AttendancePage() {
                             🚫 Off
                           </Badge>
                         )}
-                        {!["HADIR", "ALPA", "SAKIT", "IZIN", "OFF"].includes(
+                        {!["HADIR", "LEMBUR", "ALPA", "SAKIT", "IZIN", "OFF"].includes(
                           attendance.status
                         ) && (
                           <Badge variant="outline">{attendance.status}</Badge>
                         )}
                       </TableCell>
                       <TableCell>
-                        {attendance.status === "HADIR" ? (
+                        {isPresentStatus(attendance.status) ? (
                           attendance.setengahHari ? (
                             <Badge variant="outline" className="border-orange-200 text-orange-700 bg-orange-50">
                               0.5 Hari
+                            </Badge>
+                          ) : attendance.status === "LEMBUR" ? (
+                            <Badge variant="outline" className="border-purple-200 text-purple-700 bg-purple-50">
+                              1 Hari + Lembur
                             </Badge>
                           ) : (
                             <Badge variant="outline" className="border-green-200 text-green-700 bg-green-50">
@@ -713,7 +880,7 @@ export default function AttendancePage() {
                 <Select
                   value={editingItem.status}
                   onValueChange={(value) => {
-                    const isHadir = value === "HADIR";
+                    const isHadir = isPresentStatus(value);
                     setEditingItem({
                       ...editingItem,
                       status: value,
@@ -727,6 +894,7 @@ export default function AttendancePage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="HADIR">✅ Hadir</SelectItem>
+                    <SelectItem value="LEMBUR">🕒 Lembur</SelectItem>
                     <SelectItem value="SAKIT">🤒 Sakit</SelectItem>
                     <SelectItem value="IZIN">📝 Izin</SelectItem>
                     <SelectItem value="ALPA">❌ Alpha</SelectItem>
@@ -757,7 +925,11 @@ export default function AttendancePage() {
                       ...editingItem,
                       setengahHari: e.target.checked,
                       hadir: e.target.checked ? true : editingItem.hadir,
-                      status: e.target.checked ? "HADIR" : editingItem.status,
+                      status: e.target.checked
+                        ? isPresentStatus(editingItem.status)
+                          ? editingItem.status
+                          : "HADIR"
+                        : editingItem.status,
                     })
                   }
                   disabled={!editingItem.hadir || editingItem.status === "OFF"}
@@ -775,10 +947,42 @@ export default function AttendancePage() {
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={editingItem.hadir || false}
+                  checked={editingItem.status === "LEMBUR"}
                   onChange={(e) =>
-                    setEditingItem({ ...editingItem, hadir: e.target.checked })
+                    setEditingItem({
+                      ...editingItem,
+                      status: e.target.checked ? "LEMBUR" : "HADIR",
+                      hadir: true,
+                    })
                   }
+                  disabled={!editingItem.hadir || editingItem.status === "OFF"}
+                  id="edit-lembur"
+                  className="w-4 h-4"
+                />
+                <label htmlFor="edit-lembur" className="text-sm text-gray-600">
+                  Lembur (+1 hari lembur)
+                </label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={editingItem.hadir || false}
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    setEditingItem({
+                      ...editingItem,
+                      hadir: isChecked,
+                      status: isChecked
+                        ? isPresentStatus(editingItem.status)
+                          ? editingItem.status
+                          : "HADIR"
+                        : editingItem.status === "OFF"
+                        ? "OFF"
+                        : "ALPA",
+                      setengahHari: isChecked ? editingItem.setengahHari : false,
+                    });
+                  }}
                   disabled={editingItem.status === "OFF"}
                   id="edit-hadir"
                   className="w-4 h-4"

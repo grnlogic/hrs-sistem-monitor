@@ -15,31 +15,25 @@ import {
   AvatarImage,
 } from "@/components/ui/display/avatar";
 import { LogOut, User, Settings } from "lucide-react";
+import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { removeAuthToken } from "@/lib/api";
 
 export function Header() {
+  const { data: session } = useSession();
   const router = useRouter();
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    router.push("/");
+  const handleLogout = async () => {
+    removeAuthToken();
+    await signOut({ redirect: false });
+    router.replace("/");
+    router.refresh();
   };
 
-  const user =
-    typeof window !== "undefined"
-      ? (() => {
-          const userStr = localStorage.getItem("user");
-          if (!userStr || userStr === "undefined") {
-            return { name: "Admin", email: "admin@company.com" };
-          }
-          try {
-            return JSON.parse(userStr);
-          } catch {
-            return { name: "Admin", email: "admin@company.com" };
-          }
-        })()
-      : { name: "Admin", email: "admin@company.com" };
+  const user = {
+    name: session?.user?.name || "Admin",
+    email: session?.user?.email || "admin@company.com",
+  };
 
   return (
     <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">

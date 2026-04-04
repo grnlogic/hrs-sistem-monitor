@@ -69,6 +69,14 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
     clearTimeout(timeoutId)
 
     if (!response.ok) {
+      if (response.status === 401) {
+        removeAuthToken()
+        if (typeof window !== "undefined" && window.location.pathname !== "/") {
+          window.location.replace("/")
+        }
+        throw new Error("Unauthorized access")
+      }
+
       const errorData = await response.json().catch(() => ({}))
       const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${response.status}`
       throw new Error(errorMessage)
@@ -101,6 +109,59 @@ export const authAPI = {
 
   getProfile: async () => {
     return apiRequest("/auth/profile")
+  },
+}
+
+export type SystemRole = "HRD" | "AKUNTANSI"
+
+export type SystemUser = {
+  id: string
+  username: string
+  namaLengkap: string
+  email?: string | null
+  role: SystemRole
+  isActive: boolean
+}
+
+export const userManagementAPI = {
+  getAll: async () => {
+    return apiRequest("/users") as Promise<SystemUser[]>
+  },
+
+  create: async (data: {
+    username: string
+    namaLengkap: string
+    email?: string
+    password: string
+    role: SystemRole
+  }) => {
+    return apiRequest("/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    })
+  },
+
+  update: async (
+    id: string,
+    data: Partial<{
+      username: string
+      namaLengkap: string
+      email: string
+      password: string
+      role: SystemRole
+      isActive: boolean
+    }>
+  ) => {
+    return apiRequest(`/users/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    })
+  },
+
+  deactivate: async (id: string) => {
+    return apiRequest(`/users/${id}/deactivate`, {
+      method: "PATCH",
+    })
   },
 }
 
@@ -409,6 +470,19 @@ export const attendanceAPI = {
     })
   },
 
+  submitBulk: async (data: {
+    tanggal: string;
+    data: Array<{
+      karyawanId: number | string;
+      status: string;
+    }>;
+  }) => {
+    return apiRequest("/absensi/bulk", {
+      method: "POST",
+      body: JSON.stringify(data),
+    })
+  },
+
   getByEmployee: async (employeeId: string) => {
     return apiRequest(`/absensi/karyawan/${employeeId}`)
   },
@@ -665,6 +739,26 @@ export const salaryAPI = {
       method: "POST",
     })
   },
+
+  getDivisionDefaultBonuses: async (divisi: string) => {
+    return apiRequest(`/gaji/divisi-bonus?divisi=${encodeURIComponent(divisi)}`)
+  },
+
+  getBonusPotonganDetail: async (gajiId: string) => {
+    return apiRequest(`/gaji/${gajiId}/bonus-potongan`)
+  },
+
+  saveBonusPotongan: async (data: {
+    gajiId: string
+    karyawanId: string
+    bonusItems: Array<{ id?: string; judul: string; nominal: number }>
+    potonganItems: Array<{ id?: string; judul: string; nominal: number; isDefault?: boolean }>
+  }) => {
+    return apiRequest(`/gaji/${data.gajiId}/bonus-potongan`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    })
+  },
 }
 
 // Salary Slip Editor API (Slate JSON -> Database)
@@ -900,20 +994,41 @@ export const publicKaryawanAPI = {
 
 // Public Absensi API
 export const publicAbsensiAPI = {
-  updateStatus: async (karyawanId: number, hadir: boolean, status: string, setengahHari: boolean = false) => {
-    const data = {
-      karyawanId,
-      tanggal: new Date().toISOString().split('T')[0], // Today's date
-      hadir,
-      status,
-      setengahHari
-    }
+  updateStatus: async (
+    karyawanId: number,
+    hadir: boolean,
+    status: string,
+    setengahHari: boolean = false,
+    keterangan?: string
+  ) => {
+    const tanggal = new Date().toISOString().split('T')[0]
+    const normalizedStatus = (status || (hadir ? "HADIR" : "ALPHA")).toUpperCase() === "ALPA"
+      ? "ALPHA"
+      : (status || (hadir ? "HADIR" : "ALPHA")).toUpperCase()
     
     try {
-      const response = await apiRequest("/absensi/json", {
+      const response = await apiRequest("/absensi/bulk", {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          tanggal,
+          data: [{
+            karyawanId,
+            status: normalizedStatus,
+          }],
+        }),
       })
+
+      if (setengahHari && normalizedStatus === "HADIR") {
+        await apiRequest("/public/absensi/setengah-hari", {
+          method: "POST",
+          body: JSON.stringify({
+            karyawanId,
+            tanggal,
+            ...(keterangan ? { keterangan } : {}),
+          }),
+        })
+      }
+
       return { success: true, data: response }
     } catch (error) {
       console.error("Error updating attendance:", error)
@@ -921,20 +1036,41 @@ export const publicAbsensiAPI = {
     }
   },
 
-  updateStatusWithDate: async (karyawanId: number, tanggal: string, hadir: boolean, status: string, setengahHari: boolean = false) => {
-    const data = {
-      karyawanId,
-      tanggal,
-      hadir,
-      status,
-      setengahHari
-    }
+  updateStatusWithDate: async (
+    karyawanId: number,
+    tanggal: string,
+    hadir: boolean,
+    status: string,
+    setengahHari: boolean = false,
+    keterangan?: string
+  ) => {
+    const normalizedStatus = (status || (hadir ? "HADIR" : "ALPHA")).toUpperCase() === "ALPA"
+      ? "ALPHA"
+      : (status || (hadir ? "HADIR" : "ALPHA")).toUpperCase()
     
     try {
-      const response = await apiRequest("/absensi/json", {
+      const response = await apiRequest("/absensi/bulk", {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          tanggal,
+          data: [{
+            karyawanId,
+            status: normalizedStatus,
+          }],
+        }),
       })
+
+      if (setengahHari && normalizedStatus === "HADIR") {
+        await apiRequest("/public/absensi/setengah-hari", {
+          method: "POST",
+          body: JSON.stringify({
+            karyawanId,
+            tanggal,
+            ...(keterangan ? { keterangan } : {}),
+          }),
+        })
+      }
+
       return { success: true, data: response }
     } catch (error) {
       console.error("Error updating attendance:", error)
@@ -986,6 +1122,7 @@ export const publicSetengahHariAPI = {
   submitSingle: async (data: {
     karyawanId: number | string;
     tanggal?: string;
+    lembur?: boolean;
     keterangan?: string;
   }) => {
     return apiRequest("/public/absensi/setengah-hari", {
@@ -999,6 +1136,7 @@ export const publicSetengahHariAPI = {
     records: Array<{
       karyawanId: number | string;
       tanggal?: string;
+      lembur?: boolean;
       keterangan?: string;
     }>;
   }) => {

@@ -27,12 +27,11 @@ import {
   SelectValue,
 } from "@/components/ui/form/select";
 
-// Infer tipe upah dari departemen/jabatan
-function inferTipeUpah(departemen?: string, jabatan?: string): TipeUpahPKB {
-  const dept = (departemen || "").toLowerCase();
-  const jab = (jabatan || "").toLowerCase();
-  if (dept.includes("market") || dept.includes("staff") || jab.includes("marketing") || jab.includes("staff")) return "per_hari";
-  if (dept.includes("tembakau") || jab.includes("tembakau") || jab.includes("pengolahan")) return "per_kg";
+// Infer tipe upah dari divisi
+function inferTipeUpah(divisi?: string): TipeUpahPKB {
+  const div = (divisi || "").toLowerCase();
+  if (div.includes("sales") || div.includes("staff")) return "per_hari";
+  if (div.includes("blend")) return "per_kg";
   return "per_pack";
 }
 
@@ -42,15 +41,17 @@ const TIPE_UPAH_OPTIONS: { value: TipeUpahPKB; label: string }[] = [
   { value: "per_hari", label: "Per Hari (Staff/Marketing)" },
 ];
 
-function inferDivision(tipeUpah: TipeUpahPKB, departemen?: string): PKBDivision {
-  const dept = (departemen || "").toLowerCase();
-  if (dept.includes("pack")) return "packing";
-  if (dept.includes("blend") || dept.includes("tembakau")) return "blending";
-  if (dept.includes("market") || dept.includes("sales") || dept.includes("staff")) return "sales";
+function inferDivision(tipeUpah: TipeUpahPKB, divisi?: string): PKBDivision {
+  const div = (divisi || "").toLowerCase();
+  if (div.includes("pack")) return "packing";
+  if (div.includes("blend")) return "blending";
+  if (div.includes("sales") || div.includes("staff")) return "sales";
   if (tipeUpah === "per_pack") return "packing";
   if (tipeUpah === "per_kg") return "blending";
   return "sales";
 }
+
+const ROLE_OPTIONS: Array<"Supervisor" | "Karyawan" | "Manager"> = ["Supervisor", "Karyawan", "Manager"];
 
 export default function PKBPage() {
   const router = useRouter();
@@ -103,7 +104,7 @@ export default function PKBPage() {
 
       setPkbDokumenTtd(pkb?.dokumenTtd ?? null);
 
-      const tipeUpah = (pkb?.tipeUpah as TipeUpahPKB) ?? inferTipeUpah(karyawan.departemen, karyawan.jabatan);
+      const tipeUpah = (pkb?.tipeUpah as TipeUpahPKB) ?? inferTipeUpah(karyawan.departemen);
       const gajiPerHari = Number(karyawan.gajiPerHari ?? 0) || undefined;
       const gajiPerBulan = Number(karyawan.gajiPerBulan ?? 0) || undefined;
       const gajiKaryawan = gajiPerHari ?? (tipeUpah === "per_hari" && gajiPerBulan && gajiPerBulan > 0 ? Math.round(gajiPerBulan / 26) : undefined);
@@ -120,7 +121,8 @@ export default function PKBPage() {
         pihak1TandaTangan: pkb?.pihak1TandaTangan ?? defaults.pihak1TandaTangan ?? "Moch Syaeful Ikhsan",
         pihak2Nama: pkb?.pihak2Nama ?? karyawan.namaLengkap ?? karyawan.name ?? "",
         pihak2Nik: pkb?.pihak2Nik ?? karyawan.nik ?? karyawan.noKtp ?? "",
-        pihak2Jabatan: pkb?.pihak2Jabatan ?? karyawan.departemen ?? karyawan.jabatan ?? "",
+        pihak2Jabatan: pkb?.pihak2Jabatan ?? karyawan.departemen ?? "",
+        peranKaryawan: (pkb?.peranKaryawan as PKBData["peranKaryawan"]) ?? ((ROLE_OPTIONS.includes(karyawan.jabatan) ? karyawan.jabatan : "Karyawan") as PKBData["peranKaryawan"]),
         pihak2Alamat: pkb?.pihak2Alamat ?? karyawan.alamat ?? "",
         pihak2TandaTangan: pkb?.pihak2TandaTangan ?? karyawan.namaLengkap ?? karyawan.name ?? "",
         tipeUpah,
@@ -161,7 +163,8 @@ export default function PKBPage() {
       pihak1TandaTangan: formData.pihak1TandaTangan ?? defaults.pihak1TandaTangan ?? "Moch Syaeful Ikhsan",
       pihak2Nama: formData.pihak2Nama ?? employee?.namaLengkap ?? "",
       pihak2Nik: formData.pihak2Nik ?? employee?.nik ?? "",
-      pihak2Jabatan: formData.pihak2Jabatan ?? employee?.departemen ?? employee?.jabatan ?? "",
+      pihak2Jabatan: formData.pihak2Jabatan ?? employee?.departemen ?? "",
+      peranKaryawan: formData.peranKaryawan ?? "Karyawan",
       pihak2Alamat: formData.pihak2Alamat ?? employee?.alamat ?? "",
       pihak2TandaTangan: formData.pihak2TandaTangan ?? formData.pihak2Nama ?? employee?.namaLengkap ?? "",
       tipeUpah,
@@ -176,7 +179,7 @@ export default function PKBPage() {
 
   const getPKBDocxPayload = (): PKBDocxPayload => {
     const base = getPKBData();
-    const division = inferDivision(base.tipeUpah, formData.pihak2Jabatan ?? employee?.departemen ?? employee?.jabatan);
+    const division = inferDivision(base.tipeUpah, formData.pihak2Jabatan ?? employee?.departemen);
     return { ...base, division };
   };
 
@@ -256,6 +259,7 @@ export default function PKBPage() {
         pihak2Nama: pkbData.pihak2Nama,
         pihak2Nik: pkbData.pihak2Nik,
         pihak2Jabatan: pkbData.pihak2Jabatan,
+        peranKaryawan: pkbData.peranKaryawan,
         pihak2Alamat: pkbData.pihak2Alamat,
         pihak2TandaTangan: pkbData.pihak2TandaTangan,
         tipeUpah: pkbData.tipeUpah,
@@ -391,7 +395,7 @@ export default function PKBPage() {
           <CardHeader>
             <CardTitle>Pihak II (Karyawan)</CardTitle>
             <CardDescription>
-              Data karyawan terisi otomatis dari profil (departemen/divisi, gaji, alamat). Bisa diedit jika perlu.
+              Data karyawan terisi otomatis dari profil (divisi, role, gaji, alamat). Bisa diedit jika perlu.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -413,13 +417,31 @@ export default function PKBPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="pihak2Jabatan">Divisi / Jabatan (dari departemen)</Label>
+                <Label htmlFor="pihak2Jabatan">Divisi</Label>
                 <Input
                   id="pihak2Jabatan"
                   value={formData.pihak2Jabatan ?? ""}
                   onChange={(e) => handleChange("pihak2Jabatan", e.target.value)}
-                  placeholder="Contoh: STAFF PJP, PACKING PJP"
+                  placeholder="Contoh: BLENDING, PACKING, SALES"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="peranKaryawan">Role Karyawan</Label>
+                <Select
+                  value={(formData.peranKaryawan as string) ?? "Karyawan"}
+                  onValueChange={(v) => handleChange("peranKaryawan" as keyof PKBData, v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROLE_OPTIONS.map((role) => (
+                      <SelectItem key={role} value={role}>
+                        {role}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="pihak2Alamat">Alamat</Label>

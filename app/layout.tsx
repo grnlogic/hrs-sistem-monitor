@@ -2,6 +2,8 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Sora } from "next/font/google"
 import "./globals.css"
+import { AuthSessionProvider } from "@/components/providers/session-provider"
+import { SessionTokenSync } from "@/components/auth/session-token-sync"
 
 const sora = Sora({ subsets: ["latin"], display: "swap" })
 
@@ -17,7 +19,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id">
-      <body className={sora.className}>{children}</body>
+      <body className={sora.className}>
+        <AuthSessionProvider>
+          <SessionTokenSync />
+          {children}
+        </AuthSessionProvider>
+      </body>
     </html>
   )
 }

@@ -1,5 +1,5 @@
-import SalaryPage from "../_components/salary-page";
+import { SalaryStepperDashboard } from "../_components/salary-stepper-dashboard";
 
 export default function NonStaffSalaryPage() {
-  return <SalaryPage mode="nonstaff" />;
+  return <SalaryStepperDashboard pageType="nonstaff" />;
 }

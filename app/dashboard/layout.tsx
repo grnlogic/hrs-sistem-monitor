@@ -1,11 +1,13 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import { Header } from "@/components/layout/header"
+import { SessionTokenSync } from "@/components/auth/session-token-sync"
 
 export default function DashboardLayout({
   children,
@@ -13,21 +15,15 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const router = useRouter()
-  const [isLoading, setIsLoading] = useState(true)
+  const { status } = useSession()
 
   useEffect(() => {
-    // Check if user is authenticated
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
-
-    if (!token) {
+    if (status === "unauthenticated") {
       router.push("/")
-      return
     }
+  }, [router, status])
 
-    setIsLoading(false)
-  }, [router])
-
-  if (isLoading) {
+  if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
@@ -37,6 +33,7 @@ export default function DashboardLayout({
 
   return (
     <SidebarProvider>
+      <SessionTokenSync />
       <AppSidebar />
       <SidebarInset>
         <Header />

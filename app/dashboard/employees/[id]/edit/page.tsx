@@ -36,24 +36,21 @@ import ReactCrop, {
 import "react-image-crop/dist/ReactCrop.css";
 
 const statusOptions = [
-  { label: "Aktif", value: "AKTIF" },
+  { label: "Tetap", value: "TETAP" },
   { label: "Kontrak", value: "KONTRAK" },
-  { label: "Cuti", value: "CUTI" },
-  { label: "Resign", value: "RESIGN" },
-  { label: "Tidak Aktif", value: "TIDAK_AKTIF" },
+];
+
+const roleOptions = [
+  { label: "Supervisor", value: "Supervisor" },
+  { label: "Karyawan", value: "Karyawan" },
+  { label: "Manager", value: "Manager" },
 ];
 
 const departmentOptions = [
-  { label: "STAFF PJP", value: "STAFF PJP" },
-  { label: "STAFF CPD", value: "STAFF CPD" },
-  { label: "BLANDING PJP", value: "BLANDING PJP" },
-  { label: "PACKING PJP", value: "PACKING PJP" },
-  { label: "MARKET PJP", value: "MARKET PJP" },
-  { label: "PACKING CPD", value: "PACKING CPD" },
-  { label: "MARKET CPD", value: "MARKET CPD" },
-  { label: "STAFF CMS", value: "STAFF CMS" },
-  { label: "PACKING CMS", value: "PACKING CMS" },
-  { label: "MARKET CMS", value: "MARKET CMS" },
+  { label: "Blending", value: "BLENDING" },
+  { label: "Packing", value: "PACKING" },
+  { label: "Sales", value: "SALES" },
+  { label: "Staff", value: "STAFF" },
 ];
 
 // Aspect ratio untuk foto profil (1:1 square)
@@ -263,7 +260,7 @@ export default function EditEmployeePage() {
       namaLengkap: formData.get("namaLengkap") as string,
       email: formData.get("email") as string,
       noHp: formData.get("noHp") as string,
-      jabatan: formData.get("jabatan") as string,
+      jabatan: formData.get("roleKaryawan") as string,
       departemen: formData.get("departemen") as string,
       tanggalMasuk: formData.get("tanggalMasuk") as string,
       gajiPerHari: Number(formData.get("gajiPerHari")),
@@ -532,17 +529,36 @@ export default function EditEmployeePage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="departemen">Departemen *</Label>
+                <Label htmlFor="departemen">Divisi *</Label>
                 <Select
                   name="departemen"
                   required
                   defaultValue={employeeData.departemen || ""}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Pilih departemen" />
+                    <SelectValue placeholder="Pilih divisi" />
                   </SelectTrigger>
                   <SelectContent>
                     {departmentOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="roleKaryawan">Role Karyawan *</Label>
+                <Select
+                  name="roleKaryawan"
+                  required
+                  defaultValue={employeeData.jabatan || "Karyawan"}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {roleOptions.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>
                         {opt.label}
                       </SelectItem>
@@ -575,11 +591,11 @@ export default function EditEmployeePage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="statusKaryawan">Status Karyawan *</Label>
+                <Label htmlFor="statusKaryawan">Status (Tetap/Kontrak) *</Label>
                 <Select
                   name="statusKaryawan"
                   required
-                  defaultValue={employeeData.statusKaryawan || "AKTIF"}
+                  defaultValue={employeeData.statusKaryawan === "TETAP" ? "TETAP" : "KONTRAK"}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Pilih status" />
@@ -592,6 +608,15 @@ export default function EditEmployeePage() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="alamat">Alamat *</Label>
+                <Input
+                  id="alamat"
+                  name="alamat"
+                  required
+                  defaultValue={employeeData.alamat || ""}
+                />
               </div>
             </div>
             {/* Bagian Opsional */}
@@ -645,14 +670,6 @@ export default function EditEmployeePage() {
                   id="jenisKelamin"
                   name="jenisKelamin"
                   defaultValue={employeeData.jenisKelamin || ""}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="alamat">Alamat</Label>
-                <Input
-                  id="alamat"
-                  name="alamat"
-                  defaultValue={employeeData.alamat || ""}
                 />
               </div>
               <div className="space-y-2">
@@ -730,14 +747,6 @@ export default function EditEmployeePage() {
                       ? employeeData.batasKontrak.split("T")[0]
                       : ""
                   }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="jabatan">Jabatan</Label>
-                <Input
-                  id="jabatan"
-                  name="jabatan"
-                  defaultValue={employeeData.jabatan || ""}
                 />
               </div>
               <div className="space-y-2">

@@ -17,6 +17,10 @@ export interface PKBData {
   pihak2Nama: string;
   pihak2Nik: string;
   pihak2Jabatan: string;
+    peranKaryawan?: "Supervisor" | "Karyawan" | "Manager";
+    bpjs?: string;
+    bpjsKesehatanNominal?: string | number;
+    bpjsKetenagakerjaanNominal?: string | number;
   pihak2Alamat: string;
   pihak2TandaTangan: string;
 

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function SalaryIndexPage() {
-  redirect("/dashboard/salary/staff");
+export default function SalaryRootPage() {
+	redirect("/dashboard/salary/staff");
 }

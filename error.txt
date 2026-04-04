@@ -1,37 +1,63 @@
-In HTML, whitespace text nodes cannot be a child of <tr>. Make sure you don't have any extra whitespace between tags on each line of your source code.
-This will cause a hydration error.
+api.ts:1028 Error updating attendance: Error: HTTP error! status: 405
+    at apiRequest (api.ts:74:13)
+    at async Object.updateStatusWithDate (api.ts:1022:24)
+    at async Promise.allSettled (index 10)
+    at async handleSubmit (page.tsx:312:23)
+api.ts:64 
+ POST http://localhost:3999/api/absensi/json 405 (Method Not Allowed)
+api.ts:1028 Error updating attendance: Error: HTTP error! status: 405
+    at apiRequest (api.ts:74:13)
+    at async Object.updateStatusWithDate (api.ts:1022:24)
+    at async Promise.allSettled (index 11)
+    at async handleSubmit (page.tsx:312:23)
+api.ts:64 
+ POST http://localhost:3999/api/absensi/json 405 (Method Not Allowed)
+api.ts:1028 Error updating attendance: Error: HTTP error! status: 405
+    at apiRequest (api.ts:74:13)
+    at async Object.updateStatusWithDate (api.ts:1022:24)
+    at async Promise.allSettled (index 12)
+    at async handleSubmit (page.tsx:312:23)
+api.ts:64 
+ POST http://localhost:3999/api/absensi/json 405 (Method Not Allowed)
+api.ts:1028 Error updating attendance: Error: HTTP error! status: 405
+    at apiRequest (api.ts:74:13)
+    at async Object.updateStatusWithDate (api.ts:1022:24)
+    at async Promise.allSettled (index 13)
+    at async handleSubmit (page.tsx:312:23)
+api.ts:64 
+ POST http://localhost:3999/api/absensi/json 405 (Method Not Allowed)
+api.ts:1028 Error updating attendance: Error: HTTP error! status: 405
+    at apiRequest (api.ts:74:13)
+    at async Object.updateStatusWithDate (api.ts:1022:24)
+    at async Promise.allSettled (index 14)
+    at async handleSubmit (page.tsx:312:23)
+api.ts:64 
+ POST http://localhost:3999/api/absensi/json 405 (Method Not Allowed)
+api.ts:1028 Error updating attendance: Error: HTTP error! status: 405
+    at apiRequest (api.ts:74:13)
+    at async Object.updateStatusWithDate (api.ts:1022:24)
+    at async Promise.allSettled (index 15)
+    at async handleSubmit (page.tsx:312:23)
+api.ts:64 
+ POST http://localhost:3999/api/absensi/json 405 (Method Not Allowed)
+api.ts:1028 Error updating attendance: Error: HTTP error! status: 405
+    at apiRequest (api.ts:74:13)
+    at async Object.updateStatusWithDate (api.ts:1022:24)
+    at async Promise.allSettled (index 16)
+    at async handleSubmit (page.tsx:312:23)
+api.ts:64 
+ POST http://localhost:3999/api/absensi/json 405 (Method Not Allowed)
+api.ts:1028 Error updating attendance: Error: HTTP error! status: 405
+    at apiRequest (api.ts:74:13)
+    at async Object.updateStatusWithDate (api.ts:1022:24)
+    at async Promise.allSettled (index 17)
+    at async handleSubmit (page.tsx:312:23)
+api.ts:64 
+ POST http://localhost:3999/api/absensi/json 405 (Method Not Allowed)
+api.ts:1028 Error updating attendance: Error: HTTP error! status: 405
+    at apiRequest (api.ts:74:13)
+    at async Object.updateStatusWithDate (api.ts:1022:24)
+    at async Promise.allSettled (index 18)
+    at async handleSubmit (page.tsx:312:23)
+﻿
 
-  ...
-    <ClientPageRoot Component={function ViolationsPage} searchParams={{}} params={{}}>
-      <ViolationsPage params={Promise} searchParams={Promise}>
-        <div className="flex flex-...">
-          <div>
-          <div>
-          <_c>
-            <div ref={null} className="rounded-lg...">
-              <_c2>
-              <_c8>
-                <div ref={null} className="p-6 pt-0">
-                  <div className="rounded-md...">
-                    <_c>
-                      <div className="relative w...">
-                        <table ref={null} className="w-full cap...">
-                          <_c2>
-                            <thead ref={null} className={"[&_tr]:b..."}>
-                              <_c8>
->                               <tr
->                                 ref={null}
->                                 className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
->                               >
-                                  <_c10>
-                                  <_c10>
-                                  <_c10>
-                                  <_c10>
-                                  <_c10>
-                                  <_c10>
-                                  <_c10>
->                                 {"                    "}
-                                  ...
-                          ...
-                  ...
-    ...

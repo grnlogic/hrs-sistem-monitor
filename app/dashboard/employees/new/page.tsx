@@ -55,39 +55,35 @@ import ReactCrop, {
 import "react-image-crop/dist/ReactCrop.css";
 
 const statusOptions = [
-  { label: "Aktif", value: "AKTIF" },
+  { label: "Tetap", value: "TETAP" },
   { label: "Kontrak", value: "KONTRAK" },
-  { label: "Cuti", value: "CUTI" },
-  { label: "Resign", value: "RESIGN" },
-  { label: "Tidak Aktif", value: "TIDAK_AKTIF" },
+];
+
+const roleOptions = [
+  { label: "Supervisor", value: "Supervisor" },
+  { label: "Karyawan", value: "Karyawan" },
+  { label: "Manager", value: "Manager" },
 ];
 
 const ALL_DEPARTMENTS = [
-  { label: "STAFF PJP", value: "STAFF PJP" },
-  { label: "STAFF CPD", value: "STAFF CPD" },
-  { label: "STAFF CMS", value: "STAFF CMS" },
-  { label: "BLANDING PJP", value: "BLANDING PJP" },
-  { label: "PACKING PJP", value: "PACKING PJP" },
-  { label: "PACKING CPD", value: "PACKING CPD" },
-  { label: "PACKING CMS", value: "PACKING CMS" },
-  { label: "MARKET PJP", value: "MARKET PJP" },
-  { label: "MARKET CPD", value: "MARKET CPD" },
-  { label: "MARKET CMS", value: "MARKET CMS" },
+  { label: "Blending", value: "BLENDING" },
+  { label: "Packing", value: "PACKING" },
+  { label: "Sales", value: "SALES" },
+  { label: "Staff", value: "STAFF" },
 ];
 
-function inferTipeUpah(departemen?: string, jabatan?: string): TipeUpahPKB {
-  const dept = (departemen || "").toLowerCase();
-  const jab = (jabatan || "").toLowerCase();
-  if (dept.includes("market") || dept.includes("staff") || jab.includes("marketing") || jab.includes("staff")) return "per_hari";
-  if (dept.includes("tembakau") || jab.includes("tembakau") || jab.includes("pengolahan")) return "per_kg";
+function inferTipeUpah(divisi?: string): TipeUpahPKB {
+  const div = (divisi || "").toLowerCase();
+  if (div.includes("sales") || div.includes("staff")) return "per_hari";
+  if (div.includes("blend")) return "per_kg";
   return "per_pack";
 }
 
-function inferDivision(tipeUpah: TipeUpahPKB, departemen?: string): PKBDivision {
-  const dept = (departemen || "").toLowerCase();
-  if (dept.includes("pack")) return "packing";
-  if (dept.includes("blend") || dept.includes("tembakau")) return "blending";
-  if (dept.includes("market") || dept.includes("sales") || dept.includes("staff")) return "sales";
+function inferDivision(tipeUpah: TipeUpahPKB, divisi?: string): PKBDivision {
+  const div = (divisi || "").toLowerCase();
+  if (div.includes("pack")) return "packing";
+  if (div.includes("blend")) return "blending";
+  if (div.includes("sales") || div.includes("staff")) return "sales";
   if (tipeUpah === "per_pack") return "packing";
   if (tipeUpah === "per_kg") return "blending";
   return "sales";
@@ -176,8 +172,9 @@ export default function NewEmployeePage() {
   // Form data (persistent across steps)
   const [formData, setFormData] = useState({
     nik: "", namaLengkap: "", departemen: "", tanggalMasuk: "", gajiPerHari: "",
-    statusKaryawan: "AKTIF", jabatan: "", noHp: "", email: "", alamat: "",
-    noKtp: "", npwp: "", bpjsKesehatan: "", bpjsKetenagakerjaan: "",
+    statusKaryawan: "KONTRAK", roleKaryawan: "Karyawan", noHp: "", email: "", alamat: "",
+    noKtp: "", npwp: "", bpjsNominal: "",
+    noBpjs: "",
     tempatLahir: "", tanggalLahir: "", jenisKelamin: "", statusPernikahan: "",
     jumlahTanggungan: "", tanggalKontrak: "", batasKontrak: "", pendidikanTerakhir: "",
     atasanLangsung: "", lokasiKerja: "", tanggalKeluar: "", namaKontakDarurat: "",
@@ -245,10 +242,13 @@ export default function NewEmployeePage() {
   const validateStep1 = () => {
     if (!formData.nik.trim()) return "NIK harus diisi";
     if (!formData.namaLengkap.trim()) return "Nama Lengkap harus diisi";
-    if (!formData.departemen) return "Departemen harus dipilih";
+    if (!formData.departemen) return "Divisi harus dipilih";
     if (!formData.tanggalMasuk) return "Tanggal Masuk harus diisi";
     if (!formData.gajiPerHari || Number(formData.gajiPerHari) <= 0) return "Gaji Per Hari harus diisi";
+    if (formData.bpjsNominal === "" || Number(formData.bpjsNominal) < 0) return "Potongan BPJS/Bulan harus diisi";
     if (!formData.alamat.trim()) return "Alamat harus diisi";
+    if (!formData.roleKaryawan) return "Role karyawan harus dipilih";
+    if (!formData.statusKaryawan) return "Status harus dipilih";
     return null;
   };
 
@@ -257,14 +257,18 @@ export default function NewEmployeePage() {
     setError("");
     setPrintingPkb(true);
     const defaults = getDefaultPKBData();
-    const tipeUpah = inferTipeUpah(formData.departemen, formData.jabatan);
+    const tipeUpah = inferTipeUpah(formData.departemen);
     const nominalDefault = tipeUpah === "per_hari" ? 68450 : tipeUpah === "per_kg" ? 3400 : 3000;
 
     const pkbData: PKBData = {
       ...defaults,
       pihak2Nama: formData.namaLengkap,
       pihak2Nik: formData.nik,
-      pihak2Jabatan: formData.jabatan || formData.departemen,
+      pihak2Jabatan: formData.departemen,
+      peranKaryawan: formData.roleKaryawan as PKBData["peranKaryawan"],
+      bpjs: formData.noBpjs || "-",
+      bpjsKesehatanNominal: formData.bpjsNominal || "0",
+      bpjsKetenagakerjaanNominal: "0",
       pihak2Alamat: formData.alamat || "",
       pihak2TandaTangan: formData.namaLengkap,
       tipeUpah,
@@ -298,7 +302,7 @@ export default function NewEmployeePage() {
       namaLengkap: formData.namaLengkap,
       email: formData.email || null,
       noHp: formData.noHp || null,
-      jabatan: formData.jabatan || null,
+      jabatan: formData.roleKaryawan || null,
       departemen: formData.departemen,
       tanggalMasuk: formData.tanggalMasuk,
       gajiPerHari: Number(formData.gajiPerHari),
@@ -309,8 +313,8 @@ export default function NewEmployeePage() {
       alamat: formData.alamat || null,
       noKtp: formData.noKtp || null,
       npwp: formData.npwp || null,
-      bpjsKesehatan: formData.bpjsKesehatan || null,
-      bpjsKetenagakerjaan: formData.bpjsKetenagakerjaan || null,
+      bpjsKesehatan: formData.bpjsNominal || null,
+      bpjsKetenagakerjaan: null,
       statusPernikahan: formData.statusPernikahan || null,
       jumlahTanggungan: formData.jumlahTanggungan || null,
       tanggalKontrak: formData.tanggalKontrak || null,
@@ -334,7 +338,7 @@ export default function NewEmployeePage() {
 
       // Save PKB data
       try {
-        const tipeUpah = inferTipeUpah(formData.departemen, formData.jabatan);
+        const tipeUpah = inferTipeUpah(formData.departemen);
         const nominalDefault = tipeUpah === "per_hari" ? 68450 : tipeUpah === "per_kg" ? 3400 : 3000;
         const defaults = getDefaultPKBData();
         await employeeAPI.savePKB(newEmployee.id.toString(), {
@@ -343,7 +347,11 @@ export default function NewEmployeePage() {
           pihak1Jabatan: defaults.pihak1Jabatan,
           pihak2Nama: formData.namaLengkap,
           pihak2Nik: formData.nik,
-          pihak2Jabatan: formData.jabatan || formData.departemen,
+          pihak2Jabatan: formData.departemen,
+          peranKaryawan: formData.roleKaryawan,
+          bpjs: formData.noBpjs || "-",
+          bpjsKesehatanNominal: formData.bpjsNominal || "0",
+          bpjsKetenagakerjaanNominal: "0",
           pihak2Alamat: formData.alamat || "",
           tipeUpah,
           nominalUpah: nominalDefault,
@@ -501,12 +509,23 @@ export default function NewEmployeePage() {
                   <Input id="namaLengkap" value={formData.namaLengkap} onChange={(e) => updateField("namaLengkap", e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-sm">Departemen *</Label>
+                  <Label className="text-sm">Divisi *</Label>
                   <Select value={formData.departemen} onValueChange={(v) => updateField("departemen", v)}>
-                    <SelectTrigger><SelectValue placeholder="Pilih departemen" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Pilih divisi" /></SelectTrigger>
                     <SelectContent>
                       {ALL_DEPARTMENTS.map((d) => (
                         <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm">Role Karyawan *</Label>
+                  <Select value={formData.roleKaryawan} onValueChange={(v) => updateField("roleKaryawan", v)}>
+                    <SelectTrigger><SelectValue placeholder="Pilih role" /></SelectTrigger>
+                    <SelectContent>
+                      {roleOptions.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -520,7 +539,7 @@ export default function NewEmployeePage() {
                   <Input id="gajiPerHari" type="number" value={formData.gajiPerHari} onChange={(e) => updateField("gajiPerHari", e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-sm">Status Karyawan *</Label>
+                  <Label className="text-sm">Status (Tetap/Kontrak) *</Label>
                   <Select value={formData.statusKaryawan} onValueChange={(v) => updateField("statusKaryawan", v)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -529,6 +548,17 @@ export default function NewEmployeePage() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="bpjsNominal" className="text-sm">Potongan BPJS/Bulan *</Label>
+                  <Input
+                    id="bpjsNominal"
+                    type="number"
+                    min={0}
+                    value={formData.bpjsNominal}
+                    onChange={(e) => updateField("bpjsNominal", e.target.value)}
+                    placeholder="Nominal potongan per bulan"
+                  />
                 </div>
                 <div className="space-y-1.5 md:col-span-2">
                   <Label htmlFor="alamat" className="text-sm">Alamat *</Label>
@@ -558,7 +588,6 @@ export default function NewEmployeePage() {
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {[
-                    { id: "jabatan", label: "Jabatan" },
                     { id: "noHp", label: "Nomor HP" },
                     { id: "email", label: "Email", type: "email" },
                     { id: "noKtp", label: "No KTP" },
@@ -566,8 +595,7 @@ export default function NewEmployeePage() {
                     { id: "tanggalLahir", label: "Tanggal Lahir", type: "date" },
                     { id: "jenisKelamin", label: "Jenis Kelamin" },
                     { id: "npwp", label: "NPWP" },
-                    { id: "bpjsKesehatan", label: "BPJS Kesehatan" },
-                    { id: "bpjsKetenagakerjaan", label: "BPJS Ketenagakerjaan" },
+                    { id: "noBpjs", label: "No BPJS" },
                     { id: "statusPernikahan", label: "Status Pernikahan" },
                     { id: "jumlahTanggungan", label: "Jumlah Tanggungan", type: "number" },
                     { id: "tanggalKontrak", label: "Tanggal Kontrak", type: "date" },
@@ -608,13 +636,15 @@ export default function NewEmployeePage() {
               <div className="grid grid-cols-2 gap-x-8 gap-y-2.5 text-sm">
                 <div><span className="text-slate-500">Nama:</span> <span className="font-medium">{formData.namaLengkap}</span></div>
                 <div><span className="text-slate-500">NIK:</span> <span className="font-medium">{formData.nik}</span></div>
-                <div><span className="text-slate-500">Departemen:</span> <span className="font-medium">{formData.departemen}</span></div>
-                <div><span className="text-slate-500">Jabatan:</span> <span className="font-medium">{formData.jabatan || "-"}</span></div>
+                <div><span className="text-slate-500">Divisi:</span> <span className="font-medium">{formData.departemen}</span></div>
+                <div><span className="text-slate-500">Role:</span> <span className="font-medium">{formData.roleKaryawan || "-"}</span></div>
+                <div><span className="text-slate-500">Status:</span> <span className="font-medium">{formData.statusKaryawan || "-"}</span></div>
+                <div><span className="text-slate-500">Potongan BPJS/Bulan:</span> <span className="font-medium">Rp {(Number(formData.bpjsNominal || 0) || 0).toLocaleString("id-ID")}</span></div>
                 <div><span className="text-slate-500">Alamat:</span> <span className="font-medium">{formData.alamat || "-"}</span></div>
                 <div><span className="text-slate-500">Tgl Masuk:</span> <span className="font-medium">{formData.tanggalMasuk}</span></div>
                 <div><span className="text-slate-500">Gaji/Hari:</span> <span className="font-medium">Rp {Number(formData.gajiPerHari).toLocaleString("id-ID")}</span></div>
-                <div><span className="text-slate-500">Tipe Upah:</span> <span className="font-medium capitalize">{inferTipeUpah(formData.departemen, formData.jabatan).replace("_", " ")}</span></div>
-                <div><span className="text-slate-500">Divisi PKB:</span> <span className="font-medium capitalize">{inferDivision(inferTipeUpah(formData.departemen, formData.jabatan), formData.departemen)}</span></div>
+                <div><span className="text-slate-500">Tipe Upah:</span> <span className="font-medium capitalize">{inferTipeUpah(formData.departemen).replace("_", " ")}</span></div>
+                <div><span className="text-slate-500">Divisi PKB:</span> <span className="font-medium capitalize">{inferDivision(inferTipeUpah(formData.departemen), formData.departemen)}</span></div>
               </div>
             </CardContent>
           </Card>
@@ -713,8 +743,9 @@ export default function NewEmployeePage() {
                 setStep(1);
                 setFormData({
                   nik: "", namaLengkap: "", departemen: "", tanggalMasuk: "", gajiPerHari: "",
-                  statusKaryawan: "AKTIF", jabatan: "", noHp: "", email: "", alamat: "",
-                  noKtp: "", npwp: "", bpjsKesehatan: "", bpjsKetenagakerjaan: "",
+                  statusKaryawan: "KONTRAK", roleKaryawan: "Karyawan", noHp: "", email: "", alamat: "",
+                  noKtp: "", npwp: "", bpjsNominal: "",
+                  noBpjs: "",
                   tempatLahir: "", tanggalLahir: "", jenisKelamin: "", statusPernikahan: "",
                   jumlahTanggungan: "", tanggalKontrak: "", batasKontrak: "", pendidikanTerakhir: "",
                   atasanLangsung: "", lokasiKerja: "", tanggalKeluar: "", namaKontakDarurat: "",
