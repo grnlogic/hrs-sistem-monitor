@@ -2,8 +2,9 @@ import { Text } from "slate";
 import type { Descendant } from "slate";
 import type { PKBData } from "./pkb-template";
 import { formatCurrency, formatDate, getClause2AndRole } from "./pkb-template";
+import { NAMA_PT } from "@/lib/constants/perusahaan";
 
-const COMPANY_NAME = process.env.NEXT_PUBLIC_COMPANY_NAME || "PT. PADUD JAYA PUTERA";
+const COMPANY_NAME = process.env.NEXT_PUBLIC_COMPANY_NAME || NAMA_PT.PJP.toUpperCase();
 const COMPANY_ADDRESS =
   process.env.NEXT_PUBLIC_COMPANY_ADDRESS ||
   "Lingkungan Jelat, No. 905, RT.03/04, Kel. Pataruman, Kec. Pataruman, Kota Banjar";
@@ -22,6 +23,20 @@ function escapeHtml(value: string): string {
 
 function renderChildren(children: Descendant[]): string {
   return children.map(serializeNode).join("");
+}
+
+function formatFieldLine(childrenHtml: string, align?: string): string | null {
+  if (align && align !== "left") return null;
+
+  // Align lines like "Nama : {{PIHAK_2_NAMA}}" using fixed columns, not manual spaces.
+  const match = childrenHtml.match(/^([^<:\n]{1,40})\s*:\s*([\s\S]+)$/);
+  if (!match) return null;
+
+  const label = match[1].trim();
+  const value = match[2].trim();
+  if (!label || !value) return null;
+
+  return `<p class="pkb-field-row"><span class="pkb-field-label">${label}</span><span class="pkb-field-sep">:</span><span class="pkb-field-value">${value}</span></p>`;
 }
 
 function serializeNode(node: Descendant): string {
@@ -101,6 +116,10 @@ function serializeNode(node: Descendant): string {
     case "signature-box":
       return `<div class="pkb-signature-box">${children}</div>`;
     case "paragraph":
+      {
+        const fieldLine = formatFieldLine(children, node.align);
+        if (fieldLine) return fieldLine;
+      }
     default:
       return `<p${alignStyle}>${children}</p>`;
   }
@@ -125,6 +144,8 @@ function tipeUpahLabel(tipe?: string | null) {
       return "Per Pack";
     case "per_hari":
       return "Per Hari";
+    case "per_bulan":
+      return "Per Bulan";
     case "per_kg":
       return "Per Kilogram";
     default:
@@ -137,9 +158,18 @@ function parseNominal(value: unknown): number {
   return raw ? Number(raw) : 0;
 }
 
+function toPlainNominal(value: unknown): string {
+  const parsed = parseNominal(value);
+  return String(parsed);
+}
+
 export function buildPlaceholderContext(data: PKBData, options?: { division?: string; logoDataUrl?: string }): PlaceholderContext {
   const { clause2, role } = getClause2AndRole(data);
-  const catatan = data.catatanPembayaran?.trim() || "yang akan dibayarkan setiap hari Sabtu";
+  const catatan =
+    data.catatanPembayaran?.trim() ||
+    (data.tipeUpah === "per_bulan"
+      ? "yang akan dibayarkan setiap akhir bulan"
+      : "yang akan dibayarkan setiap hari Sabtu");
   const bpjs = data.bpjs?.trim() || "-";
   const bpjsKesehatan = parseNominal(data.bpjsKesehatanNominal);
   const bpjsKetenagakerjaan = parseNominal(data.bpjsKetenagakerjaanNominal);
@@ -161,7 +191,7 @@ export function buildPlaceholderContext(data: PKBData, options?: { division?: st
     PIHAK_2_TTD: data.pihak2TandaTangan || data.pihak2Nama || "",
     DIVISI: divisionLabel(options?.division || data.pihak2Jabatan),
     TIPE_UPAH_LABEL: tipeUpahLabel(data.tipeUpah),
-    NOMINAL_UPAH: `Rp. ${formatCurrency(data.nominalUpah || 0)}`,
+    NOMINAL_UPAH: toPlainNominal(data.nominalUpah || 0),
     BONUS_NOMINAL: data.bonusNominal ? `Rp. ${formatCurrency(data.bonusNominal)}` : "-",
     CATATAN_PEMBAYARAN: catatan,
     BPJS: bpjs,
@@ -198,6 +228,9 @@ function wrapDocument(body: string): string {
   <title>Perjanjian Kerja Bersama</title>
   <style>
     @page { size: A4; margin: 15mm; }
+    * {
+      box-sizing: border-box;
+    }
     body {
       font-family: 'Times New Roman', Times, serif;
       margin: 0;
@@ -217,6 +250,13 @@ function wrapDocument(body: string): string {
     }
     .pkb-container h2 { text-transform: uppercase; letter-spacing: 0.5px; margin: 8px 0; }
     .pkb-container p { margin: 4px 0; }
+    .pkb-container p,
+    .pkb-container li,
+    .pkb-container blockquote,
+    .pkb-container h2,
+    .pkb-container h3 {
+      white-space: pre-wrap;
+    }
     .pkb-container blockquote {
       border-left: 3px solid #999;
       padding-left: 10px;
@@ -224,6 +264,22 @@ function wrapDocument(body: string): string {
       color: #555;
     }
     .pkb-container ol { padding-left: 20px; }
+    .pkb-field-row {
+      display: grid;
+      grid-template-columns: 120px 14px 1fr;
+      column-gap: 0;
+      align-items: baseline;
+      margin: 4px 0;
+    }
+    .pkb-field-label {
+      display: inline-block;
+    }
+    .pkb-field-sep {
+      text-align: center;
+    }
+    .pkb-field-value {
+      min-width: 0;
+    }
     .pkb-logo {
       width: 80px;
       height: 80px;
@@ -249,6 +305,8 @@ function wrapDocument(body: string): string {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 24px;
+      break-inside: avoid-page;
+      page-break-inside: avoid;
     }
     .pkb-signature-box {
       border: 1px solid #000;
@@ -264,6 +322,37 @@ function wrapDocument(body: string): string {
       margin: 4px 0;
     }
     hr { border: none; border-top: 2px solid #000; margin: 16px 0; }
+    @media print {
+      @page { size: A4; margin: 12mm; }
+      body {
+        background: #fff;
+        padding: 0;
+        line-height: 1.5;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .pkb-container {
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+        padding: 24px;
+        border: none;
+        box-shadow: none;
+      }
+      .pkb-container p { margin: 2px 0; }
+      .pkb-container h2 { margin: 6px 0; }
+      .pkb-container ol { margin: 6px 0; }
+      .pkb-signature-container {
+        margin-top: 16px;
+        break-inside: avoid-page;
+        page-break-inside: avoid;
+      }
+      .pkb-signature-box {
+        min-height: 110px;
+        padding: 10px 10px;
+      }
+      hr { margin: 10px 0; }
+    }
   </style>
 </head>
 <body>

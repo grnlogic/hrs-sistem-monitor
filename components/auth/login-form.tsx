@@ -18,6 +18,7 @@ import { Eye, EyeOff, LogIn, User, Lock } from "lucide-react";
 import Image from "next/image";
 import Logo from "@/app/image/png.png";
 import { normalizeRole } from "@/lib/auth/roles";
+import { NAMA_PT } from "@/lib/constants/perusahaan";
 
 export function LoginForm() {
   const router = useRouter();
@@ -66,7 +67,7 @@ export function LoginForm() {
         <div className="mx-auto flex h-12 w-12 items-center justify-center overflow-hidden">
           <Image
             src={Logo}
-            alt="Logo PT. PADUDJAYA PUTERA"
+            alt={`Logo ${NAMA_PT.PJP}`}
             width={48}
             height={48}
             className="object-contain"

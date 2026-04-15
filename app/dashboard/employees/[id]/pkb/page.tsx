@@ -30,7 +30,8 @@ import {
 // Infer tipe upah dari divisi
 function inferTipeUpah(divisi?: string): TipeUpahPKB {
   const div = (divisi || "").toLowerCase();
-  if (div.includes("sales") || div.includes("staff")) return "per_hari";
+  if (div.includes("staff")) return "per_bulan";
+  if (div.includes("sales")) return "per_hari";
   if (div.includes("blend")) return "per_kg";
   return "per_pack";
 }
@@ -38,6 +39,7 @@ function inferTipeUpah(divisi?: string): TipeUpahPKB {
 const TIPE_UPAH_OPTIONS: { value: TipeUpahPKB; label: string }[] = [
   { value: "per_pack", label: "Per Pack (Borongan Pengemasan)" },
   { value: "per_kg", label: "Per Kilogram (Borongan Pengolahan Tembakau)" },
+  { value: "per_bulan", label: "Per Bulan (Staff)" },
   { value: "per_hari", label: "Per Hari (Staff/Marketing)" },
 ];
 
@@ -45,9 +47,11 @@ function inferDivision(tipeUpah: TipeUpahPKB, divisi?: string): PKBDivision {
   const div = (divisi || "").toLowerCase();
   if (div.includes("pack")) return "packing";
   if (div.includes("blend")) return "blending";
-  if (div.includes("sales") || div.includes("staff")) return "sales";
+  if (div.includes("staff")) return "staff";
+  if (div.includes("sales")) return "sales";
   if (tipeUpah === "per_pack") return "packing";
   if (tipeUpah === "per_kg") return "blending";
+  if (tipeUpah === "per_bulan") return "staff";
   return "sales";
 }
 
@@ -107,11 +111,16 @@ export default function PKBPage() {
       const tipeUpah = (pkb?.tipeUpah as TipeUpahPKB) ?? inferTipeUpah(karyawan.departemen);
       const gajiPerHari = Number(karyawan.gajiPerHari ?? 0) || undefined;
       const gajiPerBulan = Number(karyawan.gajiPerBulan ?? 0) || undefined;
-      const gajiKaryawan = gajiPerHari ?? (tipeUpah === "per_hari" && gajiPerBulan && gajiPerBulan > 0 ? Math.round(gajiPerBulan / 26) : undefined);
-      const nominalDefaultTipe = tipeUpah === "per_hari" ? 68450 : tipeUpah === "per_kg" ? 3400 : 3000;
+      const gajiKaryawan =
+        tipeUpah === "per_bulan"
+          ? (gajiPerBulan ?? gajiPerHari)
+          : (gajiPerHari ?? gajiPerBulan);
+      const nominalDefaultTipe =
+        tipeUpah === "per_hari" ? 68450 : tipeUpah === "per_kg" ? 3400 : tipeUpah === "per_bulan" ? 1500000 : 3000;
       const nominalUpah = pkb?.nominalUpah ?? pkb?.upahPerPack ?? (gajiKaryawan ?? nominalDefaultTipe);
       const bonusNominal = pkb?.bonusNominal ?? pkb?.bonusPerPack ?? defaults.bonusNominal ?? 250;
-      const catatanPembayaran = pkb?.catatanPembayaran ?? "yang akan dibayarkan setiap hari Sabtu";
+      const catatanPembayaran =
+        pkb?.catatanPembayaran ?? (tipeUpah === "per_bulan" ? "yang akan dibayarkan setiap akhir bulan" : "yang akan dibayarkan setiap hari Sabtu");
 
       setFormData({
         ...defaults,
@@ -170,7 +179,12 @@ export default function PKBPage() {
       tipeUpah,
       nominalUpah: nominal,
       bonusNominal: tipeUpah === "per_pack" ? bonus : undefined,
-      catatanPembayaran: tipeUpah === "per_hari" ? (formData.catatanPembayaran || "yang akan dibayarkan setiap hari Sabtu") : undefined,
+      catatanPembayaran:
+        tipeUpah === "per_hari"
+          ? (formData.catatanPembayaran || "yang akan dibayarkan setiap hari Sabtu")
+          : tipeUpah === "per_bulan"
+            ? (formData.catatanPembayaran || "yang akan dibayarkan setiap akhir bulan")
+            : undefined,
       upahPerPack: nominal,
       bonusPerPack: bonus,
       tanggalPerjanjian: formData.tanggalPerjanjian ?? new Date().toISOString().split("T")[0],
@@ -565,6 +579,32 @@ export default function PKBPage() {
                     <p className="text-xs text-muted-foreground">
                       Contoh: &quot;yang akan dibayarkan setiap hari Sabtu&quot;
                     </p>
+                  </div>
+                </>
+              )}
+
+              {(formData.tipeUpah ?? "per_pack") === "per_bulan" && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="nominalUpahBulan">Gaji per Bulan (Rp)</Label>
+                    <Input
+                      id="nominalUpahBulan"
+                      type="number"
+                      value={formData.nominalUpah ?? formData.upahPerPack ?? 1500000}
+                      onChange={(e) => {
+                        handleChange("nominalUpah", Number(e.target.value) || 0);
+                        handleChange("upahPerPack", Number(e.target.value) || 0);
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="catatanPembayaranBulanan">Catatan Pembayaran</Label>
+                    <Input
+                      id="catatanPembayaranBulanan"
+                      value={formData.catatanPembayaran ?? "yang akan dibayarkan setiap akhir bulan"}
+                      onChange={(e) => handleChange("catatanPembayaran", e.target.value)}
+                      placeholder="yang akan dibayarkan setiap akhir bulan"
+                    />
                   </div>
                 </>
               )}

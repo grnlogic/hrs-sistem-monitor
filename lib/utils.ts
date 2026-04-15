@@ -1,6 +1,7 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import type { PKBDocxPayload } from "./pkb-docx"
+import { NAMA_PT } from "@/lib/constants/perusahaan"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -179,7 +180,7 @@ async function buildSalaryPdf(data: SalaryLike[]) {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
 
   doc.setFontSize(14);
-  doc.text("Rekap Penggajian PT. PADUD JAYA", 14, 14);
+  doc.text(`Rekap Penggajian ${NAMA_PT.PJP}`, 14, 14);
   doc.setFontSize(9);
   doc.text(`Tanggal Cetak: ${new Date().toLocaleDateString("id-ID")}`, 14, 20);
 

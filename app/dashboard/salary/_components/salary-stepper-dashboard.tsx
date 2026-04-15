@@ -54,6 +54,7 @@ type AttendanceSummary = {
   hadir: number;
   setengahHari: number;
   lembur: number;
+  lokasiCount?: Record<"PJP" | "SP" | "PRIMA", number>;
 };
 
 type SalaryItem = {
@@ -279,6 +280,28 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
     return attendanceOverrides[karyawanId] || attendanceMap[karyawanId] || { hadir: 0, setengahHari: 0, lembur: 0 };
   }
 
+  function lokasiForSalary(row: SalaryRow): "PJP" | "SP" | "PRIMA" {
+    const fromAttendance = attendanceFor(row.karyawanId).lokasiCount;
+    if (fromAttendance) {
+      const ranked = (Object.entries(fromAttendance) as Array<["PJP" | "SP" | "PRIMA", number]>).sort(
+        (a, b) => b[1] - a[1]
+      );
+      if (ranked[0] && ranked[0][1] > 0) return ranked[0][0];
+    }
+
+    const fromRow = String(row.lokasiKerja || "").toUpperCase();
+    if (fromRow === "SP" || fromRow === "PRIMA" || fromRow === "PJP") {
+      return fromRow as "PJP" | "SP" | "PRIMA";
+    }
+
+    const fromSession = String(session?.user?.lokasi || "").toUpperCase();
+    if (fromSession === "SP" || fromSession === "PRIMA" || fromSession === "PJP") {
+      return fromSession as "PJP" | "SP" | "PRIMA";
+    }
+
+    return "PJP";
+  }
+
   function nonStaffBaseSalary(employee: EmployeeRow): number {
     const summary = attendanceFor(employee.id);
     const hariEfektif = summary.hadir + summary.setengahHari * 0.5 + summary.lembur;
@@ -344,17 +367,27 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
           if (!karyawanId) return;
 
           if (!summary[karyawanId]) {
-            summary[karyawanId] = { hadir: 0, setengahHari: 0, lembur: 0 };
+            summary[karyawanId] = {
+              hadir: 0,
+              setengahHari: 0,
+              lembur: 0,
+              lokasiCount: { PJP: 0, SP: 0, PRIMA: 0 },
+            };
           }
 
-          if (row.setengahHari) {
+          const lokasiRaw = String(row.lokasi || row.location || "").toUpperCase();
+          if (lokasiRaw === "PJP" || lokasiRaw === "SP" || lokasiRaw === "PRIMA") {
+            summary[karyawanId].lokasiCount![lokasiRaw] += 1;
+          }
+
+          const normalizedStatus = String(row.status || "").toUpperCase();
+          if (normalizedStatus === "SETENGAH_HARI") {
             summary[karyawanId].setengahHari += 1;
-          } else if (row.hadir) {
+          } else if (normalizedStatus === "HADIR") {
             summary[karyawanId].hadir += 1;
           }
 
-          const statusLower = String(row.status || "").toLowerCase();
-          if (statusLower.includes("lembur")) {
+          if (Boolean(row.isLembur)) {
             summary[karyawanId].lembur += 1;
           }
         });
@@ -631,7 +664,7 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
         division: row.divisi,
         status: pageType === "staff" ? "Staff" : "Non-Staff",
         periodLabel,
-        location: row.lokasiKerja,
+        location: lokasiForSalary(row),
         hariEfektif: calc.hariEfektif,
         upahHarian: calc.upahHarian,
         gajiPokok: calc.gajiPokok,

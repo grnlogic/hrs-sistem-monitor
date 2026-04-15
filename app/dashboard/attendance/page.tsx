@@ -36,6 +36,7 @@ import {
   Edit,
   Download,
   Filter,
+  X,
 } from "lucide-react";
 import {
   Select,
@@ -48,27 +49,38 @@ import { attendanceAPI, employeeAPI } from "@/lib/api";
 import type { Employee } from "@/lib/types";
 import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
 
-const isPresentStatus = (status?: string) => status === "HADIR" || status === "LEMBUR";
+const normalizeStatus = (status?: string) => {
+  const value = String(status || "").trim().toUpperCase().replace(/\s+/g, "_");
+  if (value === "SETENGAH_HARI") return "SETENGAH_HARI";
+  if (value === "HADIR") return "HADIR";
+  if (value === "IZIN") return "IZIN";
+  if (value === "TIDAK_HADIR") return "TIDAK_HADIR";
+  if (value === "LEMBUR") return "HADIR";
+  if (value === "SAKIT" || value === "ALPA" || value === "ALPHA" || value === "OFF") return "TIDAK_HADIR";
+  return value || "TIDAK_HADIR";
+};
+
+const isPresentStatus = (status?: string) => {
+  const normalized = normalizeStatus(status);
+  return normalized === "HADIR" || normalized === "SETENGAH_HARI";
+};
 
 const getStatusLabel = (status?: string) => {
-  switch (status) {
-    case "HADIR":
-      return "Hadir";
-    case "LEMBUR":
-      return "Lembur";
-    case "IZIN":
-      return "Izin";
-    case "SAKIT":
-      return "Sakit";
-    case "ALPA":
-      return "Alpa";
-    case "OFF":
-      return "Off";
-    case "BELUM_ABSEN":
-      return "Belum Absen";
-    default:
-      return status || "-";
-  }
+  const normalized = normalizeStatus(status);
+  if (normalized === "HADIR") return "Hadir";
+  if (normalized === "SETENGAH_HARI") return "Setengah Hari";
+  if (normalized === "IZIN") return "Tidak Hadir (Izin)";
+  if (status === "BELUM_ABSEN") return "Belum Absen";
+  return "Tidak Hadir";
+};
+
+const hitungHariEfektif = (status?: string, isLembur?: boolean) => {
+  const normalized = normalizeStatus(status);
+  let hari = 0;
+  if (normalized === "HADIR") hari = 1;
+  if (normalized === "SETENGAH_HARI") hari = 0.5;
+  if (isLembur) hari += 1;
+  return hari;
 };
 
 export default function AttendancePage() {
@@ -85,6 +97,8 @@ export default function AttendancePage() {
   const [editingItem, setEditingItem] = useState<any>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
+  const [pdfFileName, setPdfFileName] = useState("");
 
   useEffect(() => {
     fetchData();
@@ -93,6 +107,14 @@ export default function AttendancePage() {
   useEffect(() => {
     filterData();
   }, [attendanceData, searchTerm, statusFilter, dateFilter, departmentFilter]);
+
+  useEffect(() => {
+    return () => {
+      if (pdfPreviewUrl) {
+        URL.revokeObjectURL(pdfPreviewUrl);
+      }
+    };
+  }, [pdfPreviewUrl]);
 
   const fetchData = async () => {
     try {
@@ -113,9 +135,12 @@ export default function AttendancePage() {
           id: a.id,
           karyawanId: a.karyawanId,
           tanggal: a.tanggal,
-          status: a.status,
+          status: normalizeStatus(a.status),
           hadir: a.hadir,
-          setengahHari: Boolean(a.setengahHari),
+          setengahHari: normalizeStatus(a.status) === "SETENGAH_HARI",
+          isLembur: Boolean(a.isLembur),
+          hariEfektif: Number(a.hariEfektif ?? hitungHariEfektif(a.status, a.isLembur)),
+          lokasi: a.lokasi,
           checkIn: a.waktuMasuk || a.checkIn || "-",
           checkOut: a.waktuPulang || a.checkOut || "-",
           notes: a.keterangan || a.notes || "-",
@@ -145,12 +170,10 @@ export default function AttendancePage() {
     }
 
     if (statusFilter !== "all") {
-      if (statusFilter === "SETENGAH_HARI") {
-        filtered = filtered.filter(
-          (item) => isPresentStatus(item.status) && Boolean(item.setengahHari)
-        );
+      if (statusFilter === "LEMBUR") {
+        filtered = filtered.filter((item) => Boolean(item.isLembur));
       } else {
-        filtered = filtered.filter((item) => item.status === statusFilter);
+        filtered = filtered.filter((item) => normalizeStatus(item.status) === statusFilter);
       }
     }
 
@@ -194,14 +217,10 @@ export default function AttendancePage() {
   const attendanceStats = {
     total: statsSource.length,
     hadir: statsSource.filter((item) => isPresentStatus(item.status)).length,
-    lembur: statsSource.filter((item) => item.status === "LEMBUR").length,
-    setengahHari: statsSource.filter(
-      (item) => isPresentStatus(item.status) && Boolean(item.setengahHari)
-    ).length,
-    alpha: statsSource.filter((item) => item.status === "ALPA").length,
-    sakit: statsSource.filter((item) => item.status === "SAKIT").length,
-    izin: statsSource.filter((item) => item.status === "IZIN").length,
-    off: statsSource.filter((item) => item.status === "OFF").length,
+    lembur: statsSource.filter((item) => Boolean(item.isLembur)).length,
+    setengahHari: statsSource.filter((item) => normalizeStatus(item.status) === "SETENGAH_HARI").length,
+    tidakHadir: statsSource.filter((item) => normalizeStatus(item.status) === "TIDAK_HADIR").length,
+    izin: statsSource.filter((item) => normalizeStatus(item.status) === "IZIN").length,
   };
 
   // Get unique departments for filter
@@ -257,7 +276,9 @@ export default function AttendancePage() {
     setEditingItem({
       ...attendance,
       employee: employee,
-      setengahHari: attendance.setengahHari || false,
+      status: normalizeStatus(attendance.status),
+      setengahHari: normalizeStatus(attendance.status) === "SETENGAH_HARI",
+      isLembur: Boolean(attendance.isLembur),
       hadir: attendance.hadir,
     });
     setShowEditModal(true);
@@ -268,14 +289,16 @@ export default function AttendancePage() {
 
     try {
       setIsLoading(true);
-      const isPresent = isPresentStatus(editingItem.status) && Boolean(editingItem.hadir);
+      const isPresent = isPresentStatus(editingItem.status);
 
       // Gunakan endpoint PUT yang baru
       await attendanceAPI.update(editingItem.id, {
         hadir: isPresent,
         status: editingItem.status,
-        setengahHari: isPresent ? Boolean(editingItem.setengahHari) : false,
+        setengahHari: normalizeStatus(editingItem.status) === "SETENGAH_HARI",
+        isLembur: Boolean(editingItem.isLembur),
         keterangan: editingItem.notes,
+        lokasi: editingItem.lokasi,
       });
 
       await fetchData();
@@ -324,9 +347,44 @@ export default function AttendancePage() {
     }
   };
 
+  const closePdfPreview = () => {
+    if (pdfPreviewUrl) {
+      URL.revokeObjectURL(pdfPreviewUrl);
+    }
+    setPdfPreviewUrl("");
+    setPdfFileName("");
+  };
+
+  const handleDownloadPreviewedPdf = () => {
+    if (!pdfPreviewUrl || !pdfFileName) return;
+    const link = document.createElement("a");
+    link.href = pdfPreviewUrl;
+    link.download = pdfFileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleExportDailyReportPDF = async () => {
-    if (dailyDepartmentReports.length === 0) {
-      setError("Belum ada data divisi untuk diekspor");
+    const rows = attendanceData
+      .filter(
+        (item) =>
+          new Date(item.tanggal || item.date).toLocaleDateString("en-CA") === reportDate
+      )
+      .map((item) => {
+        const employee = employees.find((emp) => emp.id === item.karyawanId);
+        return {
+          tanggal: new Date(item.tanggal || item.date).toLocaleDateString("id-ID"),
+          nama: employee?.namaLengkap || "(Tanpa Nama)",
+          status: getStatusLabel(item.status),
+          lembur: item.isLembur ? "Lembur" : "-",
+          hariEfektif: String(Number(item.hariEfektif ?? hitungHariEfektif(item.status, item.isLembur))),
+          keterangan: item.notes || "-",
+        };
+      });
+
+    if (rows.length === 0) {
+      setError("Belum ada data absensi harian untuk diekspor");
       return;
     }
 
@@ -337,7 +395,7 @@ export default function AttendancePage() {
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
       doc.setFontSize(14);
-      doc.text("Laporan Harian Absensi per Divisi", 14, 14);
+      doc.text("Rekapan Harian Absensi Karyawan", 14, 14);
       doc.setFontSize(10);
       doc.text(
         `Tanggal: ${new Date(reportDate).toLocaleDateString("id-ID")}`,
@@ -345,55 +403,28 @@ export default function AttendancePage() {
         21
       );
 
-      let cursorY = 28;
-
-      dailyDepartmentReports.forEach((report, index) => {
-        if (index > 0 && cursorY > 245) {
-          doc.addPage();
-          cursorY = 14;
-        }
-
-        doc.setFontSize(11);
-        doc.text(`Divisi: ${report.departemen}`, 14, cursorY);
-
-        autoTable(doc, {
-          startY: cursorY + 2,
-          head: [["Total Karyawan", "Hadir", "Tidak Hadir"]],
-          body: [
-            [
-              String(report.totalKaryawan),
-              String(report.hadirCount),
-              String(report.exceptions.length),
-            ],
-          ],
-          styles: { fontSize: 9 },
-          margin: { left: 14, right: 14 },
-        });
-
-        cursorY = (doc as any).lastAutoTable.finalY + 4;
-
-        if (report.exceptions.length > 0) {
-          autoTable(doc, {
-            startY: cursorY,
-            head: [["Nama", "NIK", "Status", "Keterangan"]],
-            body: report.exceptions.map((item) => [
-              item.namaLengkap,
-              item.nik,
-              getStatusLabel(item.status),
-              item.notes || "-",
-            ]),
-            styles: { fontSize: 9 },
-            margin: { left: 14, right: 14 },
-          });
-          cursorY = (doc as any).lastAutoTable.finalY + 8;
-        } else {
-          doc.setFontSize(9);
-          doc.text("Semua karyawan di divisi ini hadir/lembur.", 14, cursorY + 2);
-          cursorY += 10;
-        }
+      autoTable(doc, {
+        startY: 28,
+        head: [["Tanggal", "Nama", "Status Kehadiran", "Lembur", "Hari Efektif", "Keterangan"]],
+        body: rows.map((row) => [
+          row.tanggal,
+          row.nama,
+          row.status,
+          row.lembur,
+          row.hariEfektif,
+          row.keterangan,
+        ]),
+        styles: { fontSize: 9 },
+        margin: { left: 14, right: 14 },
       });
 
-      doc.save(`laporan-harian-absensi-${reportDate}.pdf`);
+      const blob = doc.output("blob");
+      const nextPreviewUrl = URL.createObjectURL(blob);
+      if (pdfPreviewUrl) {
+        URL.revokeObjectURL(pdfPreviewUrl);
+      }
+      setPdfPreviewUrl(nextPreviewUrl);
+      setPdfFileName(`laporan-harian-absensi-${reportDate}.pdf`);
     } catch (err) {
       setError("Gagal export PDF laporan harian");
     }
@@ -502,12 +533,12 @@ export default function AttendancePage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">🤒 Sakit</CardTitle>
+            <CardTitle className="text-sm font-medium">🌓 Setengah Hari</CardTitle>
             <AlertCircle className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-yellow-600">
-              {attendanceStats.sakit}
+              {attendanceStats.setengahHari}
             </div>
             <p className="text-xs text-muted-foreground">Karyawan</p>
           </CardContent>
@@ -526,23 +557,11 @@ export default function AttendancePage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">🌓 Setengah Hari</CardTitle>
+            <CardTitle className="text-sm font-medium">📝 Izin</CardTitle>
             <Clock className="h-4 w-4 text-orange-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">
-              {attendanceStats.setengahHari}
-            </div>
-            <p className="text-xs text-muted-foreground">Dari status hadir</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">📝 Izin</CardTitle>
-            <Clock className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
               {attendanceStats.izin}
             </div>
             <p className="text-xs text-muted-foreground">Karyawan</p>
@@ -550,12 +569,12 @@ export default function AttendancePage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">❌ Alpha</CardTitle>
-            <XCircle className="h-4 w-4 text-red-600" />
+            <CardTitle className="text-sm font-medium">❌ Tidak Hadir</CardTitle>
+            <Clock className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {attendanceStats.alpha}
+            <div className="text-2xl font-bold text-blue-600">
+              {attendanceStats.tidakHadir}
             </div>
             <p className="text-xs text-muted-foreground">Karyawan</p>
           </CardContent>
@@ -602,12 +621,10 @@ export default function AttendancePage() {
                 <SelectContent>
                   <SelectItem value="all">Semua Status</SelectItem>
                   <SelectItem value="HADIR">✅ Hadir</SelectItem>
-                  <SelectItem value="LEMBUR">🕒 Lembur</SelectItem>
                   <SelectItem value="SETENGAH_HARI">🌓 Setengah Hari</SelectItem>
-                  <SelectItem value="SAKIT">🤒 Sakit</SelectItem>
                   <SelectItem value="IZIN">📝 Izin</SelectItem>
-                  <SelectItem value="ALPA">❌ Alpha</SelectItem>
-                  <SelectItem value="OFF">🚫 Off</SelectItem>
+                  <SelectItem value="TIDAK_HADIR">❌ Tidak Hadir</SelectItem>
+                  <SelectItem value="LEMBUR">🕒 Lembur</SelectItem>
                 </SelectContent>
               </Select>
               <Select
@@ -632,21 +649,16 @@ export default function AttendancePage() {
               statusFilter !== "all" ||
               departmentFilter !== "all") && (
               <div className="mt-3 text-sm text-blue-700">
-                📊 Menampilkan {filteredData.length} dari{" "}
-                {attendanceData.length} data
+                📊 Menampilkan {filteredData.length} dari {attendanceData.length} data
                 {searchTerm && ` • Pencarian: "${searchTerm}"`}
                 {dateFilter &&
-                  ` • Tanggal: ${new Date(dateFilter).toLocaleDateString(
-                    "id-ID"
-                  )}`}
+                  ` • Tanggal: ${new Date(dateFilter).toLocaleDateString("id-ID")}`}
                 {statusFilter !== "all" && ` • Status: ${statusFilter}`}
-                {departmentFilter !== "all" &&
-                  ` • Departemen: ${departmentFilter}`}
+                {departmentFilter !== "all" && ` • Departemen: ${departmentFilter}`}
               </div>
             )}
           </div>
 
-          {/* Table */}
           <div className="rounded-md border">
             <Table>
               <TableHeader>
@@ -654,7 +666,7 @@ export default function AttendancePage() {
                   <TableHead className="w-[250px]">👤 Karyawan</TableHead>
                   <TableHead>📅 Tanggal</TableHead>
                   <TableHead>📊 Status</TableHead>
-                  <TableHead>⏱️ Durasi Kerja</TableHead>
+                  <TableHead>⏱️ Hari Efektif</TableHead>
                   <TableHead>🏢 Departemen</TableHead>
                   <TableHead>📝 Keterangan</TableHead>
                   <TableHead className="text-center">⚙️ Aksi</TableHead>
@@ -662,9 +674,7 @@ export default function AttendancePage() {
               </TableHeader>
               <TableBody>
                 {filteredData.map((attendance) => {
-                  const employee = employees.find(
-                    (emp) => emp.id === attendance.karyawanId
-                  );
+                  const employee = employees.find((emp) => emp.id === attendance.karyawanId);
                   return (
                     <TableRow key={attendance.id}>
                       <TableCell>
@@ -682,19 +692,13 @@ export default function AttendancePage() {
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <div className="font-medium">
-                              {employee?.namaLengkap}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {employee?.nik}
-                            </div>
+                            <div className="font-medium">{employee?.namaLengkap}</div>
+                            <div className="text-sm text-muted-foreground">{employee?.nik}</div>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        {new Date(
-                          attendance.tanggal || attendance.date
-                        ).toLocaleDateString("id-ID", {
+                        {new Date(attendance.tanggal || attendance.date).toLocaleDateString("id-ID", {
                           weekday: "short",
                           day: "2-digit",
                           month: "short",
@@ -702,81 +706,32 @@ export default function AttendancePage() {
                         })}
                       </TableCell>
                       <TableCell>
-                        {/* Status badges with better styling */}
-                        {attendance.status === "HADIR" && !attendance.setengahHari && (
-                          <Badge className="bg-green-100 text-green-800 border-green-200">
-                            ✅ Hadir
-                          </Badge>
+                        {normalizeStatus(attendance.status) === "HADIR" && (
+                          <Badge className="bg-green-100 text-green-800 border-green-200">✅ Hadir</Badge>
                         )}
-                        {attendance.status === "HADIR" && attendance.setengahHari && (
-                          <Badge className="bg-orange-100 text-orange-800 border-orange-200">
-                            🌓 Hadir Setengah Hari
-                          </Badge>
+                        {normalizeStatus(attendance.status) === "SETENGAH_HARI" && (
+                          <Badge className="bg-orange-100 text-orange-800 border-orange-200">🌓 Setengah Hari</Badge>
                         )}
-                        {attendance.status === "LEMBUR" && !attendance.setengahHari && (
-                          <Badge className="bg-purple-100 text-purple-800 border-purple-200">
-                            🕒 Lembur
-                          </Badge>
+                        {normalizeStatus(attendance.status) === "IZIN" && (
+                          <Badge className="bg-blue-100 text-blue-800 border-blue-200">📝 Tidak Hadir (Izin)</Badge>
                         )}
-                        {attendance.status === "LEMBUR" && attendance.setengahHari && (
-                          <Badge className="bg-violet-100 text-violet-800 border-violet-200">
-                            🌓🕒 Setengah Hari + Lembur
-                          </Badge>
+                        {normalizeStatus(attendance.status) === "TIDAK_HADIR" && (
+                          <Badge className="bg-red-100 text-red-800 border-red-200">❌ Tidak Hadir</Badge>
                         )}
-                        {attendance.status === "ALPA" && (
-                          <Badge className="bg-red-100 text-red-800 border-red-200">
-                            ❌ Alpha
-                          </Badge>
-                        )}
-                        {attendance.status === "SAKIT" && (
-                          <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
-                            🤒 Sakit
-                          </Badge>
-                        )}
-                        {attendance.status === "IZIN" && (
-                          <Badge className="bg-blue-100 text-blue-800 border-blue-200">
-                            📝 Izin
-                          </Badge>
-                        )}
-                        {attendance.status === "OFF" && (
-                          <Badge className="bg-gray-100 text-gray-800 border-gray-200">
-                            🚫 Off
-                          </Badge>
-                        )}
-                        {!["HADIR", "LEMBUR", "ALPA", "SAKIT", "IZIN", "OFF"].includes(
-                          attendance.status
-                        ) && (
-                          <Badge variant="outline">{attendance.status}</Badge>
+                        {attendance.isLembur && (
+                          <Badge className="ml-2 bg-purple-100 text-purple-800 border-purple-200">🕒 Lembur</Badge>
                         )}
                       </TableCell>
                       <TableCell>
-                        {isPresentStatus(attendance.status) ? (
-                          attendance.setengahHari ? (
-                            <Badge variant="outline" className="border-orange-200 text-orange-700 bg-orange-50">
-                              0.5 Hari
-                            </Badge>
-                          ) : attendance.status === "LEMBUR" ? (
-                            <Badge variant="outline" className="border-purple-200 text-purple-700 bg-purple-50">
-                              1 Hari + Lembur
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="border-green-200 text-green-700 bg-green-50">
-                              1 Hari
-                            </Badge>
-                          )
-                        ) : (
-                          <span className="text-sm text-gray-500">-</span>
-                        )}
+                        <Badge variant="outline" className="border-slate-200 text-slate-700 bg-slate-50">
+                          {Number(attendance.hariEfektif ?? hitungHariEfektif(attendance.status, attendance.isLembur))}
+                        </Badge>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm text-gray-600">
-                          🏢 {employee?.departemen || "-"}
-                        </span>
+                        <span className="text-sm text-gray-600">🏢 {employee?.departemen || "-"}</span>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm text-gray-600">
-                          {attendance.notes || "-"}
-                        </span>
+                        <span className="text-sm text-gray-600">{attendance.notes || "-"}</span>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center gap-2">
@@ -879,26 +834,16 @@ export default function AttendancePage() {
                 </label>
                 <Select
                   value={editingItem.status}
-                  onValueChange={(value) => {
-                    const isHadir = isPresentStatus(value);
-                    setEditingItem({
-                      ...editingItem,
-                      status: value,
-                      hadir: isHadir,
-                      setengahHari: isHadir ? editingItem.setengahHari : false,
-                    });
-                  }}
+                  onValueChange={(value) => setEditingItem({ ...editingItem, status: value })}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="HADIR">✅ Hadir</SelectItem>
-                    <SelectItem value="LEMBUR">🕒 Lembur</SelectItem>
-                    <SelectItem value="SAKIT">🤒 Sakit</SelectItem>
+                    <SelectItem value="SETENGAH_HARI">🌓 Setengah Hari</SelectItem>
                     <SelectItem value="IZIN">📝 Izin</SelectItem>
-                    <SelectItem value="ALPA">❌ Alpha</SelectItem>
-                    <SelectItem value="OFF">🚫 Off</SelectItem>
+                    <SelectItem value="TIDAK_HADIR">❌ Tidak Hadir</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -919,76 +864,18 @@ export default function AttendancePage() {
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={editingItem.setengahHari || false}
+                  checked={Boolean(editingItem.isLembur)}
                   onChange={(e) =>
                     setEditingItem({
                       ...editingItem,
-                      setengahHari: e.target.checked,
-                      hadir: e.target.checked ? true : editingItem.hadir,
-                      status: e.target.checked
-                        ? isPresentStatus(editingItem.status)
-                          ? editingItem.status
-                          : "HADIR"
-                        : editingItem.status,
+                      isLembur: e.target.checked,
                     })
                   }
-                  disabled={!editingItem.hadir || editingItem.status === "OFF"}
-                  id="edit-setengah-hari"
-                  className="w-4 h-4"
-                />
-                <label
-                  htmlFor="edit-setengah-hari"
-                  className="text-sm text-gray-600"
-                >
-                  Setengah Hari (hanya dihitung setengah gaji)
-                </label>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={editingItem.status === "LEMBUR"}
-                  onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      status: e.target.checked ? "LEMBUR" : "HADIR",
-                      hadir: true,
-                    })
-                  }
-                  disabled={!editingItem.hadir || editingItem.status === "OFF"}
                   id="edit-lembur"
                   className="w-4 h-4"
                 />
                 <label htmlFor="edit-lembur" className="text-sm text-gray-600">
-                  Lembur (+1 hari lembur)
-                </label>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={editingItem.hadir || false}
-                  onChange={(e) => {
-                    const isChecked = e.target.checked;
-                    setEditingItem({
-                      ...editingItem,
-                      hadir: isChecked,
-                      status: isChecked
-                        ? isPresentStatus(editingItem.status)
-                          ? editingItem.status
-                          : "HADIR"
-                        : editingItem.status === "OFF"
-                        ? "OFF"
-                        : "ALPA",
-                      setengahHari: isChecked ? editingItem.setengahHari : false,
-                    });
-                  }}
-                  disabled={editingItem.status === "OFF"}
-                  id="edit-hadir"
-                  className="w-4 h-4"
-                />
-                <label htmlFor="edit-hadir" className="text-sm text-gray-600">
-                  Karyawan Hadir
+                  Lembur (+1 hari efektif)
                 </label>
               </div>
             </div>
@@ -1004,6 +891,47 @@ export default function AttendancePage() {
                 Batal
               </Button>
               <Button onClick={handleSaveEdit}>Simpan</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PDF Preview Modal */}
+      {pdfPreviewUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="flex h-[90vh] w-full max-w-6xl flex-col rounded-lg bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b px-4 py-3">
+              <div>
+                <h2 className="text-base font-semibold">Preview Laporan PDF</h2>
+                <p className="text-xs text-muted-foreground">
+                  Cek data dulu sebelum download file.
+                </p>
+              </div>
+              <button
+                onClick={closePdfPreview}
+                className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Tutup preview PDF"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 p-3">
+              <iframe
+                src={pdfPreviewUrl}
+                title="Preview laporan absensi"
+                className="h-full w-full rounded-md border"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t px-4 py-3">
+              <Button variant="outline" onClick={closePdfPreview}>
+                Tutup
+              </Button>
+              <Button onClick={handleDownloadPreviewedPdf}>
+                <Download className="mr-2 h-4 w-4" />
+                Download PDF
+              </Button>
             </div>
           </div>
         </div>

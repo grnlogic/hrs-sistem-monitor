@@ -70,6 +70,11 @@ export const authOptions: NextAuthOptions = {
           name,
           email,
           role,
+          lokasi: (typeof data.user.lokasi === "string" ? data.user.lokasi.toUpperCase() : null) as
+            | "PJP"
+            | "SP"
+            | "PRIMA"
+            | null,
           accessToken: data.token,
         } as any;
       },
@@ -79,6 +84,7 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.role = (user as any).role;
+        token.lokasi = (user as any).lokasi;
         token.accessToken = (user as any).accessToken;
       }
       return token;
@@ -86,6 +92,8 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         session.user.role = (token.role as "HRD" | "AKUNTANSI") ?? "HRD";
+        session.user.lokasi =
+          (token.lokasi as "PJP" | "SP" | "PRIMA" | null | undefined) ?? null;
       }
       session.accessToken = (token.accessToken as string | undefined) ?? "";
       return session;

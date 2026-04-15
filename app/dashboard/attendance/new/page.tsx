@@ -29,37 +29,62 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/form/select";
-import { ArrowLeft, Save, Clock, Download, Search } from "lucide-react";
+import { ArrowLeft, Save, Clock, Download, Search, CheckCircle2, XCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
-import { attendanceAPI, employeeAPI, publicSetengahHariAPI } from "@/lib/api";
+import { attendanceAPI, employeeAPI } from "@/lib/api";
+import { NAMA_PT } from "@/lib/constants/perusahaan";
 
-type AbsensiStatus = "HADIR" | "SAKIT" | "IZIN" | "ALPA" | "OFF";
+type AbsensiStatus = "HADIR" | "SETENGAH_HARI" | "IZIN" | "TIDAK_HADIR";
 
 type EmployeeOption = {
   id: number;
   nik: string;
   namaLengkap: string;
   departemen: string;
+  lokasiDefault: "PJP" | "SP" | "PRIMA";
 };
 
 type AbsensiDraft = {
   status: AbsensiStatus;
   lembur: boolean;
-  setengahHari: boolean;
   keterangan: string;
+  lokasi: "PJP" | "SP" | "PRIMA";
 };
+
+type SaveToast = {
+  type: "success" | "error";
+  message: string;
+} | null;
+
+const LOKASI_OPTIONS: Array<{ value: "PJP" | "SP" | "PRIMA"; label: string }> = [
+  { value: "PJP", label: NAMA_PT.PJP },
+  { value: "SP", label: NAMA_PT.SP },
+  { value: "PRIMA", label: NAMA_PT.PRIMA },
+];
 
 const ABSENSI_STATUS_OPTIONS: Array<{ value: AbsensiStatus; label: string }> = [
   { value: "HADIR", label: "Hadir" },
-  { value: "SAKIT", label: "Sakit" },
+  { value: "SETENGAH_HARI", label: "Setengah Hari" },
   { value: "IZIN", label: "Izin" },
-  { value: "ALPA", label: "Alpa" },
-  { value: "OFF", label: "Off" },
+  { value: "TIDAK_HADIR", label: "Tidak Hadir" },
 ];
 
 const getTodayDate = () => new Date().toLocaleDateString("en-CA");
 
-const isPresentStatus = (status: AbsensiStatus) => status === "HADIR";
+const formatStatusLabel = (status: AbsensiStatus) => {
+  if (status === "HADIR") return "Hadir";
+  if (status === "SETENGAH_HARI") return "Setengah Hari";
+  if (status === "IZIN") return "Tidak Hadir (Izin)";
+  return "Tidak Hadir";
+};
+
+const hitungHariEfektif = (status: AbsensiStatus, isLembur: boolean) => {
+  let hari = 0;
+  if (status === "HADIR") hari = 1;
+  if (status === "SETENGAH_HARI") hari = 0.5;
+  if (isLembur) hari += 1;
+  return hari;
+};
 
 export default function NewAttendancePage() {
   const router = useRouter();
@@ -74,21 +99,51 @@ export default function NewAttendancePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(true);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [saveToast, setSaveToast] = useState<SaveToast>(null);
   const [submitStats, setSubmitStats] = useState<{
     successCount: number;
     failCount: number;
     hadirCount: number;
+    setengahHariCount: number;
     lemburCount: number;
     izinCount: number;
-    sakitCount: number;
-    alpaCount: number;
-    offCount: number;
+    tidakHadirCount: number;
   } | null>(null);
 
   useEffect(() => {
     fetchEmployees();
   }, []);
+
+  const buildInitialAbsensiMap = (employeeList: EmployeeOption[]) => {
+    const initialMap: Record<number, AbsensiDraft> = {};
+    employeeList.forEach((emp) => {
+      initialMap[emp.id] = {
+        status: "HADIR",
+        lembur: false,
+        keterangan: "",
+        lokasi: emp.lokasiDefault,
+      };
+    });
+    return initialMap;
+  };
+
+  const showSaveToast = (type: "success" | "error", message: string) => {
+    setSaveToast({ type, message });
+    window.setTimeout(() => {
+      setSaveToast((current) => (current?.message === message ? null : current));
+    }, 2500);
+  };
+
+  const resetAttendanceForm = () => {
+    setSelectedDate(getTodayDate());
+    setSelectedDept("all");
+    setSearchName("");
+    setStatusFilter("all");
+    setAppliedEmployeeIds([]);
+    setShowFilteredEmployees(false);
+    setSubmitStats(null);
+    setAbsensiMap(buildInitialAbsensiMap(employees));
+  };
 
   const fetchEmployees = async () => {
     try {
@@ -99,20 +154,13 @@ export default function NewAttendancePage() {
         namaLengkap: emp.namaLengkap || emp.name || "(Tanpa Nama)",
         nik: emp.nik || emp.nip || "(Tanpa NIK)",
         departemen: emp.departemen || "Lainnya",
+        lokasiDefault: ["PJP", "SP", "PRIMA"].includes((emp.lokasiDefault || "").toUpperCase())
+          ? (emp.lokasiDefault.toUpperCase() as "PJP" | "SP" | "PRIMA")
+          : "PJP",
       }));
 
       setEmployees(mappedEmployees);
-
-      const initialMap: Record<number, AbsensiDraft> = {};
-      mappedEmployees.forEach((emp) => {
-        initialMap[emp.id] = {
-          status: "HADIR",
-          lembur: false,
-          setengahHari: false,
-          keterangan: "",
-        };
-      });
-      setAbsensiMap(initialMap);
+      setAbsensiMap(buildInitialAbsensiMap(mappedEmployees));
     } catch (err) {
       setError("Gagal memuat data karyawan");
     } finally {
@@ -150,20 +198,18 @@ export default function NewAttendancePage() {
       const isLembur = Boolean(absensiMap[emp.id]?.lembur);
       acc.total += 1;
       if (currentStatus === "HADIR") acc.hadir += 1;
-      if (currentStatus === "HADIR" && isLembur) acc.lembur += 1;
-      if (currentStatus === "SAKIT") acc.sakit += 1;
+      if (currentStatus === "SETENGAH_HARI") acc.setengahHari += 1;
       if (currentStatus === "IZIN") acc.izin += 1;
-      if (currentStatus === "ALPA") acc.alpa += 1;
-      if (currentStatus === "OFF") acc.off += 1;
+      if (currentStatus === "TIDAK_HADIR") acc.tidakHadir += 1;
+      if (isLembur) acc.lembur += 1;
       return acc;
     },
-    { total: 0, hadir: 0, lembur: 0, sakit: 0, izin: 0, alpa: 0, off: 0 }
+    { total: 0, hadir: 0, setengahHari: 0, lembur: 0, izin: 0, tidakHadir: 0 }
   );
 
   const applyFilter = () => {
     setAppliedEmployeeIds(filteredEmployees.map((emp) => emp.id));
     setShowFilteredEmployees(true);
-    setSuccess("");
     setSubmitStats(null);
   };
 
@@ -180,15 +226,11 @@ export default function NewAttendancePage() {
       const current = prev[employeeId] || {
         status: "HADIR" as AbsensiStatus,
         lembur: false,
-        setengahHari: false,
         keterangan: "",
+        lokasi: "PJP",
       };
 
       const next: AbsensiDraft = { ...current, ...patch };
-      if (!isPresentStatus(next.status)) {
-        next.lembur = false;
-        next.setengahHari = false;
-      }
 
       return {
         ...prev,
@@ -204,14 +246,12 @@ export default function NewAttendancePage() {
         const prevData = next[emp.id] || {
           status: "HADIR" as AbsensiStatus,
           lembur: false,
-          setengahHari: false,
           keterangan: "",
+          lokasi: emp.lokasiDefault,
         };
         next[emp.id] = {
           ...prevData,
           status,
-          lembur: isPresentStatus(status) ? prevData.lembur : false,
-          setengahHari: isPresentStatus(status) ? prevData.setengahHari : false,
         };
       });
       return next;
@@ -240,41 +280,44 @@ export default function NewAttendancePage() {
         head: [["Ringkasan", "Jumlah"]],
         body: [
           ["Total Karyawan Diisi", String(summary.total)],
-          ["Hadir (termasuk lembur)", String(summary.hadir)],
+          ["Hadir", String(summary.hadir)],
+          ["Setengah Hari", String(summary.setengahHari)],
           ["Lembur", String(summary.lembur)],
-          ["Sakit", String(summary.sakit)],
           ["Izin", String(summary.izin)],
-          ["Alpa", String(summary.alpa)],
-          ["Off", String(summary.off)],
+          ["Tidak Hadir", String(summary.tidakHadir)],
         ],
         styles: { fontSize: 9 },
       });
 
-      const izinSakitRows = displayedEmployees
+      const rows = displayedEmployees
         .map((emp) => {
           const item = absensiMap[emp.id] || {
             status: "HADIR" as AbsensiStatus,
             lembur: false,
-            setengahHari: false,
             keterangan: "",
+            lokasi: emp.lokasiDefault,
           };
+
           return {
+            tanggal: selectedDate,
             nama: emp.namaLengkap,
-            nik: emp.nik,
-            status: item.status,
+            status: formatStatusLabel(item.status),
+            lembur: item.lembur ? "Lembur" : "-",
+            hariEfektif: String(hitungHariEfektif(item.status, item.lembur)),
             keterangan: item.keterangan?.trim() || "-",
           };
-        })
-        .filter((row) => row.status === "IZIN" || row.status === "SAKIT");
+        });
 
-      if (izinSakitRows.length > 0) {
+      if (rows.length > 0) {
         autoTable(doc, {
           startY: (doc as any).lastAutoTable.finalY + 8,
-          head: [["Nama", "NIK", "Status", "Keterangan"]],
-          body: izinSakitRows.map((row) => [
+          head: [["Tanggal", "Nama", "Status Kehadiran", "Lembur", "Hari Efektif", "Keterangan"]],
+          body: rows.map((row) => [
+            row.tanggal,
             row.nama,
-            row.nik,
             row.status,
+            row.lembur,
+            row.hariEfektif,
             row.keterangan,
           ]),
           styles: { fontSize: 9 },
@@ -292,46 +335,28 @@ export default function NewAttendancePage() {
     e.preventDefault();
 
     if (!showFilteredEmployees || displayedEmployees.length === 0) {
-      setError("Terapkan filter dulu lalu pastikan ada karyawan yang ditampilkan");
+      const message = "Terapkan filter dulu lalu pastikan ada karyawan yang ditampilkan";
+      setError(message);
+      showSaveToast("error", message);
       return;
     }
 
     setIsLoading(true);
     setError("");
-    setSuccess("");
+    setSaveToast(null);
     setSubmitStats(null);
 
     try {
       await attendanceAPI.submitBulk({
         tanggal: selectedDate,
         data: displayedEmployees.map((emp) => ({
-          // Lembur disimpan sebagai status LEMBUR agar terhitung +1 hari di modul gaji.
           karyawanId: emp.id,
-          status:
-            (absensiMap[emp.id]?.status || "HADIR") === "HADIR" && Boolean(absensiMap[emp.id]?.lembur)
-              ? "LEMBUR"
-              : absensiMap[emp.id]?.status || "HADIR",
+          status: absensiMap[emp.id]?.status || "HADIR",
+          isLembur: Boolean(absensiMap[emp.id]?.lembur),
+          lokasi: absensiMap[emp.id]?.lokasi || emp.lokasiDefault,
+          keterangan: absensiMap[emp.id]?.keterangan?.trim() || undefined,
         })),
       });
-
-      const setengahHariRecords = displayedEmployees
-        .filter((emp) => {
-          const draft = absensiMap[emp.id];
-          return (draft?.status || "HADIR") === "HADIR" && Boolean(draft?.setengahHari);
-        })
-        .map((emp) => ({
-          karyawanId: emp.id,
-          lembur: Boolean(absensiMap[emp.id]?.lembur),
-          keterangan:
-            absensiMap[emp.id]?.keterangan?.trim() || "Setengah hari via input absensi massal",
-        }));
-
-      if (setengahHariRecords.length > 0) {
-        await publicSetengahHariAPI.submitBulk({
-          tanggal: selectedDate,
-          records: setengahHariRecords,
-        });
-      }
 
       const successCount = displayedEmployees.length;
       const failCount = 0;
@@ -340,21 +365,21 @@ export default function NewAttendancePage() {
         successCount,
         failCount,
         hadirCount: summary.hadir,
+        setengahHariCount: summary.setengahHari,
         lemburCount: summary.lembur,
         izinCount: summary.izin,
-        sakitCount: summary.sakit,
-        alpaCount: summary.alpa,
-        offCount: summary.off,
+        tidakHadirCount: summary.tidakHadir,
       });
 
       if (successCount > 0) {
-        setSuccess(
-          `Absensi selesai dikirim. Berhasil ${successCount}, gagal ${failCount}.`
-        );
+        showSaveToast("success", "Absensi berhasil disimpan");
+        resetAttendanceForm();
       }
 
     } catch (err) {
-      setError("Gagal mencatat absensi. Silakan coba lagi.");
+      const message = "Gagal mencatat absensi. Silakan coba lagi.";
+      setError(message);
+      showSaveToast("error", message);
     } finally {
       setIsLoading(false);
     }
@@ -392,19 +417,11 @@ export default function NewAttendancePage() {
           </Alert>
         )}
 
-        {success && (
-          <Alert className="border-green-200 bg-green-50">
-            <AlertDescription className="text-green-800">
-              {success}
-            </AlertDescription>
-          </Alert>
-        )}
-
         {submitStats && (
           <Alert className="border-blue-200 bg-blue-50">
             <AlertDescription className="text-blue-800">
-              Rekap kirim: Hadir {submitStats.hadirCount} (termasuk lembur), Lembur {submitStats.lemburCount}, Sakit {submitStats.sakitCount},
-              Izin {submitStats.izinCount}, Alpa {submitStats.alpaCount}, Off {submitStats.offCount}.
+              Rekap kirim: Hadir {submitStats.hadirCount}, Setengah Hari {submitStats.setengahHariCount}, Lembur {submitStats.lemburCount},
+              Izin {submitStats.izinCount}, Tidak Hadir {submitStats.tidakHadirCount}.
             </AlertDescription>
           </Alert>
         )}
@@ -515,10 +532,10 @@ export default function NewAttendancePage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setAllStatusForDisplayed("OFF")}
+                onClick={() => setAllStatusForDisplayed("TIDAK_HADIR")}
                 disabled={displayedEmployees.length === 0}
               >
-                Set Semua Off
+                Set Semua Tidak Hadir
               </Button>
               <Button
                 type="button"
@@ -531,7 +548,7 @@ export default function NewAttendancePage() {
               </Button>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
               <div className="p-3 rounded border bg-indigo-50 border-indigo-200">
                 <p className="text-xs text-indigo-800">Total Diisi</p>
                 <p className="text-xl font-bold text-indigo-900">{summary.total}</p>
@@ -541,24 +558,20 @@ export default function NewAttendancePage() {
                 <p className="text-xl font-bold text-green-900">{summary.hadir}</p>
               </div>
               <div className="p-3 rounded border bg-orange-50 border-orange-200">
-                <p className="text-xs text-orange-800">Lembur</p>
-                <p className="text-xl font-bold text-orange-900">{summary.lembur}</p>
+                <p className="text-xs text-orange-800">Setengah Hari</p>
+                <p className="text-xl font-bold text-orange-900">{summary.setengahHari}</p>
               </div>
               <div className="p-3 rounded border bg-yellow-50 border-yellow-200">
-                <p className="text-xs text-yellow-800">Sakit</p>
-                <p className="text-xl font-bold text-yellow-900">{summary.sakit}</p>
+                <p className="text-xs text-yellow-800">Lembur</p>
+                <p className="text-xl font-bold text-yellow-900">{summary.lembur}</p>
               </div>
               <div className="p-3 rounded border bg-blue-50 border-blue-200">
                 <p className="text-xs text-blue-800">Izin</p>
                 <p className="text-xl font-bold text-blue-900">{summary.izin}</p>
               </div>
               <div className="p-3 rounded border bg-red-50 border-red-200">
-                <p className="text-xs text-red-800">Alpa</p>
-                <p className="text-xl font-bold text-red-900">{summary.alpa}</p>
-              </div>
-              <div className="p-3 rounded border bg-gray-100 border-gray-300">
-                <p className="text-xs text-gray-700">Off</p>
-                <p className="text-xl font-bold text-gray-900">{summary.off}</p>
+                <p className="text-xs text-red-800">Tidak Hadir</p>
+                <p className="text-xl font-bold text-red-900">{summary.tidakHadir}</p>
               </div>
             </div>
 
@@ -568,21 +581,22 @@ export default function NewAttendancePage() {
                   <TableRow>
                     <TableHead className="w-72">Karyawan</TableHead>
                     <TableHead className="w-40">Status</TableHead>
-                    <TableHead className="w-28">Setengah Hari</TableHead>
+                    <TableHead className="w-36">Lokasi</TableHead>
                     <TableHead className="w-24">Lembur</TableHead>
+                    <TableHead className="w-28">Hari Efektif</TableHead>
                     <TableHead>Keterangan</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {!showFilteredEmployees ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-6 text-gray-500">
+                      <TableCell colSpan={6} className="text-center py-6 text-gray-500">
                         Gunakan filter lalu klik Terapkan Filter untuk menampilkan daftar.
                       </TableCell>
                     </TableRow>
                   ) : displayedEmployees.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-6 text-gray-500">
+                      <TableCell colSpan={6} className="text-center py-6 text-gray-500">
                         Tidak ada karyawan sesuai filter.
                       </TableCell>
                     </TableRow>
@@ -591,8 +605,8 @@ export default function NewAttendancePage() {
                       const rowData = absensiMap[employee.id] || {
                         status: "HADIR" as AbsensiStatus,
                         lembur: false,
-                        setengahHari: false,
                         keterangan: "",
+                        lokasi: employee.lokasiDefault,
                       };
 
                       return (
@@ -625,17 +639,25 @@ export default function NewAttendancePage() {
                             </Select>
                           </TableCell>
                           <TableCell>
-                            <input
-                              type="checkbox"
-                              checked={Boolean(rowData.setengahHari)}
-                              onChange={(e) =>
+                            <Select
+                              value={rowData.lokasi}
+                              onValueChange={(value: "PJP" | "SP" | "PRIMA") =>
                                 updateAbsensi(employee.id, {
-                                  setengahHari: e.target.checked,
+                                  lokasi: value,
                                 })
                               }
-                              disabled={!isPresentStatus(rowData.status)}
-                              className="w-4 h-4"
-                            />
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {LOKASI_OPTIONS.map((lokasi) => (
+                                  <SelectItem key={lokasi.value} value={lokasi.value}>
+                                    {lokasi.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </TableCell>
                           <TableCell>
                             <input
@@ -646,20 +668,31 @@ export default function NewAttendancePage() {
                                   lembur: e.target.checked,
                                 })
                               }
-                              disabled={!isPresentStatus(rowData.status)}
                               className="w-4 h-4"
                             />
                           </TableCell>
                           <TableCell>
-                            <Input
-                              value={rowData.keterangan}
-                              onChange={(e) =>
-                                updateAbsensi(employee.id, {
-                                  keterangan: e.target.value,
-                                })
-                              }
-                              placeholder="Keterangan (opsional)"
-                            />
+                            <span className="inline-flex min-w-14 justify-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-sm font-medium text-slate-700">
+                              {hitungHariEfektif(rowData.status, rowData.lembur)}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            {rowData.status === "IZIN" || rowData.status === "TIDAK_HADIR" ? (
+                              <div className="space-y-1">
+                                <Label className="text-xs text-gray-500">Keterangan (opsional)</Label>
+                                <Input
+                                  value={rowData.keterangan}
+                                  onChange={(e) =>
+                                    updateAbsensi(employee.id, {
+                                      keterangan: e.target.value,
+                                    })
+                                  }
+                                  placeholder="Contoh: sakit, keperluan keluarga, dll"
+                                />
+                              </div>
+                            ) : (
+                              <span className="text-sm text-gray-400">-</span>
+                            )}
                           </TableCell>
                         </TableRow>
                       );
@@ -697,6 +730,39 @@ export default function NewAttendancePage() {
           </Button>
         </div>
       </form>
+
+      {saveToast && (
+        <div className="pointer-events-none fixed right-5 top-5 z-50">
+          <div
+            style={{ animation: "toastPop 220ms ease-out" }}
+            className={`flex items-center gap-2 rounded-md border px-4 py-3 text-sm shadow-lg animate-pulse ${
+              saveToast.type === "success"
+                ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                : "border-rose-300 bg-rose-50 text-rose-800"
+            }`}
+          >
+            {saveToast.type === "success" ? (
+              <CheckCircle2 className="h-4 w-4" />
+            ) : (
+              <XCircle className="h-4 w-4" />
+            )}
+            <span>{saveToast.message}</span>
+          </div>
+        </div>
+      )}
+
+      <style jsx global>{`
+        @keyframes toastPop {
+          0% {
+            opacity: 0;
+            transform: translateY(-10px) scale(0.96);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+      `}</style>
     </div>
   );
 }

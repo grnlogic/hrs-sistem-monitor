@@ -19,6 +19,7 @@ export type Employee = {
   nip: string;
   email: string;
   department: string;
+  lokasiDefault?: "PJP" | "SP" | "PRIMA";
   position: string;
   avatar?: string;
   emergencyContact?: {

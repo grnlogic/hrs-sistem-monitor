@@ -1,5 +1,5 @@
-import { SalaryStepperDashboard } from "../_components/salary-stepper-dashboard";
+import { NonStaffSalaryWorkflow } from "../_components/nonstaff-salary-workflow";
 
 export default function NonStaffSalaryPage() {
-  return <SalaryStepperDashboard pageType="nonstaff" />;
+  return <NonStaffSalaryWorkflow />;
 }

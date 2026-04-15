@@ -73,6 +73,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/overlay/dialog";
+import { getNamaPtByKode } from "@/lib/constants/perusahaan";
 import { Checkbox } from "@/components/ui/form/checkbox";
 import { employeeAPI } from "@/lib/api";
 import type { Employee } from "@/lib/types";
@@ -256,6 +257,12 @@ export default function EmployeesPage() {
         name: emp.namaLengkap || emp.name || "-",
         nip: emp.nik || emp.nip || "-",
         department: emp.departemen || emp.department || "-",
+        lokasiDefault:
+          String(emp.lokasiDefault || "").toUpperCase() === "SP"
+            ? "SP"
+            : String(emp.lokasiDefault || "").toUpperCase() === "PRIMA"
+            ? "PRIMA"
+            : "PJP",
         position: emp.jabatan || emp.position || "-",
         status:
           emp.statusKaryawan === "AKTIF"
@@ -285,6 +292,10 @@ export default function EmployeesPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const formatLokasiLabel = (lokasi?: "PJP" | "SP" | "PRIMA") => {
+    return getNamaPtByKode(lokasi);
   };
 
   // Load foto untuk semua karyawan setelah data dimuat
@@ -940,6 +951,7 @@ export default function EmployeesPage() {
                   <TableHead>NIK</TableHead>
                   <TableHead>Posisi</TableHead>
                   <TableHead>Departemen</TableHead>
+                  <TableHead>Lokasi</TableHead>
                   <TableHead>Tanggal Masuk</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Aksi</TableHead>
@@ -990,6 +1002,7 @@ export default function EmployeesPage() {
                     </TableCell>
                     <TableCell>{employee.position}</TableCell>
                     <TableCell>{employee.department}</TableCell>
+                    <TableCell>{formatLokasiLabel(employee.lokasiDefault)}</TableCell>
                     <TableCell>
                       {new Date(employee.joinDate).toLocaleDateString("id-ID")}
                     </TableCell>

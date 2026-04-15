@@ -46,6 +46,7 @@ import { printPKBPDF } from "@/lib/utils";
 import type { PKBData, TipeUpahPKB } from "@/lib/pkb-template";
 import { getDefaultPKBData } from "@/lib/pkb-template";
 import type { PKBDocxPayload, PKBDivision } from "@/lib/pkb-docx";
+import { NAMA_PT } from "@/lib/constants/perusahaan";
 import ReactCrop, {
   Crop as CropType,
   PixelCrop,
@@ -72,9 +73,20 @@ const ALL_DEPARTMENTS = [
   { label: "Staff", value: "STAFF" },
 ];
 
+const LOKASI_PT_OPTIONS = [
+  { label: NAMA_PT.PJP, value: "PJP" },
+  { label: NAMA_PT.SP, value: "SP" },
+  { label: NAMA_PT.PRIMA, value: "PRIMA" },
+];
+
+function isStaffDepartment(divisi?: string): boolean {
+  return (divisi || "").toLowerCase().includes("staff");
+}
+
 function inferTipeUpah(divisi?: string): TipeUpahPKB {
   const div = (divisi || "").toLowerCase();
-  if (div.includes("sales") || div.includes("staff")) return "per_hari";
+  if (div.includes("staff")) return "per_bulan";
+  if (div.includes("sales")) return "per_hari";
   if (div.includes("blend")) return "per_kg";
   return "per_pack";
 }
@@ -83,10 +95,23 @@ function inferDivision(tipeUpah: TipeUpahPKB, divisi?: string): PKBDivision {
   const div = (divisi || "").toLowerCase();
   if (div.includes("pack")) return "packing";
   if (div.includes("blend")) return "blending";
-  if (div.includes("sales") || div.includes("staff")) return "sales";
+  if (div.includes("staff")) return "staff";
+  if (div.includes("sales")) return "sales";
   if (tipeUpah === "per_pack") return "packing";
   if (tipeUpah === "per_kg") return "blending";
+  if (tipeUpah === "per_bulan") return "staff";
   return "sales";
+}
+
+function getNominalUpahFromForm(gajiInput: string, tipeUpah: TipeUpahPKB): number {
+  const inputNominal = Number(gajiInput);
+  if (Number.isFinite(inputNominal) && inputNominal > 0) {
+    return inputNominal;
+  }
+  if (tipeUpah === "per_hari") return 68450;
+  if (tipeUpah === "per_kg") return 3400;
+  if (tipeUpah === "per_bulan") return 1500000;
+  return 3000;
 }
 
 const ASPECT_RATIO = 1;
@@ -172,6 +197,7 @@ export default function NewEmployeePage() {
   // Form data (persistent across steps)
   const [formData, setFormData] = useState({
     nik: "", namaLengkap: "", departemen: "", tanggalMasuk: "", gajiPerHari: "",
+    lokasiDefault: "",
     statusKaryawan: "KONTRAK", roleKaryawan: "Karyawan", noHp: "", email: "", alamat: "",
     noKtp: "", npwp: "", bpjsNominal: "",
     noBpjs: "",
@@ -184,6 +210,8 @@ export default function NewEmployeePage() {
   const updateField = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
+
+  const isStaffSelected = isStaffDepartment(formData.departemen);
 
   // ---- Photo handlers ----
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -243,8 +271,11 @@ export default function NewEmployeePage() {
     if (!formData.nik.trim()) return "NIK harus diisi";
     if (!formData.namaLengkap.trim()) return "Nama Lengkap harus diisi";
     if (!formData.departemen) return "Divisi harus dipilih";
+    if (!formData.lokasiDefault) return "Lokasi PT harus dipilih";
     if (!formData.tanggalMasuk) return "Tanggal Masuk harus diisi";
-    if (!formData.gajiPerHari || Number(formData.gajiPerHari) <= 0) return "Gaji Per Hari harus diisi";
+    if (!formData.gajiPerHari || Number(formData.gajiPerHari) <= 0) {
+      return isStaffSelected ? "Gaji Per Bulan harus diisi" : "Gaji Per Hari harus diisi";
+    }
     if (formData.bpjsNominal === "" || Number(formData.bpjsNominal) < 0) return "Potongan BPJS/Bulan harus diisi";
     if (!formData.alamat.trim()) return "Alamat harus diisi";
     if (!formData.roleKaryawan) return "Role karyawan harus dipilih";
@@ -258,7 +289,7 @@ export default function NewEmployeePage() {
     setPrintingPkb(true);
     const defaults = getDefaultPKBData();
     const tipeUpah = inferTipeUpah(formData.departemen);
-    const nominalDefault = tipeUpah === "per_hari" ? 68450 : tipeUpah === "per_kg" ? 3400 : 3000;
+    const nominalUpah = getNominalUpahFromForm(formData.gajiPerHari, tipeUpah);
 
     const pkbData: PKBData = {
       ...defaults,
@@ -272,9 +303,14 @@ export default function NewEmployeePage() {
       pihak2Alamat: formData.alamat || "",
       pihak2TandaTangan: formData.namaLengkap,
       tipeUpah,
-      nominalUpah: nominalDefault,
+      nominalUpah,
       bonusNominal: tipeUpah === "per_pack" ? 250 : undefined,
-      catatanPembayaran: tipeUpah === "per_hari" ? "yang akan dibayarkan setiap hari Sabtu" : undefined,
+      catatanPembayaran:
+        tipeUpah === "per_hari"
+          ? "yang akan dibayarkan setiap hari Sabtu"
+          : tipeUpah === "per_bulan"
+            ? "yang akan dibayarkan setiap akhir bulan"
+            : undefined,
       tanggalPerjanjian: formData.tanggalMasuk || new Date().toISOString().split("T")[0],
     } as PKBData;
 
@@ -297,6 +333,10 @@ export default function NewEmployeePage() {
     setIsLoading(true);
     setError("");
 
+    const gajiInput = Number(formData.gajiPerHari);
+    const payloadGajiPerHari = isStaffSelected ? 0 : gajiInput;
+    const payloadGajiPerBulan = isStaffSelected ? gajiInput : null;
+
     const employeeData = {
       nik: formData.nik,
       namaLengkap: formData.namaLengkap,
@@ -304,8 +344,10 @@ export default function NewEmployeePage() {
       noHp: formData.noHp || null,
       jabatan: formData.roleKaryawan || null,
       departemen: formData.departemen,
+      lokasiDefault: formData.lokasiDefault || "PJP",
       tanggalMasuk: formData.tanggalMasuk,
-      gajiPerHari: Number(formData.gajiPerHari),
+      gajiPerHari: payloadGajiPerHari,
+      gajiPerBulan: payloadGajiPerBulan,
       statusKaryawan: formData.statusKaryawan,
       tempatLahir: formData.tempatLahir || null,
       tanggalLahir: formData.tanggalLahir || null,
@@ -339,7 +381,7 @@ export default function NewEmployeePage() {
       // Save PKB data
       try {
         const tipeUpah = inferTipeUpah(formData.departemen);
-        const nominalDefault = tipeUpah === "per_hari" ? 68450 : tipeUpah === "per_kg" ? 3400 : 3000;
+        const nominalUpah = getNominalUpahFromForm(formData.gajiPerHari, tipeUpah);
         const defaults = getDefaultPKBData();
         await employeeAPI.savePKB(newEmployee.id.toString(), {
           pihak1Nama: defaults.pihak1Nama,
@@ -354,8 +396,14 @@ export default function NewEmployeePage() {
           bpjsKetenagakerjaanNominal: "0",
           pihak2Alamat: formData.alamat || "",
           tipeUpah,
-          nominalUpah: nominalDefault,
+          nominalUpah,
           bonusNominal: tipeUpah === "per_pack" ? 250 : undefined,
+          catatanPembayaran:
+            tipeUpah === "per_hari"
+              ? "yang akan dibayarkan setiap hari Sabtu"
+              : tipeUpah === "per_bulan"
+                ? "yang akan dibayarkan setiap akhir bulan"
+                : undefined,
           tanggalPerjanjian: formData.tanggalMasuk,
           dokumenHtml: pkbSnapshot ?? undefined,
         });
@@ -535,8 +583,28 @@ export default function NewEmployeePage() {
                   <Input id="tanggalMasuk" type="date" value={formData.tanggalMasuk} onChange={(e) => updateField("tanggalMasuk", e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="gajiPerHari" className="text-sm">Gaji Per Hari *</Label>
-                  <Input id="gajiPerHari" type="number" value={formData.gajiPerHari} onChange={(e) => updateField("gajiPerHari", e.target.value)} />
+                  <Label htmlFor="gajiPerHari" className="text-sm">{isStaffSelected ? "Gaji Per Bulan *" : "Gaji Per Hari *"}</Label>
+                  <Input
+                    id="gajiPerHari"
+                    type="number"
+                    value={formData.gajiPerHari}
+                    onChange={(e) => updateField("gajiPerHari", e.target.value)}
+                    placeholder={isStaffSelected ? "Contoh: 3500000" : "Contoh: 120000"}
+                  />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label className="text-sm">Lokasi PT *</Label>
+                  <Select value={formData.lokasiDefault} onValueChange={(v) => updateField("lokasiDefault", v)}>
+                    <SelectTrigger><SelectValue placeholder="Pilih lokasi PT" /></SelectTrigger>
+                    <SelectContent>
+                      {LOKASI_PT_OPTIONS.map((lokasi) => (
+                        <SelectItem key={lokasi.value} value={lokasi.value}>{lokasi.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-slate-500">
+                    Lokasi asal karyawan sesuai PKB. Bisa berbeda saat absensi jika dipindahtugaskan.
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm">Status (Tetap/Kontrak) *</Label>
@@ -642,7 +710,10 @@ export default function NewEmployeePage() {
                 <div><span className="text-slate-500">Potongan BPJS/Bulan:</span> <span className="font-medium">Rp {(Number(formData.bpjsNominal || 0) || 0).toLocaleString("id-ID")}</span></div>
                 <div><span className="text-slate-500">Alamat:</span> <span className="font-medium">{formData.alamat || "-"}</span></div>
                 <div><span className="text-slate-500">Tgl Masuk:</span> <span className="font-medium">{formData.tanggalMasuk}</span></div>
-                <div><span className="text-slate-500">Gaji/Hari:</span> <span className="font-medium">Rp {Number(formData.gajiPerHari).toLocaleString("id-ID")}</span></div>
+                <div>
+                  <span className="text-slate-500">{isStaffSelected ? "Gaji/Bulan:" : "Gaji/Hari:"}</span>{" "}
+                  <span className="font-medium">Rp {Number(formData.gajiPerHari).toLocaleString("id-ID")}</span>
+                </div>
                 <div><span className="text-slate-500">Tipe Upah:</span> <span className="font-medium capitalize">{inferTipeUpah(formData.departemen).replace("_", " ")}</span></div>
                 <div><span className="text-slate-500">Divisi PKB:</span> <span className="font-medium capitalize">{inferDivision(inferTipeUpah(formData.departemen), formData.departemen)}</span></div>
               </div>
@@ -743,6 +814,7 @@ export default function NewEmployeePage() {
                 setStep(1);
                 setFormData({
                   nik: "", namaLengkap: "", departemen: "", tanggalMasuk: "", gajiPerHari: "",
+                  lokasiDefault: "",
                   statusKaryawan: "KONTRAK", roleKaryawan: "Karyawan", noHp: "", email: "", alamat: "",
                   noKtp: "", npwp: "", bpjsNominal: "",
                   noBpjs: "",

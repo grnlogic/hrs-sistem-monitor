@@ -16,6 +16,34 @@ const getApiBaseUrl = () => {
 const API_BASE_URL = getApiBaseUrl()
 const API_TIMEOUT = parseInt(process.env.NEXT_PUBLIC_API_TIMEOUT || "30000")
 const API_RETRY_ATTEMPTS = parseInt(process.env.NEXT_PUBLIC_API_RETRY_ATTEMPTS || "3")
+const API_ORIGIN = API_BASE_URL.endsWith("/api") ? API_BASE_URL.slice(0, -4) : API_BASE_URL
+
+export type GaleriTipeMedia = "FOTO" | "VIDEO" | "DOKUMEN"
+
+export type GaleriItem = {
+  id: string
+  judul: string
+  label?: string | null
+  tipe: GaleriTipeMedia
+  url: string
+  thumbnail?: string | null
+  lokasi?: "PJP" | "SP" | "PRIMA" | null
+  uploadedBy: string
+  createdAt: string
+  updatedAt: string
+  uploader?: {
+    id: string
+    username: string
+    namaLengkap?: string | null
+  } | null
+}
+
+export const resolveMediaUrl = (url: string) => {
+  if (!url) return ""
+  if (url.startsWith("http://") || url.startsWith("https://")) return url
+  const path = url.startsWith("/") ? url : `/${url}`
+  return `${API_ORIGIN}${path}`
+}
 
 // Auth token management
 let authToken: string | null = null
@@ -113,6 +141,7 @@ export const authAPI = {
 }
 
 export type SystemRole = "HRD" | "AKUNTANSI"
+export type LokasiCode = "PJP" | "SP" | "PRIMA"
 
 export type SystemUser = {
   id: string
@@ -120,6 +149,7 @@ export type SystemUser = {
   namaLengkap: string
   email?: string | null
   role: SystemRole
+  lokasi?: LokasiCode | null
   isActive: boolean
 }
 
@@ -134,6 +164,7 @@ export const userManagementAPI = {
     email?: string
     password: string
     role: SystemRole
+    lokasi?: LokasiCode | null
   }) => {
     return apiRequest("/users", {
       method: "POST",
@@ -149,6 +180,7 @@ export const userManagementAPI = {
       email: string
       password: string
       role: SystemRole
+      lokasi: LokasiCode | null
       isActive: boolean
     }>
   ) => {
@@ -282,6 +314,12 @@ export const employeeAPI = {
       }
       throw error
     }
+  },
+
+  forceDeleteAll: async () => {
+    return apiRequest("/karyawan/force-delete-all", {
+      method: "DELETE",
+    })
   },
 
   // Cek data terkait karyawan sebelum delete
@@ -425,8 +463,11 @@ export const attendanceAPI = {
         tanggal: attendance.tanggal,
         date: attendance.tanggal,
         status: attendance.status,
+        lokasi: attendance.lokasi,
         hadir: attendance.hadir,
         setengahHari: attendance.setengahHari,
+        isLembur: attendance.isLembur,
+        hariEfektif: attendance.hariEfektif,
         waktuMasuk: attendance.waktuMasuk,
         waktuPulang: attendance.waktuPulang,
         checkIn: attendance.waktuMasuk,
@@ -475,6 +516,9 @@ export const attendanceAPI = {
     data: Array<{
       karyawanId: number | string;
       status: string;
+      isLembur?: boolean;
+      keterangan?: string;
+      lokasi?: LokasiCode;
     }>;
   }) => {
     return apiRequest("/absensi/bulk", {
@@ -487,8 +531,22 @@ export const attendanceAPI = {
     return apiRequest(`/absensi/karyawan/${employeeId}`)
   },
 
+  getIzinSakitByEmployee: async (employeeId: string) => {
+    return apiRequest(`/absensi/karyawan/${employeeId}?status=IZIN,TIDAK_HADIR`) as Promise<{
+      data: Array<{
+        id: string
+        tanggal: string
+        status: "IZIN" | "TIDAK_HADIR"
+        keterangan?: string | null
+        isLembur?: boolean
+        hariEfektif?: number | string
+      }>
+      total: number
+    }>
+  },
+
   // Update absensi dengan PUT endpoint
-  update: async (id: string, data: { hadir: boolean, status: string, setengahHari: boolean, keterangan?: string }) => {
+  update: async (id: string, data: { hadir?: boolean, status: string, setengahHari?: boolean, isLembur?: boolean, keterangan?: string, lokasi?: LokasiCode }) => {
     return apiRequest(`/absensi/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -506,6 +564,12 @@ export const attendanceAPI = {
     return apiRequest(`/absensi/clear-today?date=${encodeURIComponent(tanggal)}`, {
       method: "DELETE",
     });
+  },
+
+  clearAll: async () => {
+    return apiRequest("/absensi/clear-all", {
+      method: "DELETE",
+    })
   },
 }
 
@@ -748,6 +812,25 @@ export const salaryAPI = {
     return apiRequest(`/gaji/${gajiId}/bonus-potongan`)
   },
 
+  koreksiHariEfektifNonStaff: async (data: {
+    gaji_id: string
+    karyawan_id: string
+    total_hari_efektif: number
+    gaji_pokok: number
+  }) => {
+    return apiRequest(`/salary/non-staff/koreksi-hari-efektif`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }) as Promise<{
+      success: boolean
+      data: {
+        gaji_id: string
+        total_hari_efektif: number
+        gaji_pokok: number
+      }
+    }>
+  },
+
   saveBonusPotongan: async (data: {
     gajiId: string
     karyawanId: string
@@ -758,6 +841,22 @@ export const salaryAPI = {
       method: "PUT",
       body: JSON.stringify(data),
     })
+  },
+
+  resetDraftNonStaff: async (data: {
+    periodeAwal: string
+    periodeAkhir: string
+    karyawanId?: string
+  }) => {
+    return apiRequest(`/gaji/reset-draft`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }) as Promise<{
+      message: string
+      matched: number
+      updated: number
+      deleted?: number
+    }>
   },
 }
 
@@ -961,6 +1060,108 @@ export const leaveAPI = {
   // Tambahkan fungsi untuk mendapatkan cuti berdasarkan karyawan dan tahun
   getByEmployeeAndYear: async (karyawanId: string, tahun: number) => {
     return apiRequest(`/cuti/karyawan/${karyawanId}/tahun/${tahun}`)
+  },
+
+  getEmployeeLeaveQuota: async (karyawanId: string, tahun?: number) => {
+    const yearQuery = Number.isInteger(tahun) ? `?tahun=${tahun}` : ""
+    return apiRequest(`/cuti/karyawan/${karyawanId}/kuota${yearQuery}`)
+  },
+
+  getEmployeeLeaveQuotaHistory: async (karyawanId: string, tahun?: number) => {
+    const yearQuery = Number.isInteger(tahun) ? `?tahun=${tahun}` : ""
+    return apiRequest(`/cuti/karyawan/${karyawanId}/kuota${yearQuery}`)
+  },
+
+  updateEmployeeLeaveQuota: async (
+    karyawanId: string,
+    data: { tahun?: number; batasMaksimal: number }
+  ) => {
+    return apiRequest(`/cuti/karyawan/${karyawanId}/kuota`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    })
+  },
+
+  resetAnnualQuota: async () => {
+    return apiRequest("/cuti/reset-tahunan", {
+      method: "POST",
+    })
+  },
+}
+
+export const galleryAPI = {
+  getAll: async (params?: {
+    tipe?: GaleriTipeMedia
+    lokasi?: LokasiCode
+    label?: string
+    q?: string
+  }) => {
+    const query = new URLSearchParams()
+    if (params?.tipe) query.append("tipe", params.tipe)
+    if (params?.lokasi) query.append("lokasi", params.lokasi)
+    if (params?.label) query.append("label", params.label)
+    if (params?.q) query.append("q", params.q)
+    const qs = query.toString()
+    return apiRequest(`/galeri${qs ? `?${qs}` : ""}`) as Promise<{
+      total: number
+      items: GaleriItem[]
+    }>
+  },
+
+  upload: async (payload: {
+    judul: string
+    tipe: GaleriTipeMedia
+    file: File
+    label?: string
+    lokasi?: LokasiCode
+    thumbnail?: File
+  }) => {
+    const token = getAuthToken()
+    const formData = new FormData()
+    formData.append("judul", payload.judul)
+    formData.append("tipe", payload.tipe)
+    formData.append("file", payload.file)
+    if (payload.label) formData.append("label", payload.label)
+    if (payload.lokasi) formData.append("lokasi", payload.lokasi)
+    if (payload.thumbnail) formData.append("thumbnail", payload.thumbnail)
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/galeri`, {
+        method: "POST",
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: formData,
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => null)
+        throw new Error(err?.error || `HTTP error! status: ${response.status}`)
+      }
+
+      return response.json() as Promise<{
+        message: string
+        item: GaleriItem
+      }>
+    } catch (error) {
+      clearTimeout(timeoutId)
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(`Request timeout after ${API_TIMEOUT}ms`)
+      }
+      throw error
+    }
+  },
+
+  remove: async (id: string) => {
+    return apiRequest(`/galeri/${id}`, {
+      method: "DELETE",
+    })
   },
 }
 

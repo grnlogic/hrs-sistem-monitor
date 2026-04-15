@@ -43,6 +43,10 @@ export async function middleware(req: NextRequest) {
   const accessToken = typeof token?.accessToken === "string" ? token.accessToken : "";
   const hasValidSession = Boolean(token) && !isAccessTokenExpired(accessToken);
   const role = token?.role as "HRD" | "AKUNTANSI" | undefined;
+  const lokasi =
+    typeof token?.lokasi === "string" && ["PJP", "SP", "PRIMA"].includes(token.lokasi)
+      ? (token.lokasi as "PJP" | "SP" | "PRIMA")
+      : null;
 
   if (pathname === "/") {
     if (!hasValidSession) return NextResponse.next();
@@ -57,12 +61,22 @@ export async function middleware(req: NextRequest) {
   }
 
   if (pathname.startsWith("/dashboard") || pathname.startsWith("/penggajian")) {
+    if (role === "AKUNTANSI" && !lokasi) {
+      const response = NextResponse.redirect(new URL("/", req.url));
+      clearSessionCookies(response);
+      return response;
+    }
+
     if (role === "AKUNTANSI" && !isSalaryPath(pathname)) {
       return NextResponse.redirect(new URL("/penggajian", req.url));
     }
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+  if (role === "AKUNTANSI") {
+    response.headers.set("x-user-lokasi", lokasi || "MISSING");
+  }
+  return response;
 }
 
 export const config = {

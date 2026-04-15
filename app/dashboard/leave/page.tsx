@@ -125,6 +125,11 @@ export default function LeavePage() {
     setFilteredData(filtered);
   };
 
+  useEffect(() => {
+    filterData(searchTerm, typeFilter, statusFilter);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typeFilter, statusFilter, leaveData]);
+
   const handleApprove = async (id: string) => {
     try {
       await leaveAPI.approve(id);
@@ -182,18 +187,14 @@ export default function LeavePage() {
         return (
           <Badge className="bg-blue-100 text-blue-800">Cuti Tahunan</Badge>
         );
-      case "CUTI_SAKIT":
-        return <Badge className="bg-red-100 text-red-800">Cuti Sakit</Badge>;
       case "CUTI_MELAHIRKAN":
         return (
           <Badge className="bg-purple-100 text-purple-800">
             Cuti Melahirkan
           </Badge>
         );
-      case "CUTI_KHUSUS":
-        return (
-          <Badge className="bg-orange-100 text-orange-800">Cuti Khusus</Badge>
-        );
+      case "CUTI_LAINNYA":
+        return <Badge className="bg-orange-100 text-orange-800">Cuti Lainnya</Badge>;
       default:
         return <Badge variant="outline">{type}</Badge>;
     }
@@ -216,6 +217,13 @@ export default function LeavePage() {
         0
       ),
   };
+
+  const maxConfiguredLimit = Math.max(
+    0,
+    ...Object.values(employeeLeaveInfo).map((info: any) =>
+      Number(info?.batasMaksimal || 0)
+    )
+  );
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
@@ -305,9 +313,9 @@ export default function LeavePage() {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12</div>
+            <div className="text-2xl font-bold">{maxConfiguredLimit || 12}</div>
             <p className="text-xs text-muted-foreground">
-              Hari kerja per karyawan
+              Maksimal kuota aktif
             </p>
           </CardContent>
         </Card>
@@ -339,9 +347,8 @@ export default function LeavePage() {
               <SelectContent>
                 <SelectItem value="all">Semua Jenis</SelectItem>
                 <SelectItem value="tahunan">Cuti Tahunan</SelectItem>
-                <SelectItem value="sakit">Cuti Sakit</SelectItem>
                 <SelectItem value="melahirkan">Cuti Melahirkan</SelectItem>
-                <SelectItem value="khusus">Cuti Khusus</SelectItem>
+                <SelectItem value="lainnya">Cuti Lainnya</SelectItem>
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -395,7 +402,14 @@ export default function LeavePage() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>{getTypeBadge(leave.jenisCuti)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {getTypeBadge(leave.jenisCuti)}
+                          {leave.jenisCuti === "CUTI_LAINNYA" && leave.labelCustom ? (
+                            <span className="text-xs text-muted-foreground">({leave.labelCustom})</span>
+                          ) : null}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         {new Date(leave.tanggalMulai).toLocaleDateString(
                           "id-ID"
@@ -421,31 +435,32 @@ export default function LeavePage() {
                       <TableCell>
                         {employeeLeaveInfo[leave.karyawan?.id] ? (
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">
-                              {employeeLeaveInfo[leave.karyawan?.id].sisaCuti}
-                              /12 hari
-                            </span>
-                            <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                              <div
-                                className={`h-1.5 rounded-full ${
-                                  employeeLeaveInfo[leave.karyawan?.id]
-                                    .sisaCuti > 6
-                                    ? "bg-green-500"
-                                    : employeeLeaveInfo[leave.karyawan?.id]
-                                        .sisaCuti > 3
-                                    ? "bg-yellow-500"
-                                    : "bg-red-500"
-                                }`}
-                                style={{
-                                  width: `${
-                                    (employeeLeaveInfo[leave.karyawan?.id]
-                                      .sisaCuti /
-                                      12) *
-                                    100
-                                  }%`,
-                                }}
-                              ></div>
-                            </div>
+                            {(() => {
+                              const info = employeeLeaveInfo[leave.karyawan?.id];
+                              const batas = Math.max(1, Number(info?.batasMaksimal || 1));
+                              const sisa = Math.max(0, Number(info?.sisaCuti || 0));
+                              const persen = Math.max(0, Math.min(100, (sisa / batas) * 100));
+
+                              return (
+                                <>
+                                  <span className="text-sm font-medium">
+                                    {sisa}/{batas} hari
+                                  </span>
+                                  <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                                    <div
+                                      className={`h-1.5 rounded-full ${
+                                        sisa > batas / 2
+                                          ? "bg-green-500"
+                                          : sisa > batas / 4
+                                          ? "bg-yellow-500"
+                                          : "bg-red-500"
+                                      }`}
+                                      style={{ width: `${persen}%` }}
+                                    ></div>
+                                  </div>
+                                </>
+                              );
+                            })()}
                           </div>
                         ) : (
                           <span className="text-sm text-gray-400">-</span>

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/form/button";
+import { Input } from "@/components/ui/form/input";
 import {
   Card,
   CardContent,
@@ -47,7 +48,7 @@ import {
   X,
   Paperclip,
 } from "lucide-react";
-import { employeeAPI, leaveAPI } from "@/lib/api";
+import { attendanceAPI, employeeAPI, leaveAPI } from "@/lib/api";
 import ReactCrop, {
   Crop as CropType,
   PixelCrop,
@@ -88,7 +89,12 @@ export default function EmployeeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [salaryHistory, setSalaryHistory] = useState<any[]>([]);
+  const [salaryRangeStart, setSalaryRangeStart] = useState("");
+  const [salaryRangeEnd, setSalaryRangeEnd] = useState("");
+  const [selectedExportedSalaryKey, setSelectedExportedSalaryKey] = useState<string | null>(null);
   const [attendanceHistory, setAttendanceHistory] = useState<any[]>([]);
+  const [izinSakitHistory, setIzinSakitHistory] = useState<any[]>([]);
+  const [izinSakitFilter, setIzinSakitFilter] = useState<"all" | "IZIN" | "TIDAK_HADIR">("all");
   const [leaveHistory, setLeaveHistory] = useState<any[]>([]);
   const [violationHistory, setViolationHistory] = useState<any[]>([]);
   const [leaveInfo, setLeaveInfo] = useState<any>(null);
@@ -352,6 +358,15 @@ export default function EmployeeDetailPage() {
           )
         );
         setAttendanceHistory(absensi);
+
+        try {
+          const izinSakitResponse = await attendanceAPI.getIzinSakitByEmployee(String(id));
+          setIzinSakitHistory(Array.isArray(izinSakitResponse?.data) ? izinSakitResponse.data : []);
+        } catch (err) {
+          console.error("Gagal mengambil riwayat izin/sakit:", err);
+          setIzinSakitHistory([]);
+        }
+
         setLeaveHistory(
           cuti.map((c: any) => ({
             ...c,
@@ -403,6 +418,282 @@ export default function EmployeeDetailPage() {
     }).format(amount);
   };
 
+  const formatPeriodeGaji = (periodeAwal?: string | null, periodeAkhir?: string | null) => {
+    if (!periodeAwal || !periodeAkhir) return "-";
+
+    const start = new Date(periodeAwal);
+    const end = new Date(periodeAkhir);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return `${periodeAwal} - ${periodeAkhir}`;
+    }
+
+    const startLabel = start.toLocaleDateString("id-ID");
+    const endLabel = end.toLocaleDateString("id-ID");
+    return startLabel === endLabel ? startLabel : `${startLabel} - ${endLabel}`;
+  };
+
+  const filteredSalaryHistory = useMemo(() => {
+    const start = salaryRangeStart ? new Date(salaryRangeStart) : null;
+    const end = salaryRangeEnd ? new Date(salaryRangeEnd) : null;
+
+    return salaryHistory.filter((salary) => {
+      const periodStart = salary?.periodeAwal ? new Date(salary.periodeAwal) : null;
+      const periodEnd = salary?.periodeAkhir ? new Date(salary.periodeAkhir) : null;
+      if (!periodStart || Number.isNaN(periodStart.getTime())) return true;
+      if (!periodEnd || Number.isNaN(periodEnd.getTime())) return true;
+
+      if (start && Number.isNaN(start.getTime())) return true;
+      if (end && Number.isNaN(end.getTime())) return true;
+
+      if (start && periodEnd < start) return false;
+      if (end && periodStart > end) return false;
+      return true;
+    });
+  }, [salaryHistory, salaryRangeStart, salaryRangeEnd]);
+
+  const getSalaryRowKey = (salary: any, index: number) => {
+    const idPart = salary?.id ? String(salary.id) : "no-id";
+    const startPart = salary?.periodeAwal ? String(salary.periodeAwal) : "no-start";
+    const endPart = salary?.periodeAkhir ? String(salary.periodeAkhir) : "no-end";
+    return `${idPart}-${startPart}-${endPart}-${index}`;
+  };
+
+  const exportedSalaryGroups = useMemo(() => {
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+    const paidRows = filteredSalaryHistory
+      .map((salary, index) => {
+        const start = new Date(salary?.periodeAwal || "");
+        const end = new Date(salary?.periodeAkhir || "");
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+          return null;
+        }
+
+        return {
+          salary,
+          rowKey: getSalaryRowKey(salary, index),
+          start,
+          end,
+        };
+      })
+      .filter((item): item is { salary: any; rowKey: string; start: Date; end: Date } => Boolean(item))
+      .filter((item) => String(item.salary?.statusPembayaran || "").trim().toLowerCase() === "dibayar")
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+    const grouped: Array<{
+      periodeAwal: Date;
+      periodeAkhir: Date;
+      rows: Array<{ salary: any; rowKey: string }>;
+    }> = [];
+
+    for (const item of paidRows) {
+      const lastGroup = grouped[grouped.length - 1];
+      if (!lastGroup) {
+        grouped.push({
+          periodeAwal: item.start,
+          periodeAkhir: item.end,
+          rows: [{ salary: item.salary, rowKey: item.rowKey }],
+        });
+        continue;
+      }
+
+      const isSameBatch = item.start.getTime() <= lastGroup.periodeAkhir.getTime() + ONE_DAY_MS;
+      if (isSameBatch) {
+        lastGroup.rows.push({ salary: item.salary, rowKey: item.rowKey });
+        if (item.end > lastGroup.periodeAkhir) {
+          lastGroup.periodeAkhir = item.end;
+        }
+      } else {
+        grouped.push({
+          periodeAwal: item.start,
+          periodeAkhir: item.end,
+          rows: [{ salary: item.salary, rowKey: item.rowKey }],
+        });
+      }
+    }
+
+    return grouped
+      .map((group, index) => ({
+        key: `export-${group.periodeAwal.toISOString()}-${group.periodeAkhir.toISOString()}-${index}`,
+        periodeAwal: group.periodeAwal.toISOString(),
+        periodeAkhir: group.periodeAkhir.toISOString(),
+        rows: group.rows,
+      }))
+      .reverse();
+  }, [filteredSalaryHistory]);
+
+  useEffect(() => {
+    if (exportedSalaryGroups.length === 0) {
+      setSelectedExportedSalaryKey(null);
+      return;
+    }
+
+    const hasSelected = exportedSalaryGroups.some((item) => item.key === selectedExportedSalaryKey);
+
+    if (!hasSelected) {
+      setSelectedExportedSalaryKey(exportedSalaryGroups[0].key);
+    }
+  }, [exportedSalaryGroups, selectedExportedSalaryKey]);
+
+  const selectedSalary = useMemo(() => {
+    if (!selectedExportedSalaryKey) return null;
+    const found = exportedSalaryGroups.find((item) => item.key === selectedExportedSalaryKey);
+    if (!found || found.rows.length === 0) return null;
+
+    const latestRow = found.rows[found.rows.length - 1].salary;
+    const totalGajiPokok = found.rows.reduce((sum, item) => sum + (Number(item.salary?.gajiPokok) || 0), 0);
+    const totalBonus = found.rows.reduce((sum, item) => sum + (Number(item.salary?.bonus) || 0), 0);
+    const totalPotongan = found.rows.reduce((sum, item) => sum + (Number(item.salary?.potongan) || 0), 0);
+    const totalBersih = found.rows.reduce((sum, item) => sum + (Number(item.salary?.totalGajiBersih) || 0), 0);
+
+    return {
+      ...latestRow,
+      periodeAwal: found.periodeAwal,
+      periodeAkhir: found.periodeAkhir,
+      gajiPokok: totalGajiPokok,
+      bonus: totalBonus,
+      potongan: totalPotongan,
+      totalGajiBersih: totalBersih,
+      statusPembayaran: "Dibayar",
+      _groupRows: found.rows.map((row) => row.salary),
+    };
+  }, [exportedSalaryGroups, selectedExportedSalaryKey]);
+
+  const normalizeRincianItems = (
+    raw: unknown,
+    fallbackLabel: string
+  ): Array<{ judul: string; nominal: number }> => {
+    if (!raw) return [];
+
+    const toNominal = (value: unknown): number => {
+      const numberValue = Number(value);
+      return Number.isFinite(numberValue) ? numberValue : 0;
+    };
+
+    if (Array.isArray(raw)) {
+      return raw
+        .map((item: any, index) => {
+          const nominal =
+            toNominal(item?.nominal) ||
+            toNominal(item?.jumlah) ||
+            toNominal(item?.nilai) ||
+            toNominal(item?.amount);
+          const judul =
+            item?.judul ||
+            item?.itemName ||
+            item?.nama ||
+            item?.label ||
+            `${fallbackLabel} ${index + 1}`;
+
+          return {
+            judul: String(judul),
+            nominal,
+          };
+        })
+        .filter((item) => item.nominal !== 0 || item.judul);
+    }
+
+    if (typeof raw === "object") {
+      return Object.entries(raw as Record<string, unknown>)
+        .map(([key, value]) => {
+          if (value && typeof value === "object" && !Array.isArray(value)) {
+            const nested = value as Record<string, unknown>;
+            const nominal =
+              toNominal(nested.nominal) ||
+              toNominal(nested.jumlah) ||
+              toNominal(nested.nilai) ||
+              toNominal(nested.amount);
+            const judul =
+              String(nested.judul || nested.itemName || nested.nama || nested.label || key);
+            return { judul, nominal };
+          }
+          return {
+            judul: String(key),
+            nominal: toNominal(value),
+          };
+        })
+        .filter((item) => item.nominal !== 0 || item.judul);
+    }
+
+    return [];
+  };
+
+  const selectedSalaryRincian = useMemo(() => {
+    if (!selectedSalary) {
+      return {
+        bonusItems: [] as Array<{ judul: string; nominal: number }>,
+        potonganItems: [] as Array<{ judul: string; nominal: number }>,
+      };
+    }
+
+    const sourceRows = Array.isArray((selectedSalary as any)._groupRows)
+      ? (selectedSalary as any)._groupRows
+      : [selectedSalary];
+
+    const bonusMap = new Map<string, number>();
+    const potonganMap = new Map<string, number>();
+
+    const upsertItems = (target: Map<string, number>, items: Array<{ judul: string; nominal: number }>) => {
+      for (const item of items) {
+        const judul = String(item.judul || "").trim();
+        if (!judul) continue;
+        target.set(judul, (target.get(judul) || 0) + (Number(item.nominal) || 0));
+      }
+    };
+
+    for (const row of sourceRows) {
+      const bonusCandidates = [
+        row.bonusItems,
+        row.bonusDetail,
+        row.bonusDetails,
+        row.rincianBonus,
+        row.detailBonus,
+        row.bonusList,
+      ];
+
+      const potonganCandidates = [
+        row.potonganItems,
+        row.potonganDetail,
+        row.potonganDetails,
+        row.rincianPotongan,
+        row.detailPotongan,
+        row.potonganList,
+      ];
+
+      for (const candidate of bonusCandidates) {
+        const normalized = normalizeRincianItems(candidate, "Bonus");
+        if (normalized.length > 0) {
+          upsertItems(bonusMap, normalized);
+          break;
+        }
+      }
+
+      for (const candidate of potonganCandidates) {
+        const normalized = normalizeRincianItems(candidate, "Potongan");
+        if (normalized.length > 0) {
+          upsertItems(potonganMap, normalized);
+          break;
+        }
+      }
+    }
+
+    let bonusItems = Array.from(bonusMap.entries()).map(([judul, nominal]) => ({ judul, nominal }));
+    let potonganItems = Array.from(potonganMap.entries()).map(([judul, nominal]) => ({ judul, nominal }));
+
+    const bonusTotal = Number(selectedSalary.bonus) || 0;
+    const potonganTotal = Number(selectedSalary.potongan) || 0;
+
+    if (bonusItems.length === 0 && bonusTotal > 0) {
+      bonusItems = [{ judul: "Total Bonus", nominal: bonusTotal }];
+    }
+
+    if (potonganItems.length === 0 && potonganTotal > 0) {
+      potonganItems = [{ judul: "Total Potongan", nominal: potonganTotal }];
+    }
+
+    return { bonusItems, potonganItems };
+  }, [selectedSalary]);
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "Aktif":
@@ -429,6 +720,63 @@ export default function EmployeeDetailPage() {
     }
   };
 
+  const formatIzinSakitTanggal = (tanggal?: string) => {
+    if (!tanggal) return "-";
+    const date = new Date(tanggal);
+    if (Number.isNaN(date.getTime())) return "-";
+    return date.toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+  };
+
+  const filteredIzinSakitHistory = useMemo(() => {
+    if (izinSakitFilter === "all") return izinSakitHistory;
+    return izinSakitHistory.filter((item) => item?.status === izinSakitFilter);
+  }, [izinSakitFilter, izinSakitHistory]);
+
+  const renderIzinSakitBadge = (status?: string) => {
+    if (status === "IZIN") {
+      return (
+        <Badge className="border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning)/0.16)] text-[hsl(var(--warning-foreground))] hover:bg-[hsl(var(--warning)/0.22)]">
+          Izin
+        </Badge>
+      );
+    }
+
+    if (status === "TIDAK_HADIR") {
+      return (
+        <Badge className="border-[hsl(var(--destructive)/0.35)] bg-[hsl(var(--destructive)/0.16)] text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/0.22)]">
+          Tidak Hadir
+        </Badge>
+      );
+    }
+
+    return <Badge variant="outline">-</Badge>;
+  };
+
+  const renderLeaveTypeLabel = (leave: any) => {
+    if (leave?.jenisCuti === "CUTI_TAHUNAN") return "Cuti Tahunan";
+    if (leave?.jenisCuti === "CUTI_MELAHIRKAN") return "Cuti Melahirkan";
+    if (leave?.jenisCuti === "CUTI_LAINNYA") return leave?.labelCustom || "Cuti Lainnya";
+    return leave?.jenisCuti || "-";
+  };
+
+  const renderLeaveStatusBadge = (status?: string) => {
+    const normalized = String(status || "").toUpperCase();
+    if (normalized === "PENDING") {
+      return <Badge className="bg-slate-100 text-slate-700">Menunggu</Badge>;
+    }
+    if (normalized === "APPROVED") {
+      return <Badge className="bg-green-100 text-green-800">Disetujui</Badge>;
+    }
+    if (normalized === "REJECTED") {
+      return <Badge className="bg-red-100 text-red-800">Ditolak</Badge>;
+    }
+    return <Badge variant="outline">-</Badge>;
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -446,6 +794,9 @@ export default function EmployeeDetailPage() {
       </div>
     );
   }
+
+  const showAttendanceTab = attendanceHistory.length > 0;
+  const tabGridClass = showAttendanceTab ? "grid w-full grid-cols-7" : "grid w-full grid-cols-6";
 
   return (
     <div className="space-y-6">
@@ -631,7 +982,7 @@ export default function EmployeeDetailPage() {
                   <div className="flex items-center space-x-2">
                     <Clock className="h-4 w-4 text-gray-400" />
                     <span className="text-sm text-gray-600">
-                      Sisa Cuti: {leaveInfo.sisaCuti}/12 hari
+                      Sisa Cuti: {leaveInfo.sisaCuti}/{leaveInfo.batasMaksimal} hari
                     </span>
                   </div>
                 )}
@@ -647,10 +998,11 @@ export default function EmployeeDetailPage() {
         onValueChange={setActiveTab}
         className="space-y-4"
       >
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className={tabGridClass}>
           <TabsTrigger value="personal">Data Pribadi</TabsTrigger>
           <TabsTrigger value="salary">Riwayat Gaji</TabsTrigger>
-          <TabsTrigger value="attendance">Riwayat Absensi</TabsTrigger>
+          {showAttendanceTab && <TabsTrigger value="attendance">Riwayat Absensi</TabsTrigger>}
+          <TabsTrigger value="izin-sakit">Izin & Sakit</TabsTrigger>
           <TabsTrigger value="leave">Riwayat Cuti</TabsTrigger>
           <TabsTrigger value="violations">Pelanggaran</TabsTrigger>
           <TabsTrigger value="files">
@@ -758,22 +1110,22 @@ export default function EmployeeDetailPage() {
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
                         className={`h-2 rounded-full ${
-                          leaveInfo.sisaCuti > 6
+                          leaveInfo.sisaCuti > leaveInfo.batasMaksimal / 2
                             ? "bg-green-500"
-                            : leaveInfo.sisaCuti > 3
+                            : leaveInfo.sisaCuti > leaveInfo.batasMaksimal / 4
                             ? "bg-yellow-500"
                             : "bg-red-500"
                         }`}
                         style={{
                           width: `${
-                            (leaveInfo.sisaCuti / leaveInfo.batasMaksimal) * 100
+                            (leaveInfo.sisaCuti / Math.max(1, leaveInfo.batasMaksimal)) * 100
                           }%`,
                         }}
                       ></div>
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
                       {Math.round(
-                        (leaveInfo.sisaCuti / leaveInfo.batasMaksimal) * 100
+                        (leaveInfo.sisaCuti / Math.max(1, leaveInfo.batasMaksimal)) * 100
                       )}
                       % tersisa
                     </p>
@@ -914,57 +1266,199 @@ export default function EmployeeDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Periode</TableHead>
-                    <TableHead>Gaji Pokok</TableHead>
-                    <TableHead>Bonus</TableHead>
-                    <TableHead>Potongan</TableHead>
-                    <TableHead>Gaji Bersih</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {salaryHistory.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center">
-                        Tidak ada data gaji
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    salaryHistory.map((salary, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium">
-                          {salary.periodeAwal && salary.periodeAkhir
-                            ? `${salary.periodeAwal} - ${salary.periodeAkhir}`
-                            : "-"}
-                        </TableCell>
-                        <TableCell>
-                          {formatCurrency(Number(salary.gajiPokok) || 0)}
-                        </TableCell>
-                        <TableCell>
-                          {formatCurrency(Number(salary.bonus) || 0)}
-                        </TableCell>
-                        <TableCell>
-                          {formatCurrency(Number(salary.potongan) || 0)}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {formatCurrency(Number(salary.totalGajiBersih) || 0)}
-                        </TableCell>
-                        <TableCell>
-                          {getStatusBadge(salary.statusPembayaran || "-")}
-                        </TableCell>
+              <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-600">Dari tanggal</label>
+                  <Input
+                    type="date"
+                    value={salaryRangeStart}
+                    onChange={(event) => setSalaryRangeStart(event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-600">Sampai tanggal</label>
+                  <Input
+                    type="date"
+                    value={salaryRangeEnd}
+                    onChange={(event) => setSalaryRangeEnd(event.target.value)}
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setSalaryRangeStart("");
+                      setSalaryRangeEnd("");
+                    }}
+                  >
+                    Reset Range
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+                <div className="lg:col-span-7 rounded-lg border">
+                  <div className="border-b px-4 py-3">
+                    <h3 className="text-sm font-semibold text-gray-900">Daftar Periode Gaji</h3>
+                    <p className="text-xs text-gray-500">Pilih satu periode untuk melihat rincian bonus dan potongan.</p>
+                  </div>
+
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Periode</TableHead>
+                        <TableHead>Gaji Pokok</TableHead>
+                        <TableHead>Gaji Bersih</TableHead>
+                        <TableHead>Status</TableHead>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredSalaryHistory.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center">
+                            Tidak ada data gaji
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredSalaryHistory.map((salary, idx) => {
+                          const rowKey = getSalaryRowKey(salary, idx);
+
+                          return (
+                            <TableRow
+                              key={rowKey}
+                              className=""
+                            >
+                              <TableCell className="font-medium">
+                                {formatPeriodeGaji(salary.periodeAwal, salary.periodeAkhir)}
+                              </TableCell>
+                              <TableCell>
+                                {formatCurrency(Number(salary.gajiPokok) || 0)}
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                {formatCurrency(Number(salary.totalGajiBersih) || 0)}
+                              </TableCell>
+                              <TableCell>
+                                {getStatusBadge(salary.statusPembayaran || "-")}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                <div className="lg:col-span-5 rounded-lg border bg-gray-50/40">
+                  <div className="border-b px-4 py-3">
+                    <h3 className="text-sm font-semibold text-gray-900">Rincian Periode Terpilih</h3>
+                    {exportedSalaryGroups.length > 0 ? (
+                      <div className="mt-2">
+                        <label className="mb-1 block text-xs font-medium text-gray-600">
+                          Daftar periode hasil export (Dibayar)
+                        </label>
+                        <select
+                          className="h-8 w-full rounded border border-gray-300 bg-white px-2 text-xs"
+                          value={selectedExportedSalaryKey || ""}
+                          onChange={(event) => setSelectedExportedSalaryKey(event.target.value)}
+                        >
+                          {exportedSalaryGroups.map((item) => (
+                            <option key={item.key} value={item.key}>
+                              {`${formatPeriodeGaji(item.periodeAwal, item.periodeAkhir)} · ${item.rows.length} entri · ${formatCurrency(
+                                item.rows.reduce((sum, row) => sum + (Number(row.salary?.totalGajiBersih) || 0), 0)
+                              )}`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
+                    {selectedSalary ? (
+                      <>
+                        <p className="text-xs text-gray-600 mt-1">
+                          {formatPeriodeGaji(selectedSalary.periodeAwal, selectedSalary.periodeAkhir)}
+                        </p>
+                        <div className="mt-2">{getStatusBadge(selectedSalary.statusPembayaran || "-")}</div>
+                      </>
+                    ) : (
+                      <p className="text-xs text-gray-500 mt-1">Belum ada periode hasil export (status Dibayar).</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-4 p-4">
+                    <div>
+                      <div className="mb-2 flex items-center justify-between">
+                        <h4 className="text-sm font-semibold text-green-700">Bonus</h4>
+                        <span className="text-xs font-medium text-green-700">
+                          {formatCurrency(Number(selectedSalary?.bonus) || 0)}
+                        </span>
+                      </div>
+                      {selectedSalaryRincian.bonusItems.length === 0 ? (
+                        <p className="text-xs text-gray-500">Tidak ada rincian bonus pada periode ini.</p>
+                      ) : (
+                        <div className="space-y-1">
+                          {selectedSalaryRincian.bonusItems.map((item, idx) => (
+                            <div
+                              key={`bonus-${idx}`}
+                              className="flex items-center justify-between rounded border border-green-100 bg-green-50 px-2 py-1 text-xs"
+                            >
+                              <span className="text-green-900">{item.judul}</span>
+                              <span className="font-medium text-green-800">{formatCurrency(item.nominal)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="mb-2 flex items-center justify-between">
+                        <h4 className="text-sm font-semibold text-red-700">Potongan</h4>
+                        <span className="text-xs font-medium text-red-700">
+                          {formatCurrency(Number(selectedSalary?.potongan) || 0)}
+                        </span>
+                      </div>
+                      {selectedSalaryRincian.potonganItems.length === 0 ? (
+                        <p className="text-xs text-gray-500">Tidak ada rincian potongan pada periode ini.</p>
+                      ) : (
+                        <div className="space-y-1">
+                          {selectedSalaryRincian.potonganItems.map((item, idx) => (
+                            <div
+                              key={`potongan-${idx}`}
+                              className="flex items-center justify-between rounded border border-red-100 bg-red-50 px-2 py-1 text-xs"
+                            >
+                              <span className="text-red-900">{item.judul}</span>
+                              <span className="font-medium text-red-800">{formatCurrency(item.nominal)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded border bg-white p-3">
+                      <div className="mb-1 flex items-center justify-between text-xs text-gray-600">
+                        <span>Gaji Pokok</span>
+                        <span>{formatCurrency(Number(selectedSalary?.gajiPokok) || 0)}</span>
+                      </div>
+                      <div className="mb-1 flex items-center justify-between text-xs text-gray-600">
+                        <span>Total Bonus</span>
+                        <span className="text-green-700">+ {formatCurrency(Number(selectedSalary?.bonus) || 0)}</span>
+                      </div>
+                      <div className="mb-2 flex items-center justify-between text-xs text-gray-600">
+                        <span>Total Potongan</span>
+                        <span className="text-red-700">- {formatCurrency(Number(selectedSalary?.potongan) || 0)}</span>
+                      </div>
+                      <div className="border-t pt-2 flex items-center justify-between text-sm font-semibold text-gray-900">
+                        <span>Gaji Bersih</span>
+                        <span>{formatCurrency(Number(selectedSalary?.totalGajiBersih) || 0)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="attendance">
+        {showAttendanceTab && <TabsContent value="attendance">
           <Card>
             <CardHeader>
               <CardTitle>Riwayat Absensi</CardTitle>
@@ -1007,6 +1501,78 @@ export default function EmployeeDetailPage() {
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>}
+
+        <TabsContent value="izin-sakit">
+          <Card>
+            <CardHeader>
+              <CardTitle>Riwayat Izin & Sakit</CardTitle>
+              <CardDescription>
+                Data izin dan tidak hadir dari absensi harian
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={izinSakitFilter === "all" ? "default" : "outline"}
+                  onClick={() => setIzinSakitFilter("all")}
+                >
+                  Semua
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={izinSakitFilter === "IZIN" ? "default" : "outline"}
+                  onClick={() => setIzinSakitFilter("IZIN")}
+                >
+                  Izin
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={izinSakitFilter === "TIDAK_HADIR" ? "default" : "outline"}
+                  onClick={() => setIzinSakitFilter("TIDAK_HADIR")}
+                >
+                  Sakit
+                </Button>
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-16">No</TableHead>
+                    <TableHead>Tanggal</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Keterangan</TableHead>
+                    <TableHead>Lembur</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredIzinSakitHistory.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center">
+                        Tidak ada riwayat izin atau sakit
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredIzinSakitHistory.map((item, index) => (
+                      <TableRow key={String(item.id)}>
+                        <TableCell>{index + 1}</TableCell>
+                        <TableCell className="font-medium">
+                          {formatIzinSakitTanggal(item.tanggal)}
+                        </TableCell>
+                        <TableCell>{renderIzinSakitBadge(item.status)}</TableCell>
+                        <TableCell>{item.keterangan || "-"}</TableCell>
+                        <TableCell>{item.isLembur ? "Lembur" : "-"}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="leave">
@@ -1015,15 +1581,9 @@ export default function EmployeeDetailPage() {
               <CardTitle className="flex items-center justify-between">
                 <span>Riwayat Cuti</span>
                 {leaveInfo && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-gray-500">Sisa Cuti:</span>
-                    <Badge
-                      variant="outline"
-                      className="bg-green-50 text-green-700"
-                    >
-                      {leaveInfo.sisaCuti}/12 hari
-                    </Badge>
-                  </div>
+                  <span className="text-sm text-gray-600">
+                    Jatah Cuti Tahunan {leaveInfo.tahun}: {leaveInfo.terpakai}/{leaveInfo.batasMaksimal} hari terpakai (sisa {leaveInfo.sisaCuti} hari)
+                  </span>
                 )}
               </CardTitle>
               <CardDescription>
@@ -1034,12 +1594,12 @@ export default function EmployeeDetailPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>No</TableHead>
                     <TableHead>Jenis Cuti</TableHead>
                     <TableHead>Tanggal Mulai</TableHead>
                     <TableHead>Tanggal Selesai</TableHead>
-                    <TableHead>Durasi</TableHead>
+                    <TableHead>Jumlah Hari</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Alasan</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1052,8 +1612,9 @@ export default function EmployeeDetailPage() {
                   ) : (
                     leaveHistory.map((leave, idx) => (
                       <TableRow key={idx}>
+                        <TableCell>{idx + 1}</TableCell>
                         <TableCell className="font-medium">
-                          {leave.jenisCuti || "-"}
+                          {renderLeaveTypeLabel(leave)}
                         </TableCell>
                         <TableCell>
                           {leave.tanggalMulai
@@ -1070,18 +1631,11 @@ export default function EmployeeDetailPage() {
                             : "-"}
                         </TableCell>
                         <TableCell>
-                          {leave.tanggalMulai && leave.tanggalSelesai
-                            ? (new Date(leave.tanggalSelesai).getTime() -
-                                new Date(leave.tanggalMulai).getTime()) /
-                                (1000 * 60 * 60 * 24) +
-                              1 +
-                              " hari"
-                            : "-"}
+                          {leave.jumlahHari ? `${leave.jumlahHari} hari` : "-"}
                         </TableCell>
                         <TableCell>
-                          {getStatusBadge(leave.status || "-")}
+                          {renderLeaveStatusBadge(leave.status)}
                         </TableCell>
-                        <TableCell>{leave.alasan || "-"}</TableCell>
                       </TableRow>
                     ))
                   )}

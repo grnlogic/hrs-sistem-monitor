@@ -1,10 +1,12 @@
 /**
  * Template HTML untuk Perjanjian Kerja Bersama (PKB)
- * Berdasarkan format PT. PADUD JAYA PUTERA
+ * Berdasarkan format nama perusahaan resmi
  * Ketentuan upah berbeda per divisi (per pack, per kg, per hari)
  */
 
-export type TipeUpahPKB = "per_pack" | "per_kg" | "per_hari";
+import { NAMA_PT } from "@/lib/constants/perusahaan";
+
+export type TipeUpahPKB = "per_pack" | "per_kg" | "per_hari" | "per_bulan";
 
 export interface PKBData {
   // Pihak I (Perusahaan)
@@ -28,7 +30,7 @@ export interface PKBData {
   tipeUpah: TipeUpahPKB;
   nominalUpah: number;
   bonusNominal?: number; // untuk per_pack
-  catatanPembayaran?: string; // untuk per_hari, e.g. "dibayarkan setiap hari Sabtu"
+    catatanPembayaran?: string; // untuk per_hari/per_bulan, e.g. "dibayarkan setiap hari Sabtu"
 
   // Legacy (untuk backward compatibility)
   upahPerPack?: number;
@@ -85,6 +87,12 @@ export function getClause2AndRole(data: PKBData): { clause2: string; role: strin
         clause2: `Bahwa Pihak II menerima upah kerja + tunjangan bpjs kesehatan dan ketenagakerjaan + tunjangan perjalanan sebesar Rp. ${upahFormatted}/hari.`,
       };
     }
+        case "per_bulan": {
+            return {
+                role: "Staff",
+                clause2: `Bahwa Pihak II menerima gaji pokok + tunjangan bpjs kesehatan dan ketenagakerjaan sebesar Rp. ${upahFormatted}/bulan.`,
+            };
+        }
     case "per_pack":
     default: {
       const bonus = data.bonusNominal ?? data.bonusPerPack ?? 250;
@@ -100,7 +108,9 @@ export function getClause2AndRole(data: PKBData): { clause2: string; role: strin
 export function generatePKBHTML(data: PKBData): string {
   const { clause2, role } = getClause2AndRole(data);
   const tanggalFormatted = formatDate(data.tanggalPerjanjian);
-  const catatanPembayaran = data.catatanPembayaran?.trim() || "di akhir minggu (sabtu).";
+    const catatanPembayaran =
+        data.catatanPembayaran?.trim() ||
+        (data.tipeUpah === "per_bulan" ? "di akhir bulan." : "di akhir minggu (sabtu).");
 
   return `<!DOCTYPE html>
 <html lang="id">
@@ -310,9 +320,9 @@ export function generatePKBHTML(data: PKBData): string {
 <body>
     <div class="pkb-container">
         <div class="header">
-            <div class="header-logo"><img src="/png.png" alt="PT. Padud Jaya Putera" style="width:100%;height:100%;object-fit:contain;" /></div>
+            <div class="header-logo"><img src="/png.png" alt="${NAMA_PT.PJP}" style="width:100%;height:100%;object-fit:contain;" /></div>
             <div class="header-info">
-                <div class="company-name">PT. PADUD JAYA PUTERA</div>
+                <div class="company-name">${NAMA_PT.PJP.toUpperCase()}</div>
                 <div class="company-address">Lingkungan Jelat, No. 905, RT.03/04, Kel. Pataruman, Kec. Pataruman, Kota Banjar</div>
                 <div class="company-phone">TLP. (0265) 741458</div>
             </div>
@@ -339,7 +349,7 @@ export function generatePKBHTML(data: PKBData): string {
 
         <div class="terms-intro">Telah bersepakat:</div>
         <div class="term-item">
-            1. Bahwa Pihak II menerima pekerjaan sebagai ${role} di PT. Padud Jaya Putera yang dikelola Pihak I.
+            1. Bahwa Pihak II menerima pekerjaan sebagai ${role} di ${NAMA_PT.PJP} yang dikelola Pihak I.
         </div>
         <div class="term-item">
             2. ${clause2}
@@ -348,7 +358,7 @@ export function generatePKBHTML(data: PKBData): string {
             3. Pihak II akan menerima upah ${catatanPembayaran}
         </div>
         <div class="term-item">
-            4. Pihak II bersedia mematuhi Peraturan Perusahaan PT. Padud Jaya Putera.
+            4. Pihak II bersedia mematuhi Peraturan Perusahaan ${NAMA_PT.PJP}.
         </div>
         <div class="term-item">
             5. Segala bentuk permasalahan akan diselesaikan secara kekeluargaan dan sesuai dengan peraturan.

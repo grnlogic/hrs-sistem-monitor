@@ -22,6 +22,7 @@ async function getLogoBase64(): Promise<string> {
 }
 
 function divisionToTipeUpah(division: string): TipeUpahPKB {
+  if (division === "staff") return "per_bulan";
   if (division === "sales") return "per_hari";
   if (division === "blending") return "per_kg";
   return "per_pack";

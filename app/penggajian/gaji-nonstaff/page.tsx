@@ -1,5 +1,5 @@
-import { SalaryStepperPage } from "../_components/salary-stepper-page";
+import { NonStaffSalaryWorkflow } from "@/app/dashboard/salary/_components/nonstaff-salary-workflow";
 
 export default function PenggajianNonStaffPage() {
-  return <SalaryStepperPage pageType="nonstaff" />;
+  return <NonStaffSalaryWorkflow />;
 }

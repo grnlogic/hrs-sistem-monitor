@@ -768,7 +768,7 @@ export default function PKBTemplateEditorPage() {
           <CardHeader>
             <CardTitle>Dokumen PKB</CardTitle>
             <CardDescription>
-              Semua perubahan tersimpan sebagai template tunggal. Anda bisa drag-upload gambar/logo lalu atur ukuran dan posisi elemen agar terasa seperti editor dokumen.
+              Semua perubahan tersimpan sebagai template tunggal. Area edit sudah mengikuti kertas A4 agar posisi konten di editor lebih sama dengan hasil export/print.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1031,28 +1031,41 @@ export default function PKBTemplateEditorPage() {
                   </div>
                 </div>
 
-                <div className="min-h-[720px] rounded-2xl border border-slate-200 bg-slate-100 p-6">
-                  <div className="mx-auto max-w-[210mm] bg-white p-10 shadow-xl">
-                    <Editable
-                      renderElement={renderElement}
-                      renderLeaf={renderLeaf}
-                      spellCheck={false}
-                      autoFocus
-                      className="pkb-editable"
-                      onKeyDown={onKeyDown}
-                      onDrop={async (event) => {
-                        const files = Array.from(event.dataTransfer?.files ?? []);
-                        const imageFile = files.find((file) => file.type.startsWith("image/"));
-                        if (!imageFile) return;
+                <div className="rounded-2xl border border-slate-200 bg-slate-100 p-4">
+                  <div className="overflow-auto rounded-xl border border-slate-200 bg-slate-200/70 p-4">
+                    <div className="relative mx-auto h-[297mm] w-[210mm] overflow-hidden rounded-md bg-white shadow-xl">
+                      <div className="pointer-events-none absolute inset-[12mm] border border-dashed border-slate-300" />
 
-                        event.preventDefault();
-                        const range = ReactEditor.findEventRange(editor, event);
-                        if (range) {
-                          Transforms.select(editor, range);
-                        }
-                        await insertImageFromFile(imageFile);
-                      }}
-                    />
+                      <div
+                        className="absolute inset-[12mm] overflow-y-auto p-6"
+                        style={{
+                          fontFamily: "'Times New Roman', Times, serif",
+                          fontSize: "12px",
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        <Editable
+                          renderElement={renderElement}
+                          renderLeaf={renderLeaf}
+                          spellCheck={false}
+                          autoFocus
+                          className="pkb-editable min-h-full"
+                          onKeyDown={onKeyDown}
+                          onDrop={async (event) => {
+                            const files = Array.from(event.dataTransfer?.files ?? []);
+                            const imageFile = files.find((file) => file.type.startsWith("image/"));
+                            if (!imageFile) return;
+
+                            event.preventDefault();
+                            const range = ReactEditor.findEventRange(editor, event);
+                            if (range) {
+                              Transforms.select(editor, range);
+                            }
+                            await insertImageFromFile(imageFile);
+                          }}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </Slate>

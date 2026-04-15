@@ -9,15 +9,54 @@ export type PKBTemplateRecord = {
 
 let cachedTemplate: PKBTemplateRecord | null = null;
 
+function hasNominalUpahPlaceholder(nodes: Descendant[]): boolean {
+  return JSON.stringify(nodes).toUpperCase().includes("{{NOMINAL_UPAH}}");
+}
+
+function ensureNominalUpahPlaceholder(nodes: Descendant[]): Descendant[] {
+  if (hasNominalUpahPlaceholder(nodes)) {
+    return nodes;
+  }
+
+  const nominalLine = {
+    type: "paragraph",
+    children: [{ text: "Nominal Upah Pokok : {{NOMINAL_UPAH}}" }],
+  } as Descendant;
+
+  const cloned = [...nodes];
+  const insertAfterIndex = cloned.findIndex((node: any) => {
+    const text = typeof node?.children?.[0]?.text === "string" ? node.children[0].text : "";
+    return text.includes("{{PERAN_KARYAWAN}}");
+  });
+
+  if (insertAfterIndex >= 0) {
+    cloned.splice(insertAfterIndex + 1, 0, nominalLine);
+    return cloned;
+  }
+
+  const alamatIndex = cloned.findIndex((node: any) => {
+    const text = typeof node?.children?.[0]?.text === "string" ? node.children[0].text : "";
+    return text.includes("{{PIHAK_2_ALAMAT}}");
+  });
+
+  if (alamatIndex >= 0) {
+    cloned.splice(alamatIndex, 0, nominalLine);
+    return cloned;
+  }
+
+  cloned.push(nominalLine);
+  return cloned;
+}
+
 function parseContent(payload: string): Descendant[] {
   try {
     const parsed = JSON.parse(payload);
     if (Array.isArray(parsed)) {
-      return parsed as Descendant[];
+      return ensureNominalUpahPlaceholder(parsed as Descendant[]);
     }
-    return DEFAULT_PKB_TEMPLATE_NODES;
+    return ensureNominalUpahPlaceholder(DEFAULT_PKB_TEMPLATE_NODES);
   } catch {
-    return DEFAULT_PKB_TEMPLATE_NODES;
+    return ensureNominalUpahPlaceholder(DEFAULT_PKB_TEMPLATE_NODES);
   }
 }
 

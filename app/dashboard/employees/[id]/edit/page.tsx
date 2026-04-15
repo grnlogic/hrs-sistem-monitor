@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/display/avatar";
 import { Upload, X, Crop, RotateCcw, Check, ArrowLeft } from "lucide-react";
 import { employeeAPI } from "@/lib/api";
+import { NAMA_PT } from "@/lib/constants/perusahaan";
 import ReactCrop, {
   Crop as CropType,
   PixelCrop,
@@ -38,6 +39,37 @@ import "react-image-crop/dist/ReactCrop.css";
 const statusOptions = [
   { label: "Tetap", value: "TETAP" },
   { label: "Kontrak", value: "KONTRAK" },
+];
+
+const maritalStatusOptions = [
+  { label: "Belum Menikah", value: "BELUM_MENIKAH" },
+  { label: "Menikah", value: "MENIKAH" },
+  { label: "Cerai", value: "CERAI" },
+  { label: "Cerai Mati", value: "CERAI_MATI" },
+];
+
+const genderOptions = [
+  { label: "Laki-laki", value: "LAKI_LAKI" },
+  { label: "Perempuan", value: "PEREMPUAN" },
+];
+
+const educationOptions = [
+  { label: "SD", value: "SD" },
+  { label: "SMP", value: "SMP" },
+  { label: "SMA/SMK", value: "SMA_SMK" },
+  { label: "D1/D2/D3", value: "D1_D2_D3" },
+  { label: "S1", value: "S1" },
+  { label: "S2", value: "S2" },
+  { label: "S3", value: "S3" },
+];
+
+const emergencyRelationOptions = [
+  { label: "Orang Tua", value: "ORANG_TUA" },
+  { label: "Suami/Istri", value: "SUAMI_ISTRI" },
+  { label: "Saudara", value: "SAUDARA" },
+  { label: "Kerabat", value: "KERABAT" },
+  { label: "Teman", value: "TEMAN" },
+  { label: "Lainnya", value: "LAINNYA" },
 ];
 
 const roleOptions = [
@@ -52,6 +84,40 @@ const departmentOptions = [
   { label: "Sales", value: "SALES" },
   { label: "Staff", value: "STAFF" },
 ];
+
+const lokasiPtOptions = [
+  { label: NAMA_PT.PJP, value: "PJP" },
+  { label: NAMA_PT.SP, value: "SP" },
+  { label: NAMA_PT.PRIMA, value: "PRIMA" },
+];
+
+function isStaffDepartment(departemen?: string): boolean {
+  return (departemen || "").toLowerCase().includes("staff");
+}
+
+function normalizeOptionValue(value: unknown, options: { value: string }[]): string | undefined {
+  const raw = String(value || "").trim();
+  if (!raw) return undefined;
+
+  const normalized = raw.toUpperCase().replace(/[\s\/-]+/g, "_");
+  const matched = options.find((opt) => opt.value === normalized);
+  if (matched) return matched.value;
+
+  // Backward compatibility untuk nilai lama yang belum ternormalisasi.
+  if (normalized === "LAKI" || normalized === "LAKI2") return "LAKI_LAKI";
+  if (normalized === "PRIA") return "LAKI_LAKI";
+  if (normalized === "WANITA") return "PEREMPUAN";
+  if (normalized === "BELUM_MENIKAH") return "BELUM_MENIKAH";
+  if (normalized === "D3" || normalized === "DIPLOMA") return "D1_D2_D3";
+  if (normalized === "SMA") return "SMA_SMK";
+  return undefined;
+}
+
+function normalizeEmploymentStatusForForm(value: unknown): "TETAP" | "KONTRAK" {
+  const raw = String(value || "").trim().toUpperCase();
+  if (raw === "TETAP") return "TETAP";
+  return "KONTRAK";
+}
 
 // Aspect ratio untuk foto profil (1:1 square)
 const ASPECT_RATIO = 1;
@@ -95,6 +161,8 @@ export default function EditEmployeePage() {
   const imgRef = useRef<HTMLImageElement>(null);
   const [employeeData, setEmployeeData] = useState<any>(null);
   const [currentFotoUrl, setCurrentFotoUrl] = useState<string | null>(null);
+  const [selectedDepartment, setSelectedDepartment] = useState("");
+  const [salaryInput, setSalaryInput] = useState("");
 
   // Load employee data on component mount
   useEffect(() => {
@@ -115,6 +183,12 @@ export default function EditEmployeePage() {
       }
 
       setEmployeeData(karyawan);
+      setSelectedDepartment(karyawan.departemen || "");
+
+      const initialSalary = isStaffDepartment(karyawan.departemen)
+        ? Number(karyawan.gajiPerBulan || 0)
+        : Number(karyawan.gajiPerHari || 0);
+      setSalaryInput(initialSalary > 0 ? String(initialSalary) : "");
 
       // Set current foto URL if exists
       if (karyawan.fotoProfil) {
@@ -255,15 +329,21 @@ export default function EditEmployeePage() {
     setSuccess("");
 
     const formData = new FormData(e.currentTarget);
+    const departemen = formData.get("departemen") as string;
+    const gajiInput = Number(formData.get("gajiPerHari") || 0);
+    const isStaffSelected = isStaffDepartment(departemen);
+
     const updateData = {
       nik: formData.get("nik") as string,
       namaLengkap: formData.get("namaLengkap") as string,
       email: formData.get("email") as string,
       noHp: formData.get("noHp") as string,
       jabatan: formData.get("roleKaryawan") as string,
-      departemen: formData.get("departemen") as string,
+      departemen,
+      lokasiDefault: (formData.get("lokasiDefault") as string) || "PJP",
       tanggalMasuk: formData.get("tanggalMasuk") as string,
-      gajiPerHari: Number(formData.get("gajiPerHari")),
+      gajiPerHari: isStaffSelected ? 0 : gajiInput,
+      gajiPerBulan: isStaffSelected ? gajiInput : null,
       statusKaryawan: formData.get("statusKaryawan") as string,
       tempatLahir: formData.get("tempatLahir") || null,
       tanggalLahir: formData.get("tanggalLahir") || null,
@@ -337,6 +417,8 @@ export default function EditEmployeePage() {
       </div>
     );
   }
+
+  const isStaffSelected = isStaffDepartment(selectedDepartment);
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
@@ -533,7 +615,8 @@ export default function EditEmployeePage() {
                 <Select
                   name="departemen"
                   required
-                  defaultValue={employeeData.departemen || ""}
+                  value={selectedDepartment}
+                  onValueChange={setSelectedDepartment}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Pilih divisi" />
@@ -546,6 +629,28 @@ export default function EditEmployeePage() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lokasiDefault">Lokasi PT *</Label>
+                <Select
+                  name="lokasiDefault"
+                  required
+                  defaultValue={employeeData.lokasiDefault || "PJP"}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih lokasi PT" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {lokasiPtOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-500">
+                  Lokasi asal karyawan sesuai PKB. Bisa berbeda saat absensi jika dipindahtugaskan.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="roleKaryawan">Role Karyawan *</Label>
@@ -581,21 +686,23 @@ export default function EditEmployeePage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="gajiPerHari">Gaji Per Hari *</Label>
+                <Label htmlFor="gajiPerHari">{isStaffSelected ? "Gaji Per Bulan *" : "Gaji Per Hari *"}</Label>
                 <Input
                   id="gajiPerHari"
                   name="gajiPerHari"
                   type="number"
                   required
-                  defaultValue={employeeData.gajiPerHari || ""}
+                  value={salaryInput}
+                  onChange={(e) => setSalaryInput(e.target.value)}
+                  placeholder={isStaffSelected ? "Contoh: 3500000" : "Contoh: 120000"}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="statusKaryawan">Status (Tetap/Kontrak) *</Label>
+                <Label htmlFor="statusKaryawan">Status Karyawan *</Label>
                 <Select
                   name="statusKaryawan"
                   required
-                  defaultValue={employeeData.statusKaryawan === "TETAP" ? "TETAP" : "KONTRAK"}
+                  defaultValue={normalizeEmploymentStatusForForm(employeeData.statusKaryawan)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Pilih status" />
@@ -666,11 +773,21 @@ export default function EditEmployeePage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="jenisKelamin">Jenis Kelamin</Label>
-                <Input
-                  id="jenisKelamin"
+                <Select
                   name="jenisKelamin"
-                  defaultValue={employeeData.jenisKelamin || ""}
-                />
+                  defaultValue={normalizeOptionValue(employeeData.jenisKelamin, genderOptions)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih jenis kelamin" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {genderOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="noKtp">No KTP</Label>
@@ -708,11 +825,21 @@ export default function EditEmployeePage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="statusPernikahan">Status Pernikahan</Label>
-                <Input
-                  id="statusPernikahan"
+                <Select
                   name="statusPernikahan"
-                  defaultValue={employeeData.statusPernikahan || ""}
-                />
+                  defaultValue={normalizeOptionValue(employeeData.statusPernikahan, maritalStatusOptions)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih status pernikahan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {maritalStatusOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="jumlahTanggungan">Jumlah Tanggungan</Label>
@@ -751,11 +878,21 @@ export default function EditEmployeePage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="pendidikanTerakhir">Pendidikan Terakhir</Label>
-                <Input
-                  id="pendidikanTerakhir"
+                <Select
                   name="pendidikanTerakhir"
-                  defaultValue={employeeData.pendidikanTerakhir || ""}
-                />
+                  defaultValue={normalizeOptionValue(employeeData.pendidikanTerakhir, educationOptions)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih pendidikan terakhir" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {educationOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="atasanLangsung">Atasan Langsung</Label>
@@ -805,11 +942,21 @@ export default function EditEmployeePage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="hubunganKontakDarurat">Hubungan</Label>
-                <Input
-                  id="hubunganKontakDarurat"
+                <Select
                   name="hubunganKontakDarurat"
-                  defaultValue={employeeData.hubunganKontakDarurat || ""}
-                />
+                  defaultValue={normalizeOptionValue(employeeData.hubunganKontakDarurat, emergencyRelationOptions)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih hubungan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {emergencyRelationOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="noTeleponKontakDarurat">Nomor Telepon</Label>

@@ -29,6 +29,8 @@ export default function NewLeavePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [selectedLeaveType, setSelectedLeaveType] = useState("");
+  const [customLeaveLabel, setCustomLeaveLabel] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [leaveDays, setLeaveDays] = useState(0);
@@ -49,9 +51,7 @@ export default function NewLeavePage() {
 
     if (employee && employee.id) {
       try {
-        const info = await leaveAPI.getEmployeeLeaveInfo(
-          employee.id.toString()
-        );
+        const info = await leaveAPI.getEmployeeLeaveInfo(employee.id.toString());
         setLeaveInfo(info);
       } catch (err) {
         console.error("Gagal mengambil informasi cuti:", err);
@@ -60,6 +60,11 @@ export default function NewLeavePage() {
     } else {
       setLeaveInfo(null);
     }
+  };
+
+  const refreshLeaveInfo = async (karyawanId: string) => {
+    const info = await leaveAPI.getEmployeeLeaveInfo(karyawanId);
+    setLeaveInfo(info);
   };
 
   const calculateLeaveDays = (start: string, end: string) => {
@@ -98,15 +103,40 @@ export default function NewLeavePage() {
       setIsLoading(false);
       return;
     }
+    if (!selectedLeaveType) {
+      setError("Jenis cuti wajib dipilih.");
+      setIsLoading(false);
+      return;
+    }
+    if (selectedLeaveType === "CUTI_LAINNYA" && !customLeaveLabel.trim()) {
+      setError("Nama jenis cuti wajib diisi untuk jenis Lainnya.");
+      setIsLoading(false);
+      return;
+    }
+    if (
+      selectedLeaveType === "CUTI_TAHUNAN" &&
+      leaveInfo &&
+      leaveDays > Number(leaveInfo.sisaCuti || 0)
+    ) {
+      setError(
+        `Durasi cuti (${leaveDays} hari) melebihi sisa kuota (${leaveInfo.sisaCuti} hari).`
+      );
+      setIsLoading(false);
+      return;
+    }
     const leaveData = {
-      karyawan: { id: employee.id },
-      jenisCuti: formData.get("leaveType") as string,
+      karyawanId: employee.id,
+      jenisCuti: selectedLeaveType,
+      ...(selectedLeaveType === "CUTI_LAINNYA"
+        ? { labelCustom: customLeaveLabel.trim() }
+        : {}),
       tanggalMulai: formData.get("startDate") as string,
       tanggalSelesai: formData.get("endDate") as string,
-      alasan: formData.get("reason") as string,
+      keterangan: formData.get("reason") as string,
     };
     try {
       await leaveAPI.create(leaveData);
+      await refreshLeaveInfo(employee.id.toString());
       setSuccess("Pengajuan cuti berhasil disubmit!");
       setTimeout(() => {
         router.push("/dashboard/leave");
@@ -120,6 +150,20 @@ export default function NewLeavePage() {
       setIsLoading(false);
     }
   };
+
+  const leavePercent = leaveInfo
+    ? Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(
+            ((Number(leaveInfo.sisaCuti) || 0) /
+              Math.max(1, Number(leaveInfo.batasMaksimal) || 1)) *
+              100
+          )
+        )
+      )
+    : 0;
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
@@ -178,21 +222,34 @@ export default function NewLeavePage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="leaveType">Jenis Cuti *</Label>
-                <Select name="leaveType" required>
+                <Select
+                  name="leaveType"
+                  required
+                  value={selectedLeaveType}
+                  onValueChange={setSelectedLeaveType}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Pilih jenis cuti" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Cuti Tahunan">Cuti Tahunan</SelectItem>
-                    <SelectItem value="Cuti Sakit">Cuti Sakit</SelectItem>
-                    <SelectItem value="Cuti Melahirkan">
-                      Cuti Melahirkan
-                    </SelectItem>
-                    <SelectItem value="Cuti Khusus">Cuti Khusus</SelectItem>
-                    <SelectItem value="Cuti Bersama">Cuti Bersama</SelectItem>
+                    <SelectItem value="CUTI_TAHUNAN">Cuti Tahunan</SelectItem>
+                    <SelectItem value="CUTI_MELAHIRKAN">Cuti Melahirkan</SelectItem>
+                    <SelectItem value="CUTI_LAINNYA">Lainnya...</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              {selectedLeaveType === "CUTI_LAINNYA" && (
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="customLeaveType">Nama Jenis Cuti *</Label>
+                  <Input
+                    id="customLeaveType"
+                    value={customLeaveLabel}
+                    onChange={(e) => setCustomLeaveLabel(e.target.value)}
+                    placeholder="Contoh: Cuti Pernikahan, Cuti Duka"
+                    required
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="startDate">Tanggal Mulai *</Label>
                 <Input
@@ -222,6 +279,25 @@ export default function NewLeavePage() {
                 </div>
               </div>
             </div>
+
+            {selectedLeaveType === "CUTI_TAHUNAN" && leaveInfo && (
+              <div
+                className={`text-sm rounded-md border px-3 py-2 ${
+                  Number(leaveInfo.sisaCuti || 0) > 0
+                    ? "border-green-200 bg-green-50 text-green-700"
+                    : "border-red-200 bg-red-50 text-red-700"
+                }`}
+              >
+                Sisa jatah cuti tahunan: {Number(leaveInfo.sisaCuti || 0)} hari
+              </div>
+            )}
+
+            {selectedLeaveType === "CUTI_MELAHIRKAN" && (
+              <p className="text-sm text-muted-foreground">
+                Cuti melahirkan tidak memotong jatah cuti tahunan.
+              </p>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="reason">Alasan Cuti *</Label>
               <Textarea
@@ -279,25 +355,24 @@ export default function NewLeavePage() {
                         : "bg-red-500"
                     }`}
                     style={{
-                      width: `${
-                        (leaveInfo.sisaCuti / leaveInfo.batasMaksimal) * 100
-                      }%`,
+                      width: `${leavePercent}%`,
                     }}
                   ></div>
                 </div>
                 <p className="text-xs text-gray-500 mt-2 text-center">
-                  {Math.round(
-                    (leaveInfo.sisaCuti / leaveInfo.batasMaksimal) * 100
-                  )}
-                  % sisa hari cuti tersedia
+                  {leavePercent}% sisa hari cuti tersedia
                 </p>
               </div>
-              {leaveInfo.sisaCuti === 0 && (
+              <div className="mt-4 border rounded-lg p-4 bg-slate-50">
+                <div className="text-sm font-medium mb-2">Catatan</div>
+                <p className="text-xs text-slate-600">
+                  Jatah cuti tahunan mengikuti ketentuan perusahaan: 12 hari per tahun dan reset pada tahun baru.
+                </p>
+              </div>
+              {selectedLeaveType === "CUTI_TAHUNAN" && leaveInfo.sisaCuti === 0 && (
                 <Alert variant="destructive" className="mt-4">
                   <AlertDescription>
-                    Karyawan ini telah mencapai batas maksimal cuti tahunan (12
-                    hari kerja). Tidak dapat mengajukan cuti lagi untuk tahun
-                    ini.
+                    Karyawan ini telah mencapai batas maksimal cuti tahunan ({leaveInfo.batasMaksimal} hari kerja). Tidak dapat mengajukan cuti tahunan lagi untuk tahun ini.
                   </AlertDescription>
                 </Alert>
               )}
@@ -315,7 +390,9 @@ export default function NewLeavePage() {
             disabled={
               isLoading ||
               leaveDays === 0 ||
-              (leaveInfo && leaveInfo.sisaCuti === 0)
+              (selectedLeaveType === "CUTI_TAHUNAN" &&
+                leaveInfo &&
+                (leaveInfo.sisaCuti === 0 || leaveDays > leaveInfo.sisaCuti))
             }
           >
             {isLoading ? (

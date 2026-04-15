@@ -16,6 +16,8 @@ import {
   Banknote,
   FileText,
   Settings,
+  ImageIcon,
+  Archive,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
@@ -41,6 +43,7 @@ import {
 } from "@/components/ui/overlay/dropdown-menu";
 import { removeAuthToken } from "@/lib/api";
 import { UserRole } from "@/lib/auth/roles";
+import { NAMA_PT } from "@/lib/constants/perusahaan";
 
 type MenuItem = {
   title: string;
@@ -79,6 +82,18 @@ const menuItems: MenuItem[] = [
     url: "/dashboard/violations",
     icon: AlertTriangle,
     description: "Catatan Pelanggaran",
+  },
+  {
+    title: "Galeri",
+    url: "/dashboard/galeri",
+    icon: ImageIcon,
+    description: "Dokumentasi Foto & Video",
+  },
+  {
+    title: "Arsip",
+    url: "/dashboard/arsip",
+    icon: Archive,
+    description: "Dokumen PDF, Word, Excel",
   },
   {
     title: "Template PKB",
@@ -548,7 +563,7 @@ export function AppSidebar() {
                 />
               </div>
               <div className="padud-logo-text group-data-[collapsible=icon]:hidden">
-                <span className="padud-logo-title">PT. PADUD</span>
+                <span className="padud-logo-title">{NAMA_PT.PJP}</span>
                 <span className="padud-logo-sub">Management System</span>
               </div>
             </div>
@@ -723,7 +738,7 @@ export function AppSidebar() {
 
             <div className="padud-version-badge group-data-[collapsible=icon]:hidden">
               <Factory size={9} className="text-gray-700" />
-              <span>PT. PADUD · v1.0</span>
+              <span>{NAMA_PT.PJP} · v1.0</span>
             </div>
           </div>
         </SidebarFooter>

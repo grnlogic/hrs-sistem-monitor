@@ -6,6 +6,7 @@ declare module "next-auth" {
     accessToken: string;
     user: {
       role: "HRD" | "AKUNTANSI";
+      lokasi?: "PJP" | "SP" | "PRIMA" | null;
       name?: string | null;
       email?: string | null;
       image?: string | null;
@@ -14,6 +15,7 @@ declare module "next-auth" {
 
   interface User {
     role: "HRD" | "AKUNTANSI";
+    lokasi?: "PJP" | "SP" | "PRIMA" | null;
     accessToken: string;
   }
 }
@@ -21,6 +23,7 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     role?: "HRD" | "AKUNTANSI";
+    lokasi?: "PJP" | "SP" | "PRIMA" | null;
     accessToken?: string;
   }
 }

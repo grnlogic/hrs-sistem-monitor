@@ -3,7 +3,7 @@ import path from "node:path";
 import mammoth from "mammoth";
 import type { TipeUpahPKB } from "./pkb-template";
 
-export type PKBDivision = "sales" | "packing" | "blending";
+export type PKBDivision = "sales" | "packing" | "blending" | "staff";
 
 export interface PKBDocxPayload {
   division: PKBDivision;
@@ -31,6 +31,7 @@ const TEMPLATE_BY_DIVISION: Record<PKBDivision, string> = {
   sales: "pkb-sales.docx",
   packing: "pkb-packing.docx",
   blending: "pkb-blending.docx",
+  staff: "pkb-sales.docx",
 };
 
 function formatCurrency(amount: number): string {
