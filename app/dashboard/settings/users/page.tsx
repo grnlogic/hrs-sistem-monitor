@@ -32,6 +32,13 @@ import {
 import { Badge } from "@/components/ui/display/badge";
 import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/overlay/dialog";
+import {
   LokasiCode,
   SystemRole,
   SystemUser,
@@ -41,7 +48,7 @@ import {
   salaryAPI,
   userManagementAPI,
 } from "@/lib/api";
-import { Download, Upload } from "lucide-react";
+import { Download, Upload, Loader2 } from "lucide-react";
 import { NAMA_PT } from "@/lib/constants/perusahaan";
 
 const IMPORT_HEADERS = [
@@ -58,7 +65,7 @@ const IMPORT_HEADERS = [
   "tanggalMasuk",
 ] as const;
 
-const DEPARTEMEN_OPTIONS = ["Blending", "Packing", "Sales", "Staff"] as const;
+const DEPARTEMEN_OPTIONS = ["Blending", "Packing", "Sales", "Staff", "Linting"] as const;
 const ROLE_OPTIONS = ["Karyawan", "Supervisor", "Manager"] as const;
 const STATUS_KARYAWAN_OPTIONS = ["TETAP", "KONTRAK"] as const;
 const LOKASI_OPTIONS = ["PJP", "SP", "PRIMA"] as const;
@@ -66,7 +73,7 @@ const LOKASI_OPTIONS = ["PJP", "SP", "PRIMA"] as const;
 const IMPORT_GUIDE_ROWS = [
   {
     kolom: "departemen",
-    nilai: "Blending | Packing | Sales | Staff",
+    nilai: "Blending | Packing | Sales | Staff | Linting",
     catatan: "Gunakan salah satu nilai ini saja.",
   },
   {
@@ -86,8 +93,8 @@ const IMPORT_GUIDE_ROWS = [
   },
   {
     kolom: "gajiPerBulan / gajiPerHari",
-    nilai: "Staff: isi gajiPerBulan. Non-Staff: isi gajiPerHari.",
-    catatan: "Kolom yang tidak dipakai dikosongkan.",
+    nilai: "Boleh dikosongkan (opsional).",
+    catatan: "Boleh bulanan walau bukan Staff (contoh: motoris).",
   },
   {
     kolom: "tanggalMasuk",
@@ -125,9 +132,12 @@ const toTitleTrim = (value: unknown) => {
 };
 
 const toPositiveNumber = (value: unknown) => {
-  const normalized = String(value ?? "").replace(/,/g, "").trim();
-  if (!normalized) return null;
-  const num = Number(normalized);
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number") return value > 0 ? value : null;
+  let str = String(value).trim();
+  if (!str) return null;
+  str = str.replace(/^(rp|idr)\.?\s*/i, "").replace(/[,.]00$/, "").replace(/[.,\s]/g, "");
+  const num = Number(str);
   return Number.isFinite(num) && num > 0 ? num : null;
 };
 
@@ -135,6 +145,7 @@ const normalizeDate = (value: unknown) => {
   if (!value) return new Date().toISOString().slice(0, 10);
 
   if (typeof value === "number") {
+    if (value >= 1900 && value <= 2100) return `${value}-01-01`;
     const parsed = XLSX.SSF.parse_date_code(value);
     if (parsed) {
       const month = String(parsed.m).padStart(2, "0");
@@ -145,6 +156,7 @@ const normalizeDate = (value: unknown) => {
 
   const str = String(value).trim();
   if (!str) return new Date().toISOString().slice(0, 10);
+  if (/^\d{4}$/.test(str)) return `${str}-01-01`;
   const parsedDate = new Date(str);
   if (Number.isNaN(parsedDate.getTime())) {
     return new Date().toISOString().slice(0, 10);
@@ -306,14 +318,14 @@ export default function UserManagementPage() {
     });
 
     const panduanRows = [
-      { kolom: "departemen", aturan: "Blending, Packing, Sales, Staff" },
+      { kolom: "departemen", aturan: "Blending, Packing, Sales, Staff, Linting" },
       { kolom: "jabatan", aturan: "Karyawan, Supervisor, Manager" },
       { kolom: "statusKaryawan", aturan: "TETAP atau KONTRAK" },
       { kolom: "lokasiDefault", aturan: "PJP, SP, atau PRIMA" },
       {
         kolom: "gajiPerBulan / gajiPerHari",
         aturan:
-          "Jika departemen = Staff isi gajiPerBulan dan kosongkan gajiPerHari. Selain Staff isi gajiPerHari dan kosongkan gajiPerBulan.",
+          "Boleh dikosongkan (opsional) jika data belum diketahui. Non-Staff (seperti Sales/motoris) juga bisa diisi gajiPerBulan jika sistem pembayarannya bulanan.",
       },
       {
         kolom: "tanggalMasuk",
@@ -340,37 +352,35 @@ export default function UserManagementPage() {
     const alamat = String(row.alamat ?? "").trim();
     const tanggalMasuk = normalizeDate(row.tanggalMasuk);
     const bpjsKesehatanValue = row.bpjsKesehatan;
-    const bpjsKesehatan =
-      bpjsKesehatanValue === undefined || bpjsKesehatanValue === null || String(bpjsKesehatanValue).trim() === ""
-        ? "0"
-        : String(bpjsKesehatanValue).trim();
+    const bpjsRaw = String(row.bpjsKesehatan ?? "").trim();
+    const bpjsClean = bpjsRaw.replace(/^(rp|idr)\.?\s*/i, "").replace(/[,.]00$/, "").replace(/[.,\s]/g, "");
+    const bpjsKesehatan = bpjsClean || "0";
 
     const errors: string[] = [];
 
-    if (!nik) errors.push("NIK tidak boleh kosong");
-    if (!namaLengkap) errors.push("Nama tidak boleh kosong");
-    if (!DEPARTEMEN_OPTIONS.includes(departemenRaw as (typeof DEPARTEMEN_OPTIONS)[number])) {
-      errors.push("Divisi harus Blending, Packing, Sales, atau Staff");
+    let finalNik = nik;
+    if (!finalNik) {
+      // Buatkan NIK sementara jika kosong agar tetap bisa diproses
+      finalNik = `TEMP-${Math.floor(Math.random() * 10000)}-${rowNumber}`;
     }
-    if (!ROLE_OPTIONS.includes(jabatanRaw as (typeof ROLE_OPTIONS)[number])) {
+
+    const finalNama = namaLengkap || `Tanpa Nama (Baris ${rowNumber})`;
+
+    if (departemenRaw && !DEPARTEMEN_OPTIONS.includes(departemenRaw as (typeof DEPARTEMEN_OPTIONS)[number])) {
+      errors.push("Divisi harus Blending, Packing, Sales, Staff, atau Linting");
+    }
+    if (jabatanRaw && !ROLE_OPTIONS.includes(jabatanRaw as (typeof ROLE_OPTIONS)[number])) {
       errors.push("Role harus Karyawan, Supervisor, atau Manager");
     }
-    if (!STATUS_KARYAWAN_OPTIONS.includes(statusKaryawanRaw as (typeof STATUS_KARYAWAN_OPTIONS)[number])) {
+    if (statusKaryawanRaw && !STATUS_KARYAWAN_OPTIONS.includes(statusKaryawanRaw as (typeof STATUS_KARYAWAN_OPTIONS)[number])) {
       errors.push("Status harus TETAP atau KONTRAK");
     }
-    if (!LOKASI_OPTIONS.includes(lokasiDefaultRaw as (typeof LOKASI_OPTIONS)[number])) {
+    if (lokasiDefaultRaw && !LOKASI_OPTIONS.includes(lokasiDefaultRaw as (typeof LOKASI_OPTIONS)[number])) {
       errors.push("Lokasi harus PJP, SP, atau PRIMA");
     }
 
-    if (departemenRaw === "Staff") {
-      if (!gajiPerBulan) {
-        errors.push("Divisi Staff wajib isi gajiPerBulan");
-      }
-    } else {
-      if (!gajiPerHari) {
-        errors.push("Divisi non-Staff wajib isi gajiPerHari");
-      }
-    }
+    // Gaji tidak lagi diwajibkan untuk diisi saat import, bisa menyusul
+
 
     if (errors.length > 0) {
       return {
@@ -388,17 +398,18 @@ export default function UserManagementPage() {
       Packing: "PACKING",
       Sales: "SALES",
       Staff: "STAFF",
+      Linting: "LINTING",
     };
 
     return {
       ok: true as const,
       data: {
-        nik,
-        namaLengkap,
-        departemen: departemenMap[departemenRaw as (typeof DEPARTEMEN_OPTIONS)[number]],
-        jabatan: jabatanRaw,
-        statusKaryawan: statusKaryawanRaw,
-        lokasiDefault: lokasiDefaultRaw,
+        nik: finalNik,
+        namaLengkap: finalNama,
+        departemen: departemenMap[departemenRaw as (typeof DEPARTEMEN_OPTIONS)[number]] || departemenRaw || null,
+        jabatan: jabatanRaw || null,
+        statusKaryawan: statusKaryawanRaw || "AKTIF",
+        lokasiDefault: lokasiDefaultRaw || "PJP",
         gajiPerHari: gajiPerHari ?? 0,
         gajiPerBulan: gajiPerBulan ?? null,
         bpjsKesehatan,
@@ -431,22 +442,47 @@ export default function UserManagementPage() {
         return;
       }
 
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, {
+      const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, {
         defval: "",
       });
 
-      if (rows.length === 0) {
+      const rows = rawRows.map((row) => {
+        const normalized: Record<string, unknown> = {};
+        for (const [key, val] of Object.entries(row)) {
+          const safeKey = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+          normalized[safeKey] = val;
+        }
+        return {
+          nik: normalized.nik,
+          namaLengkap: normalized.namalengkap || normalized.nama,
+          departemen: normalized.departemen || normalized.divisi,
+          jabatan: normalized.jabatan || normalized.role,
+          statusKaryawan: normalized.statuskaryawan || normalized.status,
+          lokasiDefault: normalized.lokasidefault || normalized.lokasidefaul || normalized.lokasi,
+          gajiPerHari: normalized.gajiperhari,
+          gajiPerBulan: normalized.gajiperbulan,
+          bpjsKesehatan: normalized.bpjskesehatan || normalized.bpjs,
+          alamat: normalized.alamat,
+          tanggalMasuk: normalized.tanggalmasuk || normalized.tahunmasuk || normalized.tahun,
+        };
+      });
+
+      const filteredRows = rows.filter((row) => {
+        return Object.values(row).some((val) => val !== undefined && val !== null && String(val).trim() !== "");
+      });
+
+      if (filteredRows.length === 0) {
         setImportError("File Excel kosong. Isi minimal 1 baris data.");
         return;
       }
 
       const rowErrors: ImportErrorRow[] = [];
-      const validPayloads: Array<Record<string, unknown>> = [];
+      const validPayloads: Array<{ payload: Record<string, unknown>; rowNum: number }> = [];
 
-      rows.forEach((row, idx) => {
+      filteredRows.forEach((row, idx) => {
         const result = parseAndValidateRow(row, idx + 2);
         if (result.ok) {
-          validPayloads.push(result.data);
+          validPayloads.push({ payload: result.data, rowNum: idx + 2 });
         } else {
           rowErrors.push(result.error);
         }
@@ -455,17 +491,22 @@ export default function UserManagementPage() {
       let imported = 0;
       let failed = 0;
 
-      for (const payload of validPayloads) {
+      for (const item of validPayloads) {
         try {
-          await employeeAPI.create(payload);
+          await employeeAPI.create(item.payload);
           imported += 1;
-        } catch (e) {
+        } catch (e: any) {
           failed += 1;
+          rowErrors.push({
+            row: item.rowNum,
+            nama: String(item.payload.namaLengkap || "-"),
+            error: e?.response?.data?.message || e?.message || "Gagal menyimpan ke database (kemungkinan NIK sudah terdaftar)",
+          });
         }
       }
 
       const summary: ImportSummary = {
-        total: rows.length,
+        total: filteredRows.length,
         valid: validPayloads.length,
         invalid: rowErrors.length,
         imported,
@@ -888,10 +929,19 @@ export default function UserManagementPage() {
                 }}
               />
               <Button type="button" onClick={handleImportExcel} disabled={isImporting || !selectedImportFile}>
-                <Upload className="h-4 w-4 mr-2" />
-                {isImporting ? "Memproses..." : "Upload & Import"}
+                {isImporting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4 mr-2" />
+                )}
+                {isImporting ? "Sedang Memproses..." : "Upload & Import"}
               </Button>
             </div>
+            {isImporting && (
+              <p className="text-sm text-blue-600 font-medium animate-pulse mt-2">
+                Sedang mengupload dan memproses data Excel, mohon tunggu...
+              </p>
+            )}
           </div>
 
           {importError && (
@@ -1072,6 +1122,24 @@ export default function UserManagementPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Pop up loading import */}
+      <Dialog open={isImporting} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-md [&>button]:hidden">
+          <DialogHeader>
+            <DialogTitle>Memproses Data Excel</DialogTitle>
+            <DialogDescription>
+              Mohon tunggu, sistem sedang membaca dan mengimport data karyawan.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center justify-center py-6">
+            <Loader2 className="h-10 w-10 text-blue-600 animate-spin mb-4" />
+            <p className="text-sm font-medium text-slate-700 animate-pulse">
+              Menyimpan data ke database...
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
