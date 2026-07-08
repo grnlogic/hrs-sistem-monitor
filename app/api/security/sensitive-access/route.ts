@@ -1,21 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
-
-const FALLBACK_PASSWORD = "padud@key202";
+import bcrypt from "bcryptjs";
+import { getSetting } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const inputPassword = String(body?.password ?? "");
-    const configuredPassword =
-      process.env.SENSITIVE_DATA_PASSWORD || FALLBACK_PASSWORD;
+    const inputPassword = String(body?.password ?? "").trim();
 
-    const inputBuffer = Buffer.from(inputPassword, "utf8");
-    const configuredBuffer = Buffer.from(configuredPassword, "utf8");
+    if (!inputPassword) {
+      return NextResponse.json(
+        { success: false, message: "Password wajib diisi" },
+        { status: 400 }
+      );
+    }
 
-    const isValid =
-      inputBuffer.length === configuredBuffer.length &&
-      crypto.timingSafeEqual(inputBuffer, configuredBuffer);
+    // Ambil hash dari SQLite database
+    const storedHash = getSetting("sensitive_access_password_hash");
+
+    if (!storedHash) {
+      // Hash belum di-seed ke database
+      return NextResponse.json(
+        { success: false, message: "Konfigurasi password belum diatur" },
+        { status: 500 }
+      );
+    }
+
+    // Verifikasi password dengan bcrypt (timing-safe secara otomatis)
+    const isValid = await bcrypt.compare(inputPassword, storedHash);
 
     if (!isValid) {
       return NextResponse.json(

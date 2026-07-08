@@ -41,6 +41,7 @@ type EmployeeOption = {
   nik: string;
   namaLengkap: string;
   departemen: string;
+  jabatan: string;
   lokasiDefault: "PJP" | "SP" | "PRIMA";
 };
 
@@ -149,11 +150,14 @@ export default function NewAttendancePage() {
     try {
       setIsLoadingEmployees(true);
       const data = await employeeAPI.getAll();
-      const mappedEmployees: EmployeeOption[] = data.map((emp: any) => ({
+      const mappedEmployees: EmployeeOption[] = data
+        .filter((emp: any) => emp.statusKaryawan !== "NONAKTIF" && emp.statusKaryawan !== "TIDAK_AKTIF" && emp.statusKaryawan !== "NON_AKTIF")
+        .map((emp: any) => ({
         id: Number(emp.id),
         namaLengkap: emp.namaLengkap || emp.name || "(Tanpa Nama)",
         nik: emp.nik || emp.nip || "(Tanpa NIK)",
         departemen: emp.departemen || "Lainnya",
+        jabatan: emp.jabatan || emp.position || "-",
         lokasiDefault: ["PJP", "SP", "PRIMA"].includes((emp.lokasiDefault || "").toUpperCase())
           ? (emp.lokasiDefault.toUpperCase() as "PJP" | "SP" | "PRIMA")
           : "PJP",
@@ -614,7 +618,7 @@ export default function NewAttendancePage() {
                           <TableCell>
                             <div className="font-medium">{employee.namaLengkap}</div>
                             <div className="text-xs text-gray-500">
-                              {employee.nik} • {employee.departemen}
+                              {employee.jabatan} • {employee.departemen}
                             </div>
                           </TableCell>
                           <TableCell>

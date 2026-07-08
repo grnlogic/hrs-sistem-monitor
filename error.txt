@@ -1,63 +1,26 @@
-api.ts:1028 Error updating attendance: Error: HTTP error! status: 405
-    at apiRequest (api.ts:74:13)
-    at async Object.updateStatusWithDate (api.ts:1022:24)
-    at async Promise.allSettled (index 10)
-    at async handleSubmit (page.tsx:312:23)
-api.ts:64 
- POST http://localhost:3999/api/absensi/json 405 (Method Not Allowed)
-api.ts:1028 Error updating attendance: Error: HTTP error! status: 405
-    at apiRequest (api.ts:74:13)
-    at async Object.updateStatusWithDate (api.ts:1022:24)
-    at async Promise.allSettled (index 11)
-    at async handleSubmit (page.tsx:312:23)
-api.ts:64 
- POST http://localhost:3999/api/absensi/json 405 (Method Not Allowed)
-api.ts:1028 Error updating attendance: Error: HTTP error! status: 405
-    at apiRequest (api.ts:74:13)
-    at async Object.updateStatusWithDate (api.ts:1022:24)
-    at async Promise.allSettled (index 12)
-    at async handleSubmit (page.tsx:312:23)
-api.ts:64 
- POST http://localhost:3999/api/absensi/json 405 (Method Not Allowed)
-api.ts:1028 Error updating attendance: Error: HTTP error! status: 405
-    at apiRequest (api.ts:74:13)
-    at async Object.updateStatusWithDate (api.ts:1022:24)
-    at async Promise.allSettled (index 13)
-    at async handleSubmit (page.tsx:312:23)
-api.ts:64 
- POST http://localhost:3999/api/absensi/json 405 (Method Not Allowed)
-api.ts:1028 Error updating attendance: Error: HTTP error! status: 405
-    at apiRequest (api.ts:74:13)
-    at async Object.updateStatusWithDate (api.ts:1022:24)
-    at async Promise.allSettled (index 14)
-    at async handleSubmit (page.tsx:312:23)
-api.ts:64 
- POST http://localhost:3999/api/absensi/json 405 (Method Not Allowed)
-api.ts:1028 Error updating attendance: Error: HTTP error! status: 405
-    at apiRequest (api.ts:74:13)
-    at async Object.updateStatusWithDate (api.ts:1022:24)
-    at async Promise.allSettled (index 15)
-    at async handleSubmit (page.tsx:312:23)
-api.ts:64 
- POST http://localhost:3999/api/absensi/json 405 (Method Not Allowed)
-api.ts:1028 Error updating attendance: Error: HTTP error! status: 405
-    at apiRequest (api.ts:74:13)
-    at async Object.updateStatusWithDate (api.ts:1022:24)
-    at async Promise.allSettled (index 16)
-    at async handleSubmit (page.tsx:312:23)
-api.ts:64 
- POST http://localhost:3999/api/absensi/json 405 (Method Not Allowed)
-api.ts:1028 Error updating attendance: Error: HTTP error! status: 405
-    at apiRequest (api.ts:74:13)
-    at async Object.updateStatusWithDate (api.ts:1022:24)
-    at async Promise.allSettled (index 17)
-    at async handleSubmit (page.tsx:312:23)
-api.ts:64 
- POST http://localhost:3999/api/absensi/json 405 (Method Not Allowed)
-api.ts:1028 Error updating attendance: Error: HTTP error! status: 405
-    at apiRequest (api.ts:74:13)
-    at async Object.updateStatusWithDate (api.ts:1022:24)
-    at async Promise.allSettled (index 18)
-    at async handleSubmit (page.tsx:312:23)
-﻿
-
+Failed to load resource: net::ERR_BLOCKED_BY_CLIENT
+credentials:1  Failed to load resource: the server responded with a status of 401 ()
+2108-17aede3e8aad3233.js:1  POST https://hrd-fe.padudjayaputera.com/api/auth/callback/credentials 401 (Unauthorized)
+(anonymous) @ 2108-17aede3e8aad3233.js:1
+(anonymous) @ 2108-17aede3e8aad3233.js:1
+(anonymous) @ 2108-17aede3e8aad3233.js:1
+(anonymous) @ 2108-17aede3e8aad3233.js:1
+t @ 2108-17aede3e8aad3233.js:1
+s @ 2108-17aede3e8aad3233.js:1
+Promise.then
+t @ 2108-17aede3e8aad3233.js:1
+s @ 2108-17aede3e8aad3233.js:1
+Promise.then
+t @ 2108-17aede3e8aad3233.js:1
+s @ 2108-17aede3e8aad3233.js:1
+(anonymous) @ 2108-17aede3e8aad3233.js:1
+(anonymous) @ 2108-17aede3e8aad3233.js:1
+t.signIn @ 2108-17aede3e8aad3233.js:1
+j @ page-8fe9b4c3000eb285.js:1
+i4 @ 4bd1b696-cc729d47eba2cee4.js:1
+(anonymous) @ 4bd1b696-cc729d47eba2cee4.js:1
+nz @ 4bd1b696-cc729d47eba2cee4.js:1
+se @ 4bd1b696-cc729d47eba2cee4.js:1
+cs @ 4bd1b696-cc729d47eba2cee4.js:1
+cu @ 4bd1b696-cc729d47eba2cee4.js:1
+2108-17aede3e8aad3233.js:1  POST https://hrd-fe.padudjayaputera.com/api/auth/callback/credentials 401 (Unauthorized)
