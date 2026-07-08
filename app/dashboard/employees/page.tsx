@@ -78,24 +78,22 @@ import { Checkbox } from "@/components/ui/form/checkbox";
 import { employeeAPI } from "@/lib/api";
 import type { Employee } from "@/lib/types";
 import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/navigation/tabs";
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("Aktif");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [avatarUrls, setAvatarUrls] = useState<{ [key: string]: string }>({});
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(
+  const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
+  const [employeeToDeactivate, setEmployeeToDeactivate] = useState<Employee | null>(
     null
   );
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [relatedDataInfo, setRelatedDataInfo] = useState<string>("");
-  const [showForceDeleteOption, setShowForceDeleteOption] = useState(false);
-  const [deleteMode, setDeleteMode] = useState<"safe" | "force">("safe");
+  const [isDeactivating, setIsDeactivating] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [selectedFields, setSelectedFields] = useState<string[]>([
     "name",
@@ -120,97 +118,54 @@ export default function EmployeesPage() {
 
   useEffect(() => {
     fetchEmployees();
+
+    // Periksa cookie apakah akses sensitif sudah pernah dibuka sebelumnya (misal dalam 4 jam terakhir)
+    const isUnlockedCookie = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("sensitive_data_unlocked="));
+    if (isUnlockedCookie && isUnlockedCookie.split("=")[1] === "true") {
+      setIsSensitiveUnlocked(true);
+    }
   }, []);
 
-  const handleDeleteEmployee = async (employee: Employee) => {
-    setIsDeleting(true);
+  const handleDeactivateEmployee = async (employee: Employee) => {
+    setIsDeactivating(true);
     try {
-      if (deleteMode === "force") {
-        // Force delete dengan semua data terkait
-        await employeeAPI.forceDelete(employee.id.toString());
-      } else {
-        // Safe delete (default)
-        await employeeAPI.delete(employee.id.toString());
-      }
+      await employeeAPI.deactivate(employee.id.toString());
 
-      setEmployees((prev) => prev.filter((emp) => emp.id !== employee.id));
-      setFilteredEmployees((prev) =>
-        prev.filter((emp) => emp.id !== employee.id)
+      // Biarkan 3 detik loading pop up sebelum menutup dan memperbarui UI
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+
+      setEmployees((prev) =>
+        prev.map((emp) =>
+          emp.id === employee.id ? { ...emp, status: "Tidak Aktif" } : emp
+        )
       );
-      setEmployeeToDelete(null);
-      setDeleteDialogOpen(false);
-      setShowForceDeleteOption(false);
-      setDeleteMode("safe");
-      setRelatedDataInfo("");
+      setFilteredEmployees((prev) =>
+        prev.map((emp) =>
+          emp.id === employee.id ? { ...emp, status: "Tidak Aktif" } : emp
+        )
+      );
+      setEmployeeToDeactivate(null);
+      setDeactivateDialogOpen(false);
       setError("");
 
-      // Tampilkan success message
-      const deleteType =
-        deleteMode === "force" ? "beserta semua data terkait" : "";
-      setSuccessMessage(
-        `Karyawan ${employee.name} berhasil dihapus ${deleteType}`
-      );
-
-      // Clear success message after 5 seconds
+      setSuccessMessage(`Karyawan ${employee.name} berhasil dinonaktifkan`);
       setTimeout(() => setSuccessMessage(""), 5000);
     } catch (err: any) {
-      // Jika gagal karena ada data terkait, tampilkan opsi force delete
-      if (
-        err.message &&
-        (err.message.includes("data terkait") ||
-          err.message.includes("masih memiliki data") ||
-          err.message.includes("related data"))
-      ) {
-        setShowForceDeleteOption(true);
-        setError(err.message);
-      } else {
-        setError("Gagal menghapus karyawan: " + (err.message || err));
-        console.error("Error deleting employee:", err);
-        setDeleteDialogOpen(false);
-        setEmployeeToDelete(null);
-        setShowForceDeleteOption(false);
-        setDeleteMode("safe");
-        setRelatedDataInfo("");
-      }
+      setError("Gagal menonaktifkan karyawan: " + (err.message || err));
+      console.error("Error deactivating employee:", err);
+      setDeactivateDialogOpen(false);
+      setEmployeeToDeactivate(null);
     } finally {
-      setIsDeleting(false);
+      setIsDeactivating(false);
     }
   };
 
-  // Fungsi untuk cek data terkait sebelum delete
-  const handleCheckRelatedData = async (employee: Employee) => {
-    try {
-      setError(""); // Clear previous errors
-      const response = await employeeAPI.checkRelatedData(
-        employee.id.toString()
-      );
-      setRelatedDataInfo(response);
-      setEmployeeToDelete(employee);
-      setDeleteDialogOpen(true);
-      setShowForceDeleteOption(false);
-      setDeleteMode("safe");
-
-      // Jika ada data terkait (bukan hanya "Karyawan tidak ditemukan"), tampilkan opsi force delete
-      if (
-        response &&
-        !response.includes("Karyawan tidak ditemukan") &&
-        (response.includes("Absensi (") ||
-          response.includes("Gaji (") ||
-          response.includes("Cuti (") ||
-          response.includes("Pelanggaran ("))
-      ) {
-        const hasData = response.match(/\((\d+)\)/g)?.some((match) => {
-          const count = parseInt(match.replace(/[()]/g, ""));
-          return count > 0;
-        });
-        if (hasData) {
-          setShowForceDeleteOption(true);
-        }
-      }
-    } catch (err: any) {
-      setError("Gagal mengecek data terkait: " + (err.message || err));
-      console.error("Error checking related data:", err);
-    }
+  const promptDeactivateEmployee = (employee: Employee) => {
+    setEmployeeToDeactivate(employee);
+    setDeactivateDialogOpen(true);
+    setError("");
   };
 
   useEffect(() => {
@@ -267,7 +222,7 @@ export default function EmployeesPage() {
         status:
           emp.statusKaryawan === "AKTIF"
             ? "Aktif"
-            : emp.statusKaryawan === "TIDAK_AKTIF"
+            : (emp.statusKaryawan === "TIDAK_AKTIF" || emp.statusKaryawan === "NONAKTIF" || emp.statusKaryawan === "NON_AKTIF")
             ? "Tidak Aktif"
             : emp.statusKaryawan === "CUTI"
             ? "Cuti"
@@ -394,9 +349,15 @@ export default function EmployeesPage() {
     try {
       await verifySensitivePassword(unlockPassword.trim());
       setIsSensitiveUnlocked(true);
+      
+      // Simpan di cookies selama 4 jam agar tidak perlu sering-sering isi password
+      const date = new Date();
+      date.setTime(date.getTime() + 4 * 60 * 60 * 1000);
+      document.cookie = `sensitive_data_unlocked=true;expires=${date.toUTCString()};path=/`;
+
       setUnlockDialogOpen(false);
       setUnlockPassword("");
-      setSuccessMessage("Data sensitif berhasil dibuka");
+      setSuccessMessage("Data sensitif berhasil dibuka (aktif selama 4 jam)");
       setTimeout(() => setSuccessMessage(""), 5000);
 
       if (pendingUnlockAction === "export") {
@@ -412,6 +373,10 @@ export default function EmployeesPage() {
   const handlePreviewAllClick = () => {
     if (isSensitiveUnlocked) {
       setIsSensitiveUnlocked(false);
+      
+      // Hapus cookie jika user sengaja mengunci kembali
+      document.cookie = "sensitive_data_unlocked=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/";
+
       setSuccessMessage("Data sensitif berhasil dikunci kembali");
       setTimeout(() => setSuccessMessage(""), 5000);
       return;
@@ -901,6 +866,15 @@ export default function EmployeesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <Tabs value={statusFilter} onValueChange={setStatusFilter} className="mb-6">
+            <TabsList>
+              <TabsTrigger value="Aktif">Karyawan Aktif</TabsTrigger>
+              <TabsTrigger value="Tidak Aktif">Karyawan Nonaktif</TabsTrigger>
+              <TabsTrigger value="Cuti">Cuti</TabsTrigger>
+              <TabsTrigger value="all">Semua Karyawan</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
           <div className="flex gap-4 mb-6">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -927,17 +901,6 @@ export default function EmployeesPage() {
                     </SelectItem>
                   )
                 )}
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua Status</SelectItem>
-                <SelectItem value="Aktif">Aktif</SelectItem>
-                <SelectItem value="Tidak Aktif">Tidak Aktif</SelectItem>
-                <SelectItem value="Cuti">Cuti</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1033,12 +996,13 @@ export default function EmployeesPage() {
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             onClick={() => {
-                              handleCheckRelatedData(employee);
+                              promptDeactivateEmployee(employee);
                             }}
                             className="text-red-600"
+                            disabled={employee.status === "Tidak Aktif"}
                           >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Hapus Karyawan
+                            <UserX className="mr-2 h-4 w-4" />
+                            Nonaktifkan
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -1059,139 +1023,55 @@ export default function EmployeesPage() {
         </CardContent>
       </Card>
 
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
         <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-red-600" />
-              Hapus Karyawan
+              Nonaktifkan Karyawan
             </AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription asChild>
               <div className="space-y-3">
                 <p>
-                  Anda akan menghapus karyawan{" "}
+                  Anda akan menonaktifkan karyawan{" "}
                   <span className="font-semibold">
-                    {employeeToDelete?.name}
+                    {employeeToDeactivate?.name}
                   </span>
                 </p>
-
-                {relatedDataInfo && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-                    <p className="text-sm text-blue-800 font-medium">
-                      Informasi Data Terkait:
-                    </p>
-                    <p className="text-sm text-blue-700">{relatedDataInfo}</p>
-                  </div>
-                )}
-
-                {showForceDeleteOption && (
-                  <div className="space-y-3">
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-                      <p className="text-sm text-yellow-800 font-medium">
-                        ⚠️ Pilih Mode Penghapusan:
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="radio"
-                          id="safe-delete"
-                          name="deleteMode"
-                          value="safe"
-                          checked={deleteMode === "safe"}
-                          onChange={(e) =>
-                            setDeleteMode(e.target.value as "safe" | "force")
-                          }
-                          className="h-4 w-4"
-                        />
-                        <label htmlFor="safe-delete" className="text-sm">
-                          <span className="font-medium text-green-700">
-                            Safe Delete
-                          </span>
-                          <span className="text-gray-600">
-                            {" "}
-                            - Hanya hapus data karyawan (menjaga histori)
-                          </span>
-                        </label>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="radio"
-                          id="force-delete"
-                          name="deleteMode"
-                          value="force"
-                          checked={deleteMode === "force"}
-                          onChange={(e) =>
-                            setDeleteMode(e.target.value as "safe" | "force")
-                          }
-                          className="h-4 w-4"
-                        />
-                        <label htmlFor="force-delete" className="text-sm">
-                          <span className="font-medium text-red-700">
-                            Force Delete
-                          </span>
-                          <span className="text-gray-600">
-                            {" "}
-                            - Hapus semua data termasuk histori
-                          </span>
-                        </label>
-                      </div>
-                    </div>
-
-                    <div className="bg-red-50 border border-red-200 rounded-md p-3">
-                      <p className="text-xs text-red-700">
-                        ⚠️ <strong>Peringatan:</strong> Force Delete akan
-                        menghapus semua data absensi, gaji, cuti, dan
-                        pelanggaran. Data yang terhapus tidak dapat
-                        dikembalikan!
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {!showForceDeleteOption && (
-                  <p className="text-sm text-gray-600">
-                    Aksi ini akan menghapus data karyawan. Jika karyawan
-                    memiliki data terkait, sistem akan memberikan opsi
-                    penghapusan yang sesuai.
-                  </p>
-                )}
+                <p className="text-sm text-gray-600">
+                  Karyawan yang dinonaktifkan tidak akan muncul pada absensi harian dan
+                  dianggap tidak lagi bekerja di perusahaan. Histori datanya tetap akan dipertahankan.
+                </p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel
               onClick={() => {
-                setEmployeeToDelete(null);
-                setDeleteDialogOpen(false);
-                setShowForceDeleteOption(false);
-                setDeleteMode("safe");
-                setRelatedDataInfo("");
+                setEmployeeToDeactivate(null);
+                setDeactivateDialogOpen(false);
               }}
-              disabled={isDeleting}
+              disabled={isDeactivating}
             >
               Batal
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (employeeToDelete) {
-                  handleDeleteEmployee(employeeToDelete);
+                if (employeeToDeactivate) {
+                  handleDeactivateEmployee(employeeToDeactivate);
                 }
               }}
-              disabled={isDeleting}
-              className={`${
-                deleteMode === "force"
-                  ? "bg-red-600 hover:bg-red-700"
-                  : "bg-blue-600 hover:bg-blue-700"
-              }`}
+              disabled={isDeactivating}
+              className="bg-red-600 hover:bg-red-700"
             >
-              {isDeleting
-                ? "Menghapus..."
-                : deleteMode === "force"
-                ? "Force Delete"
-                : "Hapus Karyawan"}
+              {isDeactivating ? (
+                <>
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Memproses...
+                </>
+              ) : (
+                "Nonaktifkan Karyawan"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

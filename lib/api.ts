@@ -278,6 +278,12 @@ export const employeeAPI = {
     }
   },
 
+  deactivate: async (id: string) => {
+    return apiRequest(`/karyawan/${id}/deactivate`, {
+      method: "PATCH",
+    });
+  },
+
   // Force delete karyawan beserta semua data terkait
   forceDelete: async (id: string) => {
     const token = getAuthToken()

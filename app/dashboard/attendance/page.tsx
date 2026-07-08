@@ -243,7 +243,12 @@ export default function AttendancePage() {
     .slice()
     .sort((a, b) => a.localeCompare(b))
     .map((departemen) => {
-      const deptEmployees = employees.filter((emp) => emp.departemen === departemen);
+      const deptEmployees = employees.filter(
+        (emp) => emp.departemen === departemen && 
+                 emp.statusKaryawan !== "NONAKTIF" && 
+                 emp.statusKaryawan !== "TIDAK_AKTIF" &&
+                 emp.statusKaryawan !== "NON_AKTIF"
+      );
       const exceptions = deptEmployees
         .map((emp) => {
           const attendance = attendanceTodayByEmployeeId.get(Number(emp.id));
