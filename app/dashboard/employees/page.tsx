@@ -43,10 +43,6 @@ import {
   UserCheck,
   UserX,
   Building,
-  Download,
-  FileText,
-  FileSpreadsheet,
-  AlertTriangle,
 } from "lucide-react";
 import {
   Select,
@@ -55,30 +51,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/form/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/overlay/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/overlay/dialog";
 import { getNamaPtByKode } from "@/lib/constants/perusahaan";
-import { Checkbox } from "@/components/ui/form/checkbox";
 import { employeeAPI } from "@/lib/api";
 import type { Employee } from "@/lib/types";
 import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/navigation/tabs";
+import { StatCard } from "./_components/StatCard";
+import { DeactivateDialog } from "./_components/DeactivateDialog";
+import { ExportDialog } from "./_components/ExportDialog";
+import { UnlockDialog } from "./_components/UnlockDialog";
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -397,11 +378,11 @@ export default function EmployeesPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "Aktif":
-        return <Badge className="bg-green-100 text-green-800">Aktif</Badge>;
+        return <Badge className="bg-zinc-100 text-zinc-900">Aktif</Badge>;
       case "Tidak Aktif":
         return <Badge variant="destructive">Tidak Aktif</Badge>;
       case "Cuti":
-        return <Badge className="bg-yellow-100 text-yellow-800">Cuti</Badge>;
+        return <Badge className="bg-zinc-100 text-zinc-800">Cuti</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -625,7 +606,7 @@ export default function EmployeesPage() {
     return (
       <div className="flex flex-1 flex-col gap-4 p-4">
         <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zinc-900"></div>
         </div>
       </div>
     );
@@ -650,136 +631,21 @@ export default function EmployeesPage() {
           >
             {isSensitiveUnlocked ? "Kunci Data Sensitif" : "Preview All Data"}
           </Button>
-          <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
-            <Button variant="outline" onClick={handleOpenExportDialog}>
-              <Download className="h-4 w-4 mr-2" />
-              Export Data
-            </Button>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle>Export Data Karyawan</DialogTitle>
-                <DialogDescription>
-                  Pilih data yang ingin diekspor dan format file yang
-                  diinginkan.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-6">
-                {/* Format Selection */}
-                <div>
-                  <label className="text-sm font-medium mb-3 block">
-                    Format Export
-                  </label>
-                  <div className="flex gap-4">
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="radio"
-                        id="pdf"
-                        name="format"
-                        value="pdf"
-                        checked={exportFormat === "pdf"}
-                        onChange={(e) =>
-                          setExportFormat(e.target.value as "pdf" | "excel")
-                        }
-                        className="h-4 w-4"
-                      />
-                      <label
-                        htmlFor="pdf"
-                        className="flex items-center text-sm"
-                      >
-                        <FileText className="h-4 w-4 mr-1" />
-                        PDF
-                      </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="radio"
-                        id="excel"
-                        name="format"
-                        value="excel"
-                        checked={exportFormat === "excel"}
-                        onChange={(e) =>
-                          setExportFormat(e.target.value as "pdf" | "excel")
-                        }
-                        className="h-4 w-4"
-                      />
-                      <label
-                        htmlFor="excel"
-                        className="flex items-center text-sm"
-                      >
-                        <FileSpreadsheet className="h-4 w-4 mr-1" />
-                        Excel
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Field Selection */}
-                <div>
-                  <label className="text-sm font-medium mb-3 block">
-                    Data yang Diekspor
-                  </label>
-                  <div className="space-y-2 max-h-60 overflow-y-auto border rounded-md p-3">
-                    {availableFields.map((field) => (
-                      <div
-                        key={field.key}
-                        className="flex items-center space-x-2"
-                      >
-                        <Checkbox
-                          id={field.key}
-                          checked={selectedFields.includes(field.key)}
-                          onCheckedChange={() => handleFieldToggle(field.key)}
-                        />
-                        <label htmlFor={field.key} className="text-sm">
-                          {field.label}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {selectedFields.length} dari {availableFields.length} field
-                    dipilih
-                  </p>
-                </div>
-
-                {/* Info */}
-                <div className="bg-blue-50 p-3 rounded-md">
-                  <p className="text-sm text-blue-800">
-                    <strong>Info:</strong> Data akan diekspor berdasarkan filter
-                    yang sedang aktif. Saat ini akan mengekspor{" "}
-                    {filteredEmployees.length} dari {employees.length} karyawan.
-                  </p>
-                </div>
-
-                {!isSensitiveUnlocked && (
-                  <div className="bg-yellow-50 p-3 rounded-md border border-yellow-200">
-                    <p className="text-sm text-yellow-800">
-                      Data sensitif terkunci. Masukkan password untuk membuka
-                      akses export data penuh.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setExportDialogOpen(false)}
-                  disabled={isExporting}
-                >
-                  Batal
-                </Button>
-                <Button
-                  onClick={handleExport}
-                  disabled={isExporting || selectedFields.length === 0}
-                >
-                  {isExporting
-                    ? "Mengekspor..."
-                    : `Export ${exportFormat.toUpperCase()}`}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <ExportDialog
+            open={exportDialogOpen}
+            onOpenChange={setExportDialogOpen}
+            exportFormat={exportFormat}
+            onExportFormatChange={setExportFormat}
+            selectedFields={selectedFields}
+            onFieldToggle={handleFieldToggle}
+            availableFields={availableFields}
+            isExporting={isExporting}
+            onExport={handleExport}
+            onOpenDialog={handleOpenExportDialog}
+            isSensitiveUnlocked={isSensitiveUnlocked}
+            filteredCount={filteredEmployees.length}
+            totalCount={employees.length}
+          />
           <Button asChild>
             <a href="/dashboard/employees/new">
               <Plus className="h-4 w-4 mr-2" />
@@ -796,8 +662,8 @@ export default function EmployeesPage() {
       )}
 
       {successMessage && (
-        <Alert className="border-green-200 bg-green-50">
-          <AlertDescription className="text-green-800">
+        <Alert className="border-zinc-200 bg-zinc-50">
+          <AlertDescription className="text-zinc-900">
             {successMessage}
           </AlertDescription>
         </Alert>
@@ -805,56 +671,30 @@ export default function EmployeesPage() {
 
       {/* Statistics Cards */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Karyawan
-            </CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{employeeStats.total}</div>
-            <p className="text-xs text-muted-foreground">Semua karyawan</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Karyawan Aktif
-            </CardTitle>
-            <UserCheck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {employeeStats.active}
-            </div>
-            <p className="text-xs text-muted-foreground">Sedang bekerja</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tidak Aktif</CardTitle>
-            <UserX className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {employeeStats.inactive}
-            </div>
-            <p className="text-xs text-muted-foreground">Tidak bekerja</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Departemen</CardTitle>
-            <Building className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {employeeStats.departments}
-            </div>
-            <p className="text-xs text-muted-foreground">Total departemen</p>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Total Karyawan"
+          value={employeeStats.total}
+          description="Semua karyawan"
+          icon={<Users className="h-4 w-4 text-muted-foreground" />}
+        />
+        <StatCard
+          title="Karyawan Aktif"
+          value={employeeStats.active}
+          description="Sedang bekerja"
+          icon={<UserCheck className="h-4 w-4 text-muted-foreground" />}
+        />
+        <StatCard
+          title="Tidak Aktif"
+          value={employeeStats.inactive}
+          description="Tidak bekerja"
+          icon={<UserX className="h-4 w-4 text-muted-foreground" />}
+        />
+        <StatCard
+          title="Departemen"
+          value={employeeStats.departments}
+          description="Total departemen"
+          icon={<Building className="h-4 w-4 text-muted-foreground" />}
+        />
       </div>
 
       {/* Main Content */}
@@ -877,7 +717,7 @@ export default function EmployeesPage() {
 
           <div className="flex gap-4 mb-6">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-400" />
               <Input
                 placeholder="Cari berdasarkan nama, NIP, atau email..."
                 value={searchTerm}
@@ -1023,111 +863,37 @@ export default function EmployeesPage() {
         </CardContent>
       </Card>
 
-      <AlertDialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
-        <AlertDialogContent className="max-w-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-600" />
-              Nonaktifkan Karyawan
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3">
-                <p>
-                  Anda akan menonaktifkan karyawan{" "}
-                  <span className="font-semibold">
-                    {employeeToDeactivate?.name}
-                  </span>
-                </p>
-                <p className="text-sm text-gray-600">
-                  Karyawan yang dinonaktifkan tidak akan muncul pada absensi harian dan
-                  dianggap tidak lagi bekerja di perusahaan. Histori datanya tetap akan dipertahankan.
-                </p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={() => {
-                setEmployeeToDeactivate(null);
-                setDeactivateDialogOpen(false);
-              }}
-              disabled={isDeactivating}
-            >
-              Batal
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (employeeToDeactivate) {
-                  handleDeactivateEmployee(employeeToDeactivate);
-                }
-              }}
-              disabled={isDeactivating}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {isDeactivating ? (
-                <>
-                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Memproses...
-                </>
-              ) : (
-                "Nonaktifkan Karyawan"
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeactivateDialog
+        open={deactivateDialogOpen}
+        onOpenChange={setDeactivateDialogOpen}
+        employeeToDeactivate={employeeToDeactivate}
+        isDeactivating={isDeactivating}
+        onConfirm={() => {
+          if (employeeToDeactivate) {
+            handleDeactivateEmployee(employeeToDeactivate);
+          }
+        }}
+        onCancel={() => {
+          setEmployeeToDeactivate(null);
+          setDeactivateDialogOpen(false);
+        }}
+      />
 
-      <Dialog open={unlockDialogOpen} onOpenChange={setUnlockDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Verifikasi Akses Data Sensitif</DialogTitle>
-            <DialogDescription>
-              Masukkan password operator untuk membuka data sensitif pada mode
-              {pendingUnlockAction === "export"
-                ? " export"
-                : " preview all data"}
-              .
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            <Input
-              type="password"
-              placeholder="Masukkan password"
-              value={unlockPassword}
-              onChange={(e) => setUnlockPassword(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleUnlockSensitiveData();
-                }
-              }}
-            />
-
-            {unlockError && (
-              <Alert variant="destructive">
-                <AlertDescription>{unlockError}</AlertDescription>
-              </Alert>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setUnlockDialogOpen(false);
-                setUnlockPassword("");
-                setUnlockError("");
-              }}
-              disabled={isUnlocking}
-            >
-              Batal
-            </Button>
-            <Button onClick={handleUnlockSensitiveData} disabled={isUnlocking}>
-              {isUnlocking ? "Memverifikasi..." : "Buka Akses"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <UnlockDialog
+        open={unlockDialogOpen}
+        onOpenChange={setUnlockDialogOpen}
+        unlockPassword={unlockPassword}
+        onPasswordChange={setUnlockPassword}
+        unlockError={unlockError}
+        isUnlocking={isUnlocking}
+        onUnlock={handleUnlockSensitiveData}
+        onCancel={() => {
+          setUnlockDialogOpen(false);
+          setUnlockPassword("");
+          setUnlockError("");
+        }}
+        pendingUnlockAction={pendingUnlockAction}
+      />
     </div>
   );
 }

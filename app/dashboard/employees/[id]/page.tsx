@@ -3,59 +3,28 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/form/button";
-import { Input } from "@/components/ui/form/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/display/card";
-import { Badge } from "@/components/ui/display/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/display/table";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/display/avatar";
-import {
-  ArrowLeft,
-  Edit,
-  FileText,
-  Phone,
-  Mail,
-  Calendar,
-  Building,
-  Clock,
-  Upload,
-  Camera,
-  Crop,
-  RotateCcw,
-  Check,
-  File as FileIcon,
-  UserRound,
-  Image,
-  Download,
-  Eye,
-  X,
-  Paperclip,
-} from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/navigation/tabs";
+import { ArrowLeft, Edit } from "lucide-react";
 import { attendanceAPI, employeeAPI, leaveAPI } from "@/lib/api";
-import ReactCrop, {
+import {
   Crop as CropType,
   PixelCrop,
   centerCrop,
   makeAspectCrop,
 } from "react-image-crop";
-import "react-image-crop/dist/ReactCrop.css";
+
+// Extracted components
+import { PersonalInfoTab } from "./_components/personal-info-tab";
+import { SalaryTab } from "./_components/salary-tab";
+import { AttendanceTab } from "./_components/attendance-tab";
+import { IzinSakitTab } from "./_components/izin-sakit-tab";
+import { LeaveTab } from "./_components/leave-tab";
+import { ViolationsTab } from "./_components/violations-tab";
+import { FilesTab } from "./_components/files-tab";
+import { EmployeeProfileCard } from "./_components/employee-profile-card";
+import { CropModal } from "./_components/crop-modal";
+import { FilePreviewModal } from "./_components/file-preview-modal";
+import { getSalaryRowKey } from "./_components/utils";
 
 // Aspect ratio untuk foto profil (1:1 square)
 const ASPECT_RATIO = 1;
@@ -410,28 +379,6 @@ export default function EmployeeDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const formatPeriodeGaji = (periodeAwal?: string | null, periodeAkhir?: string | null) => {
-    if (!periodeAwal || !periodeAkhir) return "-";
-
-    const start = new Date(periodeAwal);
-    const end = new Date(periodeAkhir);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      return `${periodeAwal} - ${periodeAkhir}`;
-    }
-
-    const startLabel = start.toLocaleDateString("id-ID");
-    const endLabel = end.toLocaleDateString("id-ID");
-    return startLabel === endLabel ? startLabel : `${startLabel} - ${endLabel}`;
-  };
-
   const filteredSalaryHistory = useMemo(() => {
     const start = salaryRangeStart ? new Date(salaryRangeStart) : null;
     const end = salaryRangeEnd ? new Date(salaryRangeEnd) : null;
@@ -450,13 +397,6 @@ export default function EmployeeDetailPage() {
       return true;
     });
   }, [salaryHistory, salaryRangeStart, salaryRangeEnd]);
-
-  const getSalaryRowKey = (salary: any, index: number) => {
-    const idPart = salary?.id ? String(salary.id) : "no-id";
-    const startPart = salary?.periodeAwal ? String(salary.periodeAwal) : "no-start";
-    const endPart = salary?.periodeAkhir ? String(salary.periodeAkhir) : "no-end";
-    return `${idPart}-${startPart}-${endPart}-${index}`;
-  };
 
   const exportedSalaryGroups = useMemo(() => {
     const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -694,93 +634,15 @@ export default function EmployeeDetailPage() {
     return { bonusItems, potonganItems };
   }, [selectedSalary]);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "Aktif":
-      case "Hadir":
-      case "Disetujui":
-      case "Dibayar":
-        return (
-          <Badge variant="default" className="bg-green-100 text-green-800">
-            {status}
-          </Badge>
-        );
-      case "Terlambat":
-      case "Pending":
-        return (
-          <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-            {status}
-          </Badge>
-        );
-      case "Sakit":
-      case "Ditolak":
-        return <Badge variant="destructive">{status}</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
-  const formatIzinSakitTanggal = (tanggal?: string) => {
-    if (!tanggal) return "-";
-    const date = new Date(tanggal);
-    if (Number.isNaN(date.getTime())) return "-";
-    return date.toLocaleDateString("id-ID", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-    });
-  };
-
   const filteredIzinSakitHistory = useMemo(() => {
     if (izinSakitFilter === "all") return izinSakitHistory;
     return izinSakitHistory.filter((item) => item?.status === izinSakitFilter);
   }, [izinSakitFilter, izinSakitHistory]);
 
-  const renderIzinSakitBadge = (status?: string) => {
-    if (status === "IZIN") {
-      return (
-        <Badge className="border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning)/0.16)] text-[hsl(var(--warning-foreground))] hover:bg-[hsl(var(--warning)/0.22)]">
-          Izin
-        </Badge>
-      );
-    }
-
-    if (status === "TIDAK_HADIR") {
-      return (
-        <Badge className="border-[hsl(var(--destructive)/0.35)] bg-[hsl(var(--destructive)/0.16)] text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/0.22)]">
-          Tidak Hadir
-        </Badge>
-      );
-    }
-
-    return <Badge variant="outline">-</Badge>;
-  };
-
-  const renderLeaveTypeLabel = (leave: any) => {
-    if (leave?.jenisCuti === "CUTI_TAHUNAN") return "Cuti Tahunan";
-    if (leave?.jenisCuti === "CUTI_MELAHIRKAN") return "Cuti Melahirkan";
-    if (leave?.jenisCuti === "CUTI_LAINNYA") return leave?.labelCustom || "Cuti Lainnya";
-    return leave?.jenisCuti || "-";
-  };
-
-  const renderLeaveStatusBadge = (status?: string) => {
-    const normalized = String(status || "").toUpperCase();
-    if (normalized === "PENDING") {
-      return <Badge className="bg-slate-100 text-slate-700">Menunggu</Badge>;
-    }
-    if (normalized === "APPROVED") {
-      return <Badge className="bg-green-100 text-green-800">Disetujui</Badge>;
-    }
-    if (normalized === "REJECTED") {
-      return <Badge className="bg-red-100 text-red-800">Ditolak</Badge>;
-    }
-    return <Badge variant="outline">-</Badge>;
-  };
-
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zinc-900"></div>
       </div>
     );
   }
@@ -809,16 +671,15 @@ export default function EmployeeDetailPage() {
             </a>
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">
+            <h1 className="text-3xl font-bold text-zinc-900">
               Detail Karyawan
             </h1>
-            <p className="text-gray-600">Informasi lengkap karyawan</p>
+            <p className="text-zinc-600">Informasi lengkap karyawan</p>
           </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" asChild>
             <a href={`/dashboard/employees/${employee.id}/pkb`}>
-              <FileText className="h-4 w-4 mr-2" />
               Generate PKB
             </a>
           </Button>
@@ -833,164 +694,28 @@ export default function EmployeeDetailPage() {
 
       {/* Crop Modal */}
       {showCrop && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Crop Foto Profil</h3>
-              <div className="flex space-x-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCancelCrop}
-                >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Batal
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={handleCropComplete}
-                  disabled={!completedCrop}
-                >
-                  <Check className="h-4 w-4 mr-2" />
-                  Selesai & Upload
-                </Button>
-              </div>
-            </div>
-            <div className="max-h-96 overflow-auto">
-              <ReactCrop
-                crop={crop}
-                onChange={(_, percentCrop) => setCrop(percentCrop)}
-                onComplete={(c) => setCompletedCrop(c)}
-                aspect={ASPECT_RATIO}
-                minWidth={MIN_DIMENSION}
-                minHeight={MIN_DIMENSION}
-              >
-                <img
-                  ref={imgRef}
-                  alt="Crop me"
-                  src={imgSrc}
-                  onLoad={onImageLoad}
-                  className="max-w-full h-auto"
-                />
-              </ReactCrop>
-            </div>
-            <p className="text-sm text-gray-600 mt-2">
-              Drag untuk mengatur area crop. Foto akan dipotong menjadi bentuk
-              persegi.
-            </p>
-          </div>
-        </div>
+        <CropModal
+          crop={crop}
+          setCrop={setCrop}
+          setCompletedCrop={setCompletedCrop}
+          imgSrc={imgSrc}
+          imgRef={imgRef}
+          onImageLoad={onImageLoad}
+          handleCancelCrop={handleCancelCrop}
+          handleCropComplete={handleCropComplete}
+          completedCrop={completedCrop}
+        />
       )}
 
       {/* Employee Profile Card */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-start space-x-6">
-            <div className="relative">
-              <Avatar className="h-24 w-24">
-                <AvatarImage
-                  src={avatarSrc}
-                  alt={employee.name}
-                  onError={(e) => {
-                    // Jika gambar gagal dimuat, gunakan fallback
-                    const target = e.target as HTMLImageElement;
-                    target.src = HUMAN_FALLBACK_AVATAR;
-                  }}
-                  onLoad={() => {
-                    // Tidak perlu log apa-apa di sini
-                  }}
-                />
-                <AvatarFallback className="bg-slate-100 text-slate-500">
-                  <UserRound className="h-10 w-10" />
-                </AvatarFallback>
-              </Avatar>
-
-              {/* Upload Foto Button */}
-              <div className="absolute -bottom-2 -right-2">
-                <label htmlFor="upload-foto" className="cursor-pointer">
-                  <div className="bg-blue-600 hover:bg-blue-700 text-white rounded-full p-2 shadow-lg">
-                    <Crop className="h-4 w-4" />
-                  </div>
-                </label>
-                <input
-                  id="upload-foto"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleUploadFoto}
-                  className="hidden"
-                  disabled={uploading}
-                />
-              </div>
-            </div>
-
-            <div className="flex-1 space-y-4">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {employee.name}
-                </h2>
-                <p className="text-lg text-gray-600">{employee.position}</p>
-                <div className="flex items-center space-x-4 mt-2">
-                  <span className="text-sm text-gray-500">
-                    NIK: {employee.nip}
-                  </span>
-                  {getStatusBadge(employee.status)}
-                </div>
-              </div>
-
-              {uploadError && (
-                <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
-                  {uploadError}
-                </div>
-              )}
-
-              {uploading && (
-                <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded flex items-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                  Mengupload foto...
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                <div className="flex items-center space-x-2">
-                  <Building className="h-4 w-4 text-gray-400" />
-                  <span className="text-sm text-gray-600">
-                    {employee.department}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Phone className="h-4 w-4 text-gray-400" />
-                  <span className="text-sm text-gray-600">
-                    {employee.phone}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Mail className="h-4 w-4 text-gray-400" />
-                  <span className="text-sm text-gray-600">
-                    {employee.email}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Calendar className="h-4 w-4 text-gray-400" />
-                  <span className="text-sm text-gray-600">
-                    Bergabung{" "}
-                    {new Date(employee.joinDate).toLocaleDateString("id-ID")}
-                  </span>
-                </div>
-                {leaveInfo && (
-                  <div className="flex items-center space-x-2">
-                    <Clock className="h-4 w-4 text-gray-400" />
-                    <span className="text-sm text-gray-600">
-                      Sisa Cuti: {leaveInfo.sisaCuti}/{leaveInfo.batasMaksimal} hari
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <EmployeeProfileCard
+        employee={employee}
+        avatarSrc={avatarSrc}
+        leaveInfo={leaveInfo}
+        uploadError={uploadError}
+        uploading={uploading}
+        handleUploadFoto={handleUploadFoto}
+      />
 
       {/* Tabs */}
       <Tabs
@@ -1006,930 +731,68 @@ export default function EmployeeDetailPage() {
           <TabsTrigger value="leave">Riwayat Cuti</TabsTrigger>
           <TabsTrigger value="violations">Pelanggaran</TabsTrigger>
           <TabsTrigger value="files">
-            <Paperclip className="h-4 w-4 mr-1" />
             Dokumen ({uploadedFiles.length})
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="personal" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Informasi Pribadi</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Tanggal Lahir
-                  </label>
-                  <p className="text-gray-900">
-                    {new Date(employee.birthDate).toLocaleDateString("id-ID")}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Alamat
-                  </label>
-                  <p className="text-gray-900">{employee.address}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Gaji Pokok
-                  </label>
-                  <p className="text-gray-900">{employee.salary}</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Kontak Darurat</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Nama
-                  </label>
-                  <p className="text-gray-900">
-                    {employee.emergencyContact.name}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Hubungan
-                  </label>
-                  <p className="text-gray-900">
-                    {employee.emergencyContact.relation}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Nomor Telepon
-                  </label>
-                  <p className="text-gray-900">
-                    {employee.emergencyContact.phone}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {leaveInfo && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="h-5 w-5" />
-                    Informasi Cuti
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">
-                      Cuti Tahun Ini
-                    </label>
-                    <p className="text-gray-900">
-                      {leaveInfo.jumlahCutiTahunIni} hari kerja
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">
-                      Sisa Cuti
-                    </label>
-                    <p className="text-gray-900">
-                      {leaveInfo.sisaCuti} hari kerja
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">
-                      Batas Maksimal
-                    </label>
-                    <p className="text-gray-900">
-                      {leaveInfo.batasMaksimal} hari kerja per tahun
-                    </p>
-                  </div>
-                  <div className="mt-4">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className={`h-2 rounded-full ${
-                          leaveInfo.sisaCuti > leaveInfo.batasMaksimal / 2
-                            ? "bg-green-500"
-                            : leaveInfo.sisaCuti > leaveInfo.batasMaksimal / 4
-                            ? "bg-yellow-500"
-                            : "bg-red-500"
-                        }`}
-                        style={{
-                          width: `${
-                            (leaveInfo.sisaCuti / Math.max(1, leaveInfo.batasMaksimal)) * 100
-                          }%`,
-                        }}
-                      ></div>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {Math.round(
-                        (leaveInfo.sisaCuti / Math.max(1, leaveInfo.batasMaksimal)) * 100
-                      )}
-                      % tersisa
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Tambahan: Tabel JSON Data Pribadi Lengkap */}
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle>Tabel Data Pribadi</CardTitle>
-              <CardDescription>Menampilkan data asli</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm border">
-                  <thead>
-                    <tr>
-                      <th className="border px-2 py-1 text-left bg-gray-50">
-                        Field
-                      </th>
-                      <th className="border px-2 py-1 text-left bg-gray-50">
-                        Data Asli
-                      </th>
-                      <th className="border px-2 py-1 text-left bg-gray-50">
-                        Data Terenkripsi
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {employee &&
-                      employee._rawKaryawan &&
-                      Object.entries(employee._rawKaryawan)
-                        .filter(
-                          ([key]) =>
-                            !["absensi", "cuti", "gaji", "pelanggaran"].includes(key)
-                        )
-                        .map(([key, value]) => {
-                          // Tentukan apakah ini field encrypted atau tidak
-                          const isEncrypted =
-                            key.includes("encrypted") ||
-                            key.includes("Encrypted");
-                          const originalKey = key
-                            .replace("_encrypted", "")
-                            .replace("Encrypted", "");
-
-                          // Cari data asli jika ini field encrypted
-                          let originalValue = null;
-                          if (isEncrypted) {
-                            originalValue =
-                              employee._rawKaryawan[originalKey] ||
-                              "Tidak ada data asli";
-                          }
-
-                          // Format value untuk tampilan (hindari [object Object])
-                          const formatValue = (v: unknown): string => {
-                            if (v === null || v === undefined) return "-";
-                            if (Array.isArray(v))
-                              return `${v.length} item`;
-                            if (typeof v === "object" && v instanceof Date)
-                              return v.toLocaleDateString("id-ID");
-                            if (typeof v === "object")
-                              return "[Data objek]";
-                            return String(v);
-                          };
-
-                          return (
-                            <tr
-                              key={key}
-                              className={isEncrypted ? "bg-blue-50" : ""}
-                            >
-                              <td className="border px-2 py-1 font-mono text-xs font-medium">
-                                {key}
-                                {isEncrypted && (
-                                  <span className="ml-1 text-xs text-blue-600">
-                                    (encrypted)
-                                  </span>
-                                )}
-                              </td>
-                              <td className="border px-2 py-1 font-mono text-xs">
-                                {isEncrypted ? (
-                                  <span className="text-green-600">
-                                    {originalValue}
-                                  </span>
-                                ) : (
-                                  <span className="text-gray-600">
-                                    {formatValue(value)}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="border px-2 py-1 font-mono text-xs">
-                                {isEncrypted ? (
-                                  <span className="text-red-600 font-bold">
-                                    {formatValue(value)}
-                                  </span>
-                                ) : (
-                                  <span className="text-gray-400">-</span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        }
-                      )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Legend */}
-              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                <h4 className="text-sm font-medium mb-2">Keterangan:</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-blue-50 border border-blue-200 rounded mr-2"></div>
-                    <span>Field terenkripsi</span>
-                  </div>
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-green-50 border border-green-200 rounded mr-2"></div>
-                    <span className="text-green-600">Data asli</span>
-                  </div>
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-red-50 border border-red-200 rounded mr-2"></div>
-                    <span className="text-red-600">Data terenkripsi</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <PersonalInfoTab employee={employee} leaveInfo={leaveInfo} />
         </TabsContent>
 
         <TabsContent value="salary">
-          <Card>
-            <CardHeader>
-              <CardTitle>Riwayat Gaji</CardTitle>
-              <CardDescription>
-                Histori pembayaran gaji karyawan
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-600">Dari tanggal</label>
-                  <Input
-                    type="date"
-                    value={salaryRangeStart}
-                    onChange={(event) => setSalaryRangeStart(event.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-600">Sampai tanggal</label>
-                  <Input
-                    type="date"
-                    value={salaryRangeEnd}
-                    onChange={(event) => setSalaryRangeEnd(event.target.value)}
-                  />
-                </div>
-                <div className="flex items-end">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setSalaryRangeStart("");
-                      setSalaryRangeEnd("");
-                    }}
-                  >
-                    Reset Range
-                  </Button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-                <div className="lg:col-span-7 rounded-lg border">
-                  <div className="border-b px-4 py-3">
-                    <h3 className="text-sm font-semibold text-gray-900">Daftar Periode Gaji</h3>
-                    <p className="text-xs text-gray-500">Pilih satu periode untuk melihat rincian bonus dan potongan.</p>
-                  </div>
-
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Periode</TableHead>
-                        <TableHead>Gaji Pokok</TableHead>
-                        <TableHead>Gaji Bersih</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredSalaryHistory.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={4} className="text-center">
-                            Tidak ada data gaji
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredSalaryHistory.map((salary, idx) => {
-                          const rowKey = getSalaryRowKey(salary, idx);
-
-                          return (
-                            <TableRow
-                              key={rowKey}
-                              className=""
-                            >
-                              <TableCell className="font-medium">
-                                {formatPeriodeGaji(salary.periodeAwal, salary.periodeAkhir)}
-                              </TableCell>
-                              <TableCell>
-                                {formatCurrency(Number(salary.gajiPokok) || 0)}
-                              </TableCell>
-                              <TableCell className="font-medium">
-                                {formatCurrency(Number(salary.totalGajiBersih) || 0)}
-                              </TableCell>
-                              <TableCell>
-                                {getStatusBadge(salary.statusPembayaran || "-")}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                <div className="lg:col-span-5 rounded-lg border bg-gray-50/40">
-                  <div className="border-b px-4 py-3">
-                    <h3 className="text-sm font-semibold text-gray-900">Rincian Periode Terpilih</h3>
-                    {exportedSalaryGroups.length > 0 ? (
-                      <div className="mt-2">
-                        <label className="mb-1 block text-xs font-medium text-gray-600">
-                          Daftar periode hasil export (Dibayar)
-                        </label>
-                        <select
-                          className="h-8 w-full rounded border border-gray-300 bg-white px-2 text-xs"
-                          value={selectedExportedSalaryKey || ""}
-                          onChange={(event) => setSelectedExportedSalaryKey(event.target.value)}
-                        >
-                          {exportedSalaryGroups.map((item) => (
-                            <option key={item.key} value={item.key}>
-                              {`${formatPeriodeGaji(item.periodeAwal, item.periodeAkhir)} · ${item.rows.length} entri · ${formatCurrency(
-                                item.rows.reduce((sum, row) => sum + (Number(row.salary?.totalGajiBersih) || 0), 0)
-                              )}`}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    ) : null}
-                    {selectedSalary ? (
-                      <>
-                        <p className="text-xs text-gray-600 mt-1">
-                          {formatPeriodeGaji(selectedSalary.periodeAwal, selectedSalary.periodeAkhir)}
-                        </p>
-                        <div className="mt-2">{getStatusBadge(selectedSalary.statusPembayaran || "-")}</div>
-                      </>
-                    ) : (
-                      <p className="text-xs text-gray-500 mt-1">Belum ada periode hasil export (status Dibayar).</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-4 p-4">
-                    <div>
-                      <div className="mb-2 flex items-center justify-between">
-                        <h4 className="text-sm font-semibold text-green-700">Bonus</h4>
-                        <span className="text-xs font-medium text-green-700">
-                          {formatCurrency(Number(selectedSalary?.bonus) || 0)}
-                        </span>
-                      </div>
-                      {selectedSalaryRincian.bonusItems.length === 0 ? (
-                        <p className="text-xs text-gray-500">Tidak ada rincian bonus pada periode ini.</p>
-                      ) : (
-                        <div className="space-y-1">
-                          {selectedSalaryRincian.bonusItems.map((item, idx) => (
-                            <div
-                              key={`bonus-${idx}`}
-                              className="flex items-center justify-between rounded border border-green-100 bg-green-50 px-2 py-1 text-xs"
-                            >
-                              <span className="text-green-900">{item.judul}</span>
-                              <span className="font-medium text-green-800">{formatCurrency(item.nominal)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div>
-                      <div className="mb-2 flex items-center justify-between">
-                        <h4 className="text-sm font-semibold text-red-700">Potongan</h4>
-                        <span className="text-xs font-medium text-red-700">
-                          {formatCurrency(Number(selectedSalary?.potongan) || 0)}
-                        </span>
-                      </div>
-                      {selectedSalaryRincian.potonganItems.length === 0 ? (
-                        <p className="text-xs text-gray-500">Tidak ada rincian potongan pada periode ini.</p>
-                      ) : (
-                        <div className="space-y-1">
-                          {selectedSalaryRincian.potonganItems.map((item, idx) => (
-                            <div
-                              key={`potongan-${idx}`}
-                              className="flex items-center justify-between rounded border border-red-100 bg-red-50 px-2 py-1 text-xs"
-                            >
-                              <span className="text-red-900">{item.judul}</span>
-                              <span className="font-medium text-red-800">{formatCurrency(item.nominal)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="rounded border bg-white p-3">
-                      <div className="mb-1 flex items-center justify-between text-xs text-gray-600">
-                        <span>Gaji Pokok</span>
-                        <span>{formatCurrency(Number(selectedSalary?.gajiPokok) || 0)}</span>
-                      </div>
-                      <div className="mb-1 flex items-center justify-between text-xs text-gray-600">
-                        <span>Total Bonus</span>
-                        <span className="text-green-700">+ {formatCurrency(Number(selectedSalary?.bonus) || 0)}</span>
-                      </div>
-                      <div className="mb-2 flex items-center justify-between text-xs text-gray-600">
-                        <span>Total Potongan</span>
-                        <span className="text-red-700">- {formatCurrency(Number(selectedSalary?.potongan) || 0)}</span>
-                      </div>
-                      <div className="border-t pt-2 flex items-center justify-between text-sm font-semibold text-gray-900">
-                        <span>Gaji Bersih</span>
-                        <span>{formatCurrency(Number(selectedSalary?.totalGajiBersih) || 0)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <SalaryTab
+            filteredSalaryHistory={filteredSalaryHistory}
+            salaryRangeStart={salaryRangeStart}
+            salaryRangeEnd={salaryRangeEnd}
+            setSalaryRangeStart={setSalaryRangeStart}
+            setSalaryRangeEnd={setSalaryRangeEnd}
+            exportedSalaryGroups={exportedSalaryGroups}
+            selectedExportedSalaryKey={selectedExportedSalaryKey}
+            setSelectedExportedSalaryKey={setSelectedExportedSalaryKey}
+            selectedSalary={selectedSalary}
+            selectedSalaryRincian={selectedSalaryRincian}
+          />
         </TabsContent>
 
         {showAttendanceTab && <TabsContent value="attendance">
-          <Card>
-            <CardHeader>
-              <CardTitle>Riwayat Absensi</CardTitle>
-              <CardDescription>Catatan kehadiran karyawan</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Tanggal</TableHead>
-                    <TableHead>Jam Masuk</TableHead>
-                    <TableHead>Jam Pulang</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Keterangan</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {attendanceHistory.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center">
-                        Tidak ada data absensi
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    attendanceHistory.map((absen, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium">
-                          {absen.tanggal || "-"}
-                        </TableCell>
-                        <TableCell>{absen.jamMasuk || "-"}</TableCell>
-                        <TableCell>{absen.jamPulang || "-"}</TableCell>
-                        <TableCell>
-                          {getStatusBadge(absen.status || "-")}
-                        </TableCell>
-                        <TableCell>{absen.keterangan || "-"}</TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <AttendanceTab attendanceHistory={attendanceHistory} />
         </TabsContent>}
 
         <TabsContent value="izin-sakit">
-          <Card>
-            <CardHeader>
-              <CardTitle>Riwayat Izin & Sakit</CardTitle>
-              <CardDescription>
-                Data izin dan tidak hadir dari absensi harian
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={izinSakitFilter === "all" ? "default" : "outline"}
-                  onClick={() => setIzinSakitFilter("all")}
-                >
-                  Semua
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={izinSakitFilter === "IZIN" ? "default" : "outline"}
-                  onClick={() => setIzinSakitFilter("IZIN")}
-                >
-                  Izin
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={izinSakitFilter === "TIDAK_HADIR" ? "default" : "outline"}
-                  onClick={() => setIzinSakitFilter("TIDAK_HADIR")}
-                >
-                  Sakit
-                </Button>
-              </div>
-
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-16">No</TableHead>
-                    <TableHead>Tanggal</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Keterangan</TableHead>
-                    <TableHead>Lembur</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredIzinSakitHistory.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center">
-                        Tidak ada riwayat izin atau sakit
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredIzinSakitHistory.map((item, index) => (
-                      <TableRow key={String(item.id)}>
-                        <TableCell>{index + 1}</TableCell>
-                        <TableCell className="font-medium">
-                          {formatIzinSakitTanggal(item.tanggal)}
-                        </TableCell>
-                        <TableCell>{renderIzinSakitBadge(item.status)}</TableCell>
-                        <TableCell>{item.keterangan || "-"}</TableCell>
-                        <TableCell>{item.isLembur ? "Lembur" : "-"}</TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <IzinSakitTab
+            filteredIzinSakitHistory={filteredIzinSakitHistory}
+            izinSakitFilter={izinSakitFilter}
+            setIzinSakitFilter={setIzinSakitFilter}
+          />
         </TabsContent>
 
         <TabsContent value="leave">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Riwayat Cuti</span>
-                {leaveInfo && (
-                  <span className="text-sm text-gray-600">
-                    Jatah Cuti Tahunan {leaveInfo.tahun}: {leaveInfo.terpakai}/{leaveInfo.batasMaksimal} hari terpakai (sisa {leaveInfo.sisaCuti} hari)
-                  </span>
-                )}
-              </CardTitle>
-              <CardDescription>
-                Histori pengajuan dan persetujuan cuti
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>No</TableHead>
-                    <TableHead>Jenis Cuti</TableHead>
-                    <TableHead>Tanggal Mulai</TableHead>
-                    <TableHead>Tanggal Selesai</TableHead>
-                    <TableHead>Jumlah Hari</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {leaveHistory.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center">
-                        Tidak ada data cuti
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    leaveHistory.map((leave, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell>{idx + 1}</TableCell>
-                        <TableCell className="font-medium">
-                          {renderLeaveTypeLabel(leave)}
-                        </TableCell>
-                        <TableCell>
-                          {leave.tanggalMulai
-                            ? new Date(leave.tanggalMulai).toLocaleDateString(
-                                "id-ID"
-                              )
-                            : "-"}
-                        </TableCell>
-                        <TableCell>
-                          {leave.tanggalSelesai
-                            ? new Date(leave.tanggalSelesai).toLocaleDateString(
-                                "id-ID"
-                              )
-                            : "-"}
-                        </TableCell>
-                        <TableCell>
-                          {leave.jumlahHari ? `${leave.jumlahHari} hari` : "-"}
-                        </TableCell>
-                        <TableCell>
-                          {renderLeaveStatusBadge(leave.status)}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <LeaveTab leaveHistory={leaveHistory} leaveInfo={leaveInfo} />
         </TabsContent>
 
         <TabsContent value="violations">
-          <Card>
-            <CardHeader>
-              <CardTitle>Riwayat Pelanggaran</CardTitle>
-              <CardDescription>
-                Catatan pelanggaran dan sanksi yang diberikan
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Tanggal</TableHead>
-                    <TableHead>Jenis Pelanggaran</TableHead>
-                    <TableHead>Deskripsi</TableHead>
-                    <TableHead>Sanksi</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {violationHistory.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center">
-                        Tidak ada data pelanggaran
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    violationHistory.map((vio, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium">
-                          {vio.tanggalKejadian
-                            ? new Date(vio.tanggalKejadian).toLocaleDateString(
-                                "id-ID"
-                              )
-                            : "-"}
-                        </TableCell>
-                        <TableCell>{vio.jenisPelanggaran || "-"}</TableCell>
-                        <TableCell>{vio.catatan || "-"}</TableCell>
-                        <TableCell>{vio.jenisSanksi || "-"}</TableCell>
-                        <TableCell>{vio.tindakLanjut || "-"}</TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <ViolationsTab violationHistory={violationHistory} />
         </TabsContent>
 
         {/* Tab Dokumen / File Upload */}
         <TabsContent value="files">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Paperclip className="h-5 w-5" />
-                Daftar Dokumen
-              </CardTitle>
-              <CardDescription>
-                File yang sudah di-upload untuk karyawan ini
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {filesLoading ? (
-                <div className="flex justify-center items-center h-32">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
-                  <span className="ml-2 text-gray-600">Memuat daftar file...</span>
-                </div>
-              ) : uploadedFiles.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40 text-gray-400">
-                  <FileIcon className="h-12 w-12 mb-3" />
-                  <p className="text-lg font-medium">Belum ada file yang di-upload</p>
-                  <p className="text-sm">File foto profil, dokumen PKB, bukti pelanggaran, dan slip gaji akan muncul di sini</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* Summary by category */}
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {Array.from(new Set(uploadedFiles.map(f => f.kategori))).map(kategori => {
-                      const count = uploadedFiles.filter(f => f.kategori === kategori).length;
-                      return (
-                        <Badge key={kategori} variant="outline" className="text-sm">
-                          {kategori} ({count})
-                        </Badge>
-                      );
-                    })}
-                  </div>
-
-                  {/* File list table */}
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-10"></TableHead>
-                        <TableHead>Nama File</TableHead>
-                        <TableHead>Kategori</TableHead>
-                        <TableHead>Tipe</TableHead>
-                        <TableHead>Ukuran</TableHead>
-                        <TableHead>Tanggal</TableHead>
-                        <TableHead>Keterangan</TableHead>
-                        <TableHead className="text-right">Aksi</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {uploadedFiles.map((file) => (
-                        <TableRow key={file.id}>
-                          <TableCell>
-                            {file.tipe === 'image' ? (
-                              <Image className="h-5 w-5 text-blue-500" />
-                            ) : file.tipe === 'pdf' ? (
-                              <FileText className="h-5 w-5 text-red-500" />
-                            ) : (
-                              <FileIcon className="h-5 w-5 text-gray-500" />
-                            )}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {file.nama}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={
-                              file.kategori === 'Foto Profil' ? 'bg-blue-50 text-blue-700' :
-                              file.kategori === 'PKB' ? 'bg-green-50 text-green-700' :
-                              file.kategori === 'Pelanggaran' ? 'bg-red-50 text-red-700' :
-                              file.kategori === 'Slip Gaji' ? 'bg-yellow-50 text-yellow-700' :
-                              ''
-                            }>
-                              {file.kategori}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="uppercase text-xs text-gray-500">
-                            {file.tipe}
-                          </TableCell>
-                          <TableCell className="text-sm text-gray-600">
-                            {file.ukuran
-                              ? file.ukuran > 1024 * 1024
-                                ? `${(file.ukuran / (1024 * 1024)).toFixed(1)} MB`
-                                : `${(file.ukuran / 1024).toFixed(1)} KB`
-                              : '-'}
-                          </TableCell>
-                          <TableCell className="text-sm text-gray-600">
-                            {file.tanggal
-                              ? new Date(file.tanggal).toLocaleDateString('id-ID')
-                              : '-'}
-                          </TableCell>
-                          <TableCell className="text-sm text-gray-500">
-                            {file.keterangan || '-'}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              {(file.tipe === 'image' || file.tipe === 'pdf') && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  title="Preview"
-                                  onClick={() => {
-                                    setPreviewFile(file);
-                                    // Load file with auth token
-                                    const token = localStorage.getItem('token');
-                                    const baseUrl = process.env.NEXT_PUBLIC_API_URL
-                                      ? (process.env.NEXT_PUBLIC_API_URL.endsWith('/') ? process.env.NEXT_PUBLIC_API_URL.slice(0, -1) : process.env.NEXT_PUBLIC_API_URL)
-                                        + (!process.env.NEXT_PUBLIC_API_URL.endsWith('/api') ? '/api' : '')
-                                      : 'http://localhost:8084/api';
-                                    const fileUrl = file.kategori === 'Foto Profil'
-                                      ? `${baseUrl}/karyawan/${employee.id}/foto`
-                                      : `${baseUrl}/karyawan/${employee.id}/files/serve?path=${encodeURIComponent(file.path)}`;
-                                    if (token) {
-                                      fetch(fileUrl, {
-                                        headers: { Authorization: `Bearer ${token}` },
-                                      })
-                                        .then(res => {
-                                          if (res.ok) return res.blob();
-                                          throw new Error('Failed to load');
-                                        })
-                                        .then(blob => {
-                                          const url = URL.createObjectURL(blob);
-                                          setPreviewUrl(url);
-                                        })
-                                        .catch(() => setPreviewUrl(null));
-                                    }
-                                  }}
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                title="Download"
-                                onClick={() => {
-                                  const token = localStorage.getItem('token');
-                                  const baseUrl = process.env.NEXT_PUBLIC_API_URL
-                                    ? (process.env.NEXT_PUBLIC_API_URL.endsWith('/') ? process.env.NEXT_PUBLIC_API_URL.slice(0, -1) : process.env.NEXT_PUBLIC_API_URL)
-                                      + (!process.env.NEXT_PUBLIC_API_URL.endsWith('/api') ? '/api' : '')
-                                    : 'http://localhost:8084/api';
-                                  const fileUrl = file.kategori === 'Foto Profil'
-                                    ? `${baseUrl}/karyawan/${employee.id}/foto`
-                                    : `${baseUrl}/karyawan/${employee.id}/files/serve?path=${encodeURIComponent(file.path)}`;
-                                  if (token) {
-                                    fetch(fileUrl, {
-                                      headers: { Authorization: `Bearer ${token}` },
-                                    })
-                                      .then(res => {
-                                        if (res.ok) return res.blob();
-                                        throw new Error('Failed');
-                                      })
-                                      .then(blob => {
-                                        const url = URL.createObjectURL(blob);
-                                        const a = document.createElement('a');
-                                        a.href = url;
-                                        a.download = file.nama.replace(/[^a-zA-Z0-9.-]/g, '_');
-                                        document.body.appendChild(a);
-                                        a.click();
-                                        document.body.removeChild(a);
-                                        URL.revokeObjectURL(url);
-                                      })
-                                      .catch(() => alert('Gagal download file'));
-                                  }
-                                }}
-                              >
-                                <Download className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <FilesTab
+            filesLoading={filesLoading}
+            uploadedFiles={uploadedFiles}
+            employee={employee}
+            setPreviewFile={setPreviewFile}
+            setPreviewUrl={setPreviewUrl}
+          />
         </TabsContent>
       </Tabs>
 
       {/* File Preview Modal */}
-      {previewFile && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-4 max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="text-lg font-semibold">{previewFile.nama}</h3>
-                <p className="text-sm text-gray-500">{previewFile.kategori} &bull; {previewFile.tipe}</p>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  setPreviewFile(null);
-                  if (previewUrl) {
-                    URL.revokeObjectURL(previewUrl);
-                    setPreviewUrl(null);
-                  }
-                }}
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-            <div className="flex-1 overflow-auto flex items-center justify-center bg-gray-50 rounded min-h-[300px]">
-              {!previewUrl ? (
-                <div className="flex flex-col items-center text-gray-400">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400 mb-2"></div>
-                  <p>Memuat preview...</p>
-                </div>
-              ) : previewFile.tipe === 'image' ? (
-                <img
-                  src={previewUrl}
-                  alt={previewFile.nama}
-                  className="max-w-full max-h-[70vh] object-contain"
-                />
-              ) : previewFile.tipe === 'pdf' ? (
-                <iframe
-                  src={previewUrl}
-                  className="w-full h-[70vh] border-0"
-                  title={previewFile.nama}
-                />
-              ) : (
-                <div className="flex flex-col items-center text-gray-400">
-                  <FileIcon className="h-16 w-16 mb-3" />
-                  <p>Preview tidak tersedia untuk tipe file ini</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <FilePreviewModal
+        previewFile={previewFile}
+        previewUrl={previewUrl}
+        setPreviewFile={setPreviewFile}
+        setPreviewUrl={setPreviewUrl}
+      />
     </div>
   );
 }

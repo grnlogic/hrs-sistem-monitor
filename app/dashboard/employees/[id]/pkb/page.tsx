@@ -13,7 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/display/card";
 import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
-import { ArrowLeft, FileText, Printer, Download, Save, Upload, Eye } from "lucide-react";
+import { ArrowLeft, Printer, Download, Save, Upload, Eye } from "lucide-react";
 import { employeeAPI } from "@/lib/api";
 import { printPKBPDF, downloadPKBPDF } from "@/lib/utils";
 import type { PKBData, TipeUpahPKB } from "@/lib/pkb-template";
@@ -337,7 +337,6 @@ export default function PKBPage() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-3xl font-bold tracking-tight mb-4">
-          <FileText className="inline-block mr-2 h-8 w-8" />
           Generate Perjanjian Kerja Bersama (PKB)
         </h1>
       </div>
@@ -348,8 +347,8 @@ export default function PKBPage() {
         </Alert>
       )}
       {saveSuccess && (
-        <Alert className="border-green-200 bg-green-50">
-          <AlertDescription className="text-green-800">{saveSuccess}</AlertDescription>
+        <Alert className="border-zinc-200 bg-zinc-50">
+          <AlertDescription className="text-zinc-900">{saveSuccess}</AlertDescription>
         </Alert>
       )}
 
@@ -649,7 +648,7 @@ export default function PKBPage() {
                 disabled={uploadingPkb}
               />
               {pkbDokumenTtd && (
-                <span className="text-sm text-green-600">✓ Dokumen tersimpan</span>
+                <span className="text-sm text-zinc-700">✓ Dokumen tersimpan</span>
               )}
             </div>
           </CardContent>

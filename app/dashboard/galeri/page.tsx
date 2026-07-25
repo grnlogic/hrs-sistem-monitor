@@ -14,7 +14,7 @@ import {
   Image,
   Video,
 } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/navigation/tabs";
 import {
   Card,
   CardContent,
@@ -31,7 +31,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/components/ui/form/select";
 import {
   galleryAPI,
   resolveMediaUrl,

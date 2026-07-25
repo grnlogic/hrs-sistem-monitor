@@ -33,9 +33,5 @@ export function inferRoleFromUser(user: RawUser): UserRole {
 }
 
 export function isSalaryPath(pathname: string): boolean {
-  return (
-    pathname === "/penggajian" ||
-    pathname.startsWith("/penggajian/") ||
-    pathname.startsWith("/dashboard/salary")
-  );
+  return pathname.startsWith("/dashboard/salary");
 }

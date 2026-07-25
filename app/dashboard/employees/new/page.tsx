@@ -146,22 +146,22 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
               <div
                 className={`
                   flex items-center justify-center w-11 h-11 rounded-full transition-all duration-300 border-2
-                  ${isCompleted ? "bg-green-500 border-green-500 text-white" : ""}
-                  ${isActive ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200" : ""}
-                  ${!isActive && !isCompleted ? "bg-white border-slate-200 text-slate-400" : ""}
+                  ${isCompleted ? "bg-zinc-500 border-zinc-500 text-white" : ""}
+                  ${isActive ? "bg-zinc-900 border-zinc-600 text-white shadow-lg shadow-blue-200" : ""}
+                  ${!isActive && !isCompleted ? "bg-white border-zinc-200 text-zinc-400" : ""}
                 `}
               >
                 {isCompleted ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
               </div>
               <div className="text-center">
-                <p className={`text-xs font-semibold ${isActive ? "text-blue-600" : isCompleted ? "text-green-600" : "text-slate-400"}`}>
+                <p className={`text-xs font-semibold ${isActive ? "text-zinc-700" : isCompleted ? "text-zinc-700" : "text-zinc-400"}`}>
                   {step.title}
                 </p>
-                <p className="text-[10px] text-slate-400 hidden sm:block">{step.desc}</p>
+                <p className="text-[10px] text-zinc-400 hidden sm:block">{step.desc}</p>
               </div>
             </div>
             {idx < STEPS.length - 1 && (
-              <div className={`h-0.5 flex-1 mx-2 mt-[-24px] rounded-full transition-all duration-300 ${currentStep > step.id ? "bg-green-400" : "bg-slate-200"}`} />
+              <div className={`h-0.5 flex-1 mx-2 mt-[-24px] rounded-full transition-all duration-300 ${currentStep > step.id ? "bg-zinc-500" : "bg-zinc-200"}`} />
             )}
           </React.Fragment>
         );
@@ -480,8 +480,8 @@ export default function NewEmployeePage() {
         <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>
       )}
       {success && (
-        <Alert className="border-green-200 bg-green-50">
-          <AlertDescription className="text-green-800">{success}</AlertDescription>
+        <Alert className="border-zinc-200 bg-zinc-50">
+          <AlertDescription className="text-zinc-900">{success}</AlertDescription>
         </Alert>
       )}
 
@@ -531,7 +531,7 @@ export default function NewEmployeePage() {
                     </Button>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-green-600">&#10003; {selectedFile.name}</span>
+                      <span className="text-sm text-zinc-700">&#10003; {selectedFile.name}</span>
                       <Button type="button" variant="ghost" size="sm" onClick={removeFile}><X className="h-4 w-4" /></Button>
                     </div>
                   )}
@@ -602,7 +602,7 @@ export default function NewEmployeePage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-zinc-500">
                     Lokasi asal karyawan sesuai PKB. Bisa berbeda saat absensi jika dipindahtugaskan.
                   </p>
                 </div>
@@ -646,10 +646,10 @@ export default function NewEmployeePage() {
             <CardHeader className="pb-3 cursor-pointer select-none" onClick={() => setShowOptional(!showOptional)}>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-base text-blue-700">Data Opsional</CardTitle>
+                  <CardTitle className="text-base text-zinc-800">Data Opsional</CardTitle>
                   <CardDescription className="text-xs">Klik untuk {showOptional ? "sembunyikan" : "tampilkan"}</CardDescription>
                 </div>
-                {showOptional ? <ChevronUp className="h-5 w-5 text-slate-400" /> : <ChevronDown className="h-5 w-5 text-slate-400" />}
+                {showOptional ? <ChevronUp className="h-5 w-5 text-zinc-400" /> : <ChevronDown className="h-5 w-5 text-zinc-400" />}
               </div>
             </CardHeader>
             {showOptional && (
@@ -702,30 +702,30 @@ export default function NewEmployeePage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-x-8 gap-y-2.5 text-sm">
-                <div><span className="text-slate-500">Nama:</span> <span className="font-medium">{formData.namaLengkap}</span></div>
-                <div><span className="text-slate-500">NIK:</span> <span className="font-medium">{formData.nik}</span></div>
-                <div><span className="text-slate-500">Divisi:</span> <span className="font-medium">{formData.departemen}</span></div>
-                <div><span className="text-slate-500">Role:</span> <span className="font-medium">{formData.roleKaryawan || "-"}</span></div>
-                <div><span className="text-slate-500">Status:</span> <span className="font-medium">{formData.statusKaryawan || "-"}</span></div>
-                <div><span className="text-slate-500">Potongan BPJS/Bulan:</span> <span className="font-medium">Rp {(Number(formData.bpjsNominal || 0) || 0).toLocaleString("id-ID")}</span></div>
-                <div><span className="text-slate-500">Alamat:</span> <span className="font-medium">{formData.alamat || "-"}</span></div>
-                <div><span className="text-slate-500">Tgl Masuk:</span> <span className="font-medium">{formData.tanggalMasuk}</span></div>
+                <div><span className="text-zinc-500">Nama:</span> <span className="font-medium">{formData.namaLengkap}</span></div>
+                <div><span className="text-zinc-500">NIK:</span> <span className="font-medium">{formData.nik}</span></div>
+                <div><span className="text-zinc-500">Divisi:</span> <span className="font-medium">{formData.departemen}</span></div>
+                <div><span className="text-zinc-500">Role:</span> <span className="font-medium">{formData.roleKaryawan || "-"}</span></div>
+                <div><span className="text-zinc-500">Status:</span> <span className="font-medium">{formData.statusKaryawan || "-"}</span></div>
+                <div><span className="text-zinc-500">Potongan BPJS/Bulan:</span> <span className="font-medium">Rp {(Number(formData.bpjsNominal || 0) || 0).toLocaleString("id-ID")}</span></div>
+                <div><span className="text-zinc-500">Alamat:</span> <span className="font-medium">{formData.alamat || "-"}</span></div>
+                <div><span className="text-zinc-500">Tgl Masuk:</span> <span className="font-medium">{formData.tanggalMasuk}</span></div>
                 <div>
-                  <span className="text-slate-500">{isStaffSelected ? "Gaji/Bulan:" : "Gaji/Hari:"}</span>{" "}
+                  <span className="text-zinc-500">{isStaffSelected ? "Gaji/Bulan:" : "Gaji/Hari:"}</span>{" "}
                   <span className="font-medium">Rp {Number(formData.gajiPerHari).toLocaleString("id-ID")}</span>
                 </div>
-                <div><span className="text-slate-500">Tipe Upah:</span> <span className="font-medium capitalize">{inferTipeUpah(formData.departemen).replace("_", " ")}</span></div>
-                <div><span className="text-slate-500">Divisi PKB:</span> <span className="font-medium capitalize">{inferDivision(inferTipeUpah(formData.departemen), formData.departemen)}</span></div>
+                <div><span className="text-zinc-500">Tipe Upah:</span> <span className="font-medium capitalize">{inferTipeUpah(formData.departemen).replace("_", " ")}</span></div>
+                <div><span className="text-zinc-500">Divisi PKB:</span> <span className="font-medium capitalize">{inferDivision(inferTipeUpah(formData.departemen), formData.departemen)}</span></div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className={pkbPrinted ? "border-green-200 bg-green-50/30" : ""}>
+          <Card className={pkbPrinted ? "border-zinc-200 bg-zinc-50/30" : ""}>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <Printer className="h-5 w-5" />
                 Cetak PKB (Perjanjian Kerja Bersama)
-                {pkbPrinted && <Check className="h-4 w-4 text-green-600" />}
+                {pkbPrinted && <Check className="h-4 w-4 text-zinc-700" />}
               </CardTitle>
               <CardDescription>
                 {pkbPrinted
@@ -751,7 +751,7 @@ export default function NewEmployeePage() {
           </Card>
 
           {pkbPrinted && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+            <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-4 text-sm text-zinc-800">
               <strong>Selanjutnya:</strong> Setelah PKB ditandatangani, klik &quot;Simpan &amp; Lanjut&quot; untuk menyimpan karyawan dan upload dokumen TTD.
             </div>
           )}
@@ -766,31 +766,31 @@ export default function NewEmployeePage() {
               <CardTitle className="text-base flex items-center gap-2">
                 <UploadCloud className="h-5 w-5" />
                 Upload Dokumen PKB yang Ditandatangani
-                {docUploaded && <Check className="h-4 w-4 text-green-600" />}
+                {docUploaded && <Check className="h-4 w-4 text-zinc-700" />}
               </CardTitle>
               <CardDescription>Upload scan/foto PKB yang sudah ditandatangani (PDF, JPG, PNG)</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {!docUploaded ? (
                 <div
-                  className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors cursor-pointer"
+                  className="border-2 border-dashed border-zinc-300 rounded-lg p-8 text-center hover:border-zinc-400 transition-colors cursor-pointer"
                   onClick={() => document.getElementById("pkb-doc-upload")?.click()}
                 >
-                  <UploadCloud className="h-10 w-10 text-slate-400 mx-auto mb-3" />
-                  <p className="text-sm text-slate-600 mb-3">Klik untuk memilih file</p>
+                  <UploadCloud className="h-10 w-10 text-zinc-400 mx-auto mb-3" />
+                  <p className="text-sm text-zinc-600 mb-3">Klik untuk memilih file</p>
                   <Button variant="outline" type="button" disabled={uploadingDoc}>
                     {uploadingDoc ? "Mengupload..." : "Pilih File"}
                   </Button>
                   <input id="pkb-doc-upload" type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleUploadPKBDoc} className="hidden" />
                 </div>
               ) : (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-                  <CheckCircle2 className="h-10 w-10 text-green-500 mx-auto mb-2" />
-                  <p className="text-green-700 font-medium">Dokumen berhasil diupload!</p>
+                <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-6 text-center">
+                  <CheckCircle2 className="h-10 w-10 text-zinc-600 mx-auto mb-2" />
+                  <p className="text-zinc-800 font-medium">Dokumen berhasil diupload!</p>
                   <Button variant="outline" size="sm" className="mt-3" onClick={() => setDocUploaded(false)}>Upload Ulang</Button>
                 </div>
               )}
-              <p className="text-xs text-slate-500 bg-slate-50 rounded-lg p-3">
+              <p className="text-xs text-zinc-500 bg-zinc-50 rounded-lg p-3">
                 <strong>Catatan:</strong> Anda bisa melewati upload dan melakukannya nanti dari halaman detail karyawan.
               </p>
             </CardContent>
@@ -800,12 +800,12 @@ export default function NewEmployeePage() {
 
       {/* ==================== STEP 4: Done ==================== */}
       {step === 4 && (
-        <Card className="border-green-200 bg-green-50/30">
+        <Card className="border-zinc-200 bg-zinc-50/30">
           <CardContent className="py-12 text-center">
-            <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-green-800 mb-2">Karyawan Berhasil Ditambahkan!</h2>
-            <p className="text-sm text-green-700 mb-1">{formData.namaLengkap} — {formData.departemen}</p>
-            <p className="text-sm text-slate-500 mb-6">
+            <CheckCircle2 className="h-16 w-16 text-zinc-600 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-zinc-900 mb-2">Karyawan Berhasil Ditambahkan!</h2>
+            <p className="text-sm text-zinc-800 mb-1">{formData.namaLengkap} — {formData.departemen}</p>
+            <p className="text-sm text-zinc-500 mb-6">
               {docUploaded ? "Data dan dokumen PKB sudah lengkap." : "Dokumen PKB belum diupload — bisa upload nanti dari detail karyawan."}
             </p>
             <div className="flex justify-center gap-3">

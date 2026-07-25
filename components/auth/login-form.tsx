@@ -51,7 +51,7 @@ export function LoginForm() {
       const sessionRes = await fetch("/api/auth/session");
       const sessionData = await sessionRes.json();
       const role = normalizeRole(sessionData?.user?.role);
-      const redirectPath = role === "AKUNTANSI" ? "/penggajian/gaji-staff" : "/dashboard";
+      const redirectPath = role === "AKUNTANSI" ? "/dashboard/salary/staff" : "/dashboard";
       router.push(redirectPath);
       router.refresh();
     } catch (err) {
@@ -62,7 +62,7 @@ export function LoginForm() {
   };
 
   return (
-    <Card className="w-full max-w-sm border-slate-200 shadow-sm">
+    <Card className="w-full max-w-sm border-zinc-200 shadow-sm">
       <CardHeader className="space-y-4 pb-4 text-center">
         <div className="mx-auto flex h-12 w-12 items-center justify-center overflow-hidden">
           <Image
@@ -75,10 +75,10 @@ export function LoginForm() {
           />
         </div>
         <div>
-          <h1 className="text-lg font-semibold text-slate-800">
+          <h1 className="text-lg font-semibold text-zinc-800">
             Sistem Manajemen Pabrik
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-zinc-500">
             Masukkan kredensial untuk masuk
           </p>
         </div>
@@ -95,7 +95,7 @@ export function LoginForm() {
           <div className="space-y-2">
             <Label htmlFor="username">Username</Label>
             <div className="relative">
-              <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
               <Input
                 id="username"
                 name="username"
@@ -111,7 +111,7 @@ export function LoginForm() {
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
               <Input
                 id="password"
                 name="password"
@@ -130,9 +130,9 @@ export function LoginForm() {
                 disabled={isLoading}
               >
                 {showPassword ? (
-                  <EyeOff className="h-4 w-4 text-slate-400" />
+                  <EyeOff className="h-4 w-4 text-zinc-400" />
                 ) : (
-                  <Eye className="h-4 w-4 text-slate-400" />
+                  <Eye className="h-4 w-4 text-zinc-400" />
                 )}
               </Button>
             </div>

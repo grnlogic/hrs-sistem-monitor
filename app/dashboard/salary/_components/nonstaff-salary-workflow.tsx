@@ -3,26 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
-import { Badge } from "@/components/ui/display/badge";
-import { Button } from "@/components/ui/form/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/display/card";
-import { Input } from "@/components/ui/form/input";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/overlay/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/display/table";
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/display/card";
 import {
   attendanceAPI,
   employeeAPI,
@@ -37,93 +23,35 @@ import {
   type NonStaffSlipExportPayload,
 } from "@/lib/salary-slip-pdf";
 import { formatCurrency } from "@/lib/utils";
+import {
+  CheckCircle2,
+  ArrowRight,
+} from "lucide-react";
 
-type Step = 1 | 2 | 3;
+// Shared types and utilities
+import {
+  type Step,
+  type SalaryItem,
+  type EmployeeRow,
+  type AttendanceSummary,
+  type SnapshotRow,
+  type GajiPeriodIndex,
+  type InputState,
+  type RekapPopupState,
+  type CalculatedSnapshot,
+  DEFAULT_POTONGAN,
+  toNumber,
+  buildDefaultInputState,
+} from "./nonstaff-salary-shared";
 
-type SalaryItem = {
-  id?: string;
-  judul: string;
-  nominal: number;
-  isDefault?: boolean;
-};
+// Extracted step / dialog / popup components
+import { NonStaffStep1Review } from "./nonstaff-step1-review";
+import { NonStaffStep2BonusPotongan } from "./nonstaff-step2-bonus-potongan";
+import { NonStaffStep3Export } from "./nonstaff-step3-export";
+import { NonStaffInputDialog } from "./nonstaff-input-dialog";
+import { NonStaffRekapPopup } from "./nonstaff-rekap-popup";
 
-type EmployeeRow = {
-  id: string;
-  namaLengkap: string;
-  departemen: string;
-  statusKaryawan: string;
-  gajiPerHari: number;
-  lokasiDefault: LokasiCode | null;
-  lokasiKerja: string;
-};
-
-type LokasiBreakdownItem = {
-  lokasi: LokasiCode;
-  hariHadir: number;
-  setengahHari: number;
-  lembur: number;
-  hariEfektif: number;
-};
-
-type AttendanceSummary = {
-  karyawanId: string;
-  nama: string;
-  divisi: string;
-  lokasiSlip: LokasiCode | null;
-  lokasiBreakdown: LokasiBreakdownItem[];
-  hariHadir: number;
-  setengahHari: number;
-  lembur: number;
-  hariEfektif: number;
-  upahHarian: number;
-};
-
-type SnapshotRow = {
-  gajiId: string;
-  karyawanId: string;
-  nama: string;
-  divisi: string;
-  lokasiSlip: LokasiCode | null;
-  lokasiBreakdown: LokasiBreakdownItem[];
-  periodeAwal: string;
-  periodeAkhir: string;
-  hariHadir: number;
-  setengahHari: number;
-  lembur: number;
-  hariEfektif: number;
-  upahHarian: number;
-  gajiPokok: number;
-};
-
-type GajiPeriodIndex = Record<string, { id: string; periodeAwal: string; periodeAkhir: string }>;
-
-type InputState = {
-  bonusItems: SalaryItem[];
-  potonganItems: SalaryItem[];
-};
-
-type ToastState = {
-  type: "success" | "error";
-  message: string;
-} | null;
-
-type RekapPopupState = {
-  open: boolean;
-  title: string;
-  message: string;
-  type: "loading" | "success" | "error";
-};
-
-const DEFAULT_BONUS: SalaryItem[] = [{ judul: "Bonus", nominal: 0 }];
-const DEFAULT_POTONGAN: SalaryItem[] = [
-  { judul: "BPJS Kesehatan", nominal: 0, isDefault: true },
-  { judul: "BPJS Ketenagakerjaan", nominal: 0, isDefault: true },
-];
-
-function toNumber(value: unknown): number {
-  const parsed = Number(value || 0);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
+/* ---------- Helper functions (stay in parent) ---------- */
 
 function normalizeDate(value: Date): string {
   return value.toISOString().slice(0, 10);
@@ -185,12 +113,13 @@ function employeeInLokasi(employee: EmployeeRow, userLokasi: LokasiCode): boolea
   return true;
 }
 
-function buildDefaultInputState(): InputState {
-  return {
-    bonusItems: DEFAULT_BONUS.map((item) => ({ ...item })),
-    potonganItems: DEFAULT_POTONGAN.map((item) => ({ ...item })),
-  };
-}
+type LokasiBreakdownItem = {
+  lokasi: LokasiCode;
+  hariHadir: number;
+  setengahHari: number;
+  lembur: number;
+  hariEfektif: number;
+};
 
 function buildAttendanceSummary(
   employees: EmployeeRow[],
@@ -304,6 +233,8 @@ function buildAttendanceSummary(
   });
 }
 
+/* ---------- Main component ---------- */
+
 export function NonStaffSalaryWorkflow() {
   const { data: session, status } = useSession();
   const role = session?.user?.role || "HRD";
@@ -312,6 +243,7 @@ export function NonStaffSalaryWorkflow() {
   const now = new Date();
   const [startDate, setStartDate] = useState(normalizeDate(new Date(now.getFullYear(), now.getMonth(), 1)));
   const [endDate, setEndDate] = useState(normalizeDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
+  const [selectedDivisions, setSelectedDivisions] = useState<string[]>([]);
 
   const [step, setStep] = useState<Step>(1);
   const [loading, setLoading] = useState(false);
@@ -332,7 +264,7 @@ export function NonStaffSalaryWorkflow() {
 
   const [inputsBySalaryId, setInputsBySalaryId] = useState<Record<string, InputState>>({});
   const [doneBySalaryId, setDoneBySalaryId] = useState<Record<string, boolean>>({});
-  const [toast, setToast] = useState<ToastState>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const simpanRekapanInFlight = useRef(false);
   const [rekapPopup, setRekapPopup] = useState<RekapPopupState>({
     open: false,
@@ -368,7 +300,7 @@ export function NonStaffSalaryWorkflow() {
     [snapshotRows, selectedSalaryId]
   );
 
-  function calculatedForSnapshot(row: SnapshotRow) {
+  function calculatedForSnapshot(row: SnapshotRow): CalculatedSnapshot {
     const input = inputsBySalaryId[row.gajiId] || buildDefaultInputState();
     const totalBonus = input.bonusItems.reduce((sum, item) => sum + toNumber(item.nominal), 0);
     const totalPotongan = input.potonganItems.reduce((sum, item) => sum + toNumber(item.nominal), 0);
@@ -407,7 +339,7 @@ export function NonStaffSalaryWorkflow() {
     const selectedStart = toApiDate(startDate);
     const selectedEnd = toApiDate(endDate);
 
-    const rowsByKaryawanId: Record<string, Array<{ id: string; periodeAwal: string; periodeAkhir: string }>> = {};
+    const rowsByKaryawanId: Record<string, Array<{ id: string; periodeAwal: string; periodeAkhir: string; statusPembayaran?: string }>> = {};
     latestRows.forEach((item: any) => {
       const karyawanId = String(item?.karyawan?.id || item?.karyawanId || "");
       const rowStart = toApiDate(String(item?.periodeAwal || item?.periode_awal || ""));
@@ -422,11 +354,13 @@ export function NonStaffSalaryWorkflow() {
         id: String(item.id),
         periodeAwal: rowStart,
         periodeAkhir: rowEnd,
+        statusPembayaran: item.statusPembayaran || item.status_pembayaran || "",
       });
     });
 
     const unresolvedNames = new Set<string>();
     const skippedCrossNames = new Set<string>();
+    const skippedNoAbsensiNames = new Set<string>();
     const tasks: Array<{ name: string; promise: Promise<any> }> = [];
     const usedTaskKeys = new Set<string>();
 
@@ -444,6 +378,11 @@ export function NonStaffSalaryWorkflow() {
       }
 
       for (const match of matches) {
+        if (match.statusPembayaran === "Tidak Ada Absensi") {
+          skippedNoAbsensiNames.add(row.nama);
+          continue;
+        }
+
         const taskKey = `${match.id}|${match.periodeAwal}|${match.periodeAkhir}`;
         if (usedTaskKeys.has(taskKey)) continue;
         usedTaskKeys.add(taskKey);
@@ -489,6 +428,7 @@ export function NonStaffSalaryWorkflow() {
       otherErrorCount,
       unresolvedCount: unresolvedNames.size,
       skippedCrossCount: skippedCrossNames.size,
+      skippedNoAbsensiCount: skippedNoAbsensiNames.size,
     };
   }
 
@@ -592,7 +532,8 @@ export function NonStaffSalaryWorkflow() {
           lokasiKerja: String(row.lokasiKerja || row.lokasi_kerja || ""),
         }))
         .filter((employee) => isNonStaff(employee))
-        .filter((employee) => employeeInLokasi(employee, userLokasi));
+        .filter((employee) => employeeInLokasi(employee, userLokasi))
+        .filter((employee) => selectedDivisions.length === 0 || selectedDivisions.includes(employee.departemen));
 
       const summary = buildAttendanceSummary(
         employees,
@@ -688,17 +629,17 @@ export function NonStaffSalaryWorkflow() {
 
     try {
       setSubmitting(true);
-
       // Draft dibuat/di-refresh saat konfirmasi agar flow tidak bergantung tombol terpisah.
-      await generateSalaryAPI.generateNonStaffMingguan(startDate, endDate);
+      const resText = await generateSalaryAPI.generateNonStaffMingguan(startDate, endDate, selectedDivisions);
+      showToast("success", resText);
 
       const generated = await salaryAPI.getGajiByDateRange(startDate, endDate);
       const generatedRows = Array.isArray(generated) ? generated : [];
       const selectedStart = toApiDate(startDate);
       const selectedEnd = toApiDate(endDate);
 
-      const exactRowByKaryawanId: Record<string, { id: string; periodeAwal: string; periodeAkhir: string }> = {};
-      const fallbackRowByKaryawanId: Record<string, { id: string; periodeAwal: string; periodeAkhir: string }> = {};
+      const exactRowByKaryawanId: Record<string, { id: string; periodeAwal: string; periodeAkhir: string; statusPembayaran?: string }> = {};
+      const fallbackRowByKaryawanId: Record<string, { id: string; periodeAwal: string; periodeAkhir: string; statusPembayaran?: string }> = {};
       generatedRows.forEach((row: any) => {
         const karyawanId = String(row.karyawan?.id || row.karyawanId || "");
         const departemen = String(row.karyawan?.departemen || "-");
@@ -710,11 +651,13 @@ export function NonStaffSalaryWorkflow() {
         const rowEnd = toApiDate(String(row.periodeAkhir || row.periode_akhir || ""));
         const isWithinSelectedRange = rowStart >= selectedStart && rowEnd <= selectedEnd;
         const isExactRange = rowStart === selectedStart && rowEnd === selectedEnd;
+        const statusPembayaran = row.statusPembayaran || row.status_pembayaran || "";
         if (isExactRange) {
           exactRowByKaryawanId[karyawanId] = {
             id: String(row.id),
             periodeAwal: rowStart,
             periodeAkhir: rowEnd,
+            statusPembayaran,
           };
           return;
         }
@@ -729,6 +672,7 @@ export function NonStaffSalaryWorkflow() {
             id: String(row.id),
             periodeAwal: rowStart,
             periodeAkhir: rowEnd,
+            statusPembayaran,
           };
         }
       });
@@ -765,6 +709,7 @@ export function NonStaffSalaryWorkflow() {
             hariEfektif: review.hariEfektif,
             upahHarian: review.upahHarian,
             gajiPokok,
+            statusPembayaran: matchedRow.statusPembayaran,
           } satisfies SnapshotRow;
         })
         .filter((row): row is SnapshotRow => Boolean(row));
@@ -779,13 +724,19 @@ export function NonStaffSalaryWorkflow() {
       setInputsBySalaryId({});
       setStep(2);
 
-      if (missingEmployees.length > 0) {
-        setMessage(`Snapshot tersimpan untuk ${normalizedSnapshots.length} karyawan. ${missingEmployees.length} karyawan belum punya data gaji periode ini.`);
-      } else if (fallbackUsedCount > 0) {
-        setMessage(`Snapshot periode tersimpan. ${fallbackUsedCount} karyawan menggunakan data gaji model harian pada rentang periode terpilih.`);
-      } else {
-        setMessage("Snapshot periode tersimpan. Lanjut ke input bonus/potongan.");
+      const noAbsensiCount = normalizedSnapshots.filter((row) => row.statusPembayaran === "Tidak Ada Absensi").length;
+      const normalCount = normalizedSnapshots.length - noAbsensiCount;
+
+      let msg = `Snapshot periode tersimpan untuk ${normalCount} karyawan.`;
+      if (noAbsensiCount > 0) {
+        msg += ` ${noAbsensiCount} karyawan dengan status "Tidak Ada Absensi" terdeteksi (perlu dicek).`;
       }
+      if (missingEmployees.length > 0) {
+        msg += ` ${missingEmployees.length} karyawan belum punya data gaji periode ini.`;
+      } else if (fallbackUsedCount > 0) {
+        msg += ` ${fallbackUsedCount} karyawan menggunakan data gaji model harian.`;
+      }
+      setMessage(msg);
     } catch (confirmErr) {
       console.error(confirmErr);
       const messageText = confirmErr instanceof Error ? confirmErr.message : "Gagal konfirmasi data.";
@@ -1066,12 +1017,14 @@ export function NonStaffSalaryWorkflow() {
       );
 
       const result = await updateStatusForSnapshotRows(snapshotRows);
-      setMessage(
-        `Export rekap selesai. Berhasil: ${result.successCount}, ` +
-          `Dilewati lintas lokasi: ${result.skippedCrossCount + result.forbiddenCount}, ` +
-          `Mismatch periode: ${result.unresolvedCount + result.conflictCount}, ` +
-          `Error lain: ${result.otherErrorCount}.`
-      );
+      let msg = `Export rekap selesai. Berhasil: ${result.successCount}, `;
+      if (result.skippedNoAbsensiCount > 0) {
+        msg += `Tanpa Absensi dilewati: ${result.skippedNoAbsensiCount}, `;
+      }
+      msg += `Dilewati lintas lokasi: ${result.skippedCrossCount + result.forbiddenCount}, ` +
+        `Mismatch periode: ${result.unresolvedCount + result.conflictCount}, ` +
+        `Error lain: ${result.otherErrorCount}.`;
+      setMessage(msg);
     } catch (exportErr) {
       console.error(exportErr);
       setError("Gagal export rekap semua.");
@@ -1099,8 +1052,16 @@ export function NonStaffSalaryWorkflow() {
 
       const result = await updateStatusForSnapshotRows(snapshotRows);
 
+      let msg = `Status pembayaran berhasil diperbarui untuk ${result.successCount} data. `;
+      if (result.skippedNoAbsensiCount > 0) {
+        msg += `${result.skippedNoAbsensiCount} data dengan status "Tidak Ada Absensi" dilewati (memerlukan pengecekan manual). `;
+      }
+      msg += `Lintas lokasi dilewati: ${result.skippedCrossCount + result.forbiddenCount}. ` +
+        `Mismatch periode: ${result.unresolvedCount + result.conflictCount}.`;
+
       setMessage(
         `Rekapan diproses. Berhasil: ${result.successCount}, ` +
+          (result.skippedNoAbsensiCount > 0 ? `Tanpa Absensi dilewati: ${result.skippedNoAbsensiCount}, ` : "") +
           `Dilewati lintas lokasi: ${result.skippedCrossCount + result.forbiddenCount}, ` +
           `Mismatch periode: ${result.unresolvedCount + result.conflictCount}, ` +
           `Error lain: ${result.otherErrorCount}.`
@@ -1108,10 +1069,7 @@ export function NonStaffSalaryWorkflow() {
       setRekapPopup({
         open: true,
         title: "Berhasil",
-        message:
-          `Status pembayaran berhasil diperbarui untuk ${result.successCount} data. ` +
-          `Lintas lokasi dilewati: ${result.skippedCrossCount + result.forbiddenCount}. ` +
-          `Mismatch periode: ${result.unresolvedCount + result.conflictCount}.`,
+        message: msg,
         type: "success",
       });
     } catch (saveErr) {
@@ -1130,12 +1088,12 @@ export function NonStaffSalaryWorkflow() {
   }
 
   const divisionSummary = useMemo(() => {
-    const summary = new Map<string, number>();
+    const summaryMap = new Map<string, number>();
     for (const row of snapshotRows) {
       const calc = calculatedForSnapshot(row);
-      summary.set(row.divisi, (summary.get(row.divisi) || 0) + calc.gajiBersih);
+      summaryMap.set(row.divisi, (summaryMap.get(row.divisi) || 0) + calc.gajiBersih);
     }
-    return Array.from(summary.entries()).map(([divisi, total]) => ({ divisi, total }));
+    return Array.from(summaryMap.entries()).map(([divisi, total]) => ({ divisi, total }));
   }, [snapshotRows, inputsBySalaryId]);
 
   if (status === "loading") {
@@ -1164,7 +1122,7 @@ export function NonStaffSalaryWorkflow() {
           <p>Lokasi akun aktif: <span className="font-semibold text-foreground">{userLokasi}</span></p>
           <p>Periode aktif: <span className="font-semibold text-foreground">{formatPeriod(startDate, endDate)}</span></p>
           {isPreviewOnly ? (
-            <p className="text-amber-700">
+            <p className="text-foreground">
               Mode HRD (Preview): hanya lihat data. Edit koreksi, bonus/potongan, dan finalisasi tetap oleh AKUNTANSI.
             </p>
           ) : null}
@@ -1173,25 +1131,46 @@ export function NonStaffSalaryWorkflow() {
 
       <Card>
         <CardContent className="pt-6">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            {[1, 2, 3].map((item) => {
-              const active = step === item;
-              const done = completedStep >= item;
+          <div className="flex flex-col md:flex-row items-center gap-4">
+            {[
+              { id: 1, label: "Review Data", desc: "Periksa absensi" },
+              { id: 2, label: "Input Bonus & Potongan", desc: "Sesuaikan gaji" },
+              { id: 3, label: "Finalisasi & Export", desc: "Simpan & cetak" }
+            ].map((s, i, arr) => {
+              const active = step === s.id;
+              const done = completedStep >= s.id;
+              const clickable = done || active || (isPreviewOnly && s.id === 1);
+              
               return (
-                <button
-                  key={item}
-                  type="button"
-                  className="border-b pb-2 text-left"
-                  onClick={() => {
-                    if (isPreviewOnly && item !== 1) return;
-                    setStep(item as Step);
-                  }}
-                >
-                  <p className={active ? "font-bold" : "font-semibold text-muted-foreground"}>
-                    {done ? "✓" : `${item}.`} {item === 1 ? "Review Data" : item === 2 ? "Input Bonus & Potongan" : "Export"}
-                  </p>
-                  {active ? <div className="mt-2 h-0.5 w-24 bg-primary" /> : null}
-                </button>
+                <div key={s.id} className="flex items-center w-full">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!clickable) return;
+                      setStep(s.id as Step);
+                    }}
+                    className={`flex items-center gap-3 w-full p-3 rounded-lg transition-all duration-200 ${
+                      active ? "bg-primary/10 border border-primary/20 shadow-sm" : 
+                      done ? "hover:bg-accent border border-transparent cursor-pointer" : 
+                      "opacity-50 cursor-not-allowed border border-transparent"
+                    }`}
+                  >
+                    <div className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm shrink-0 ${
+                      active ? "bg-primary text-primary-foreground shadow-sm" :
+                      done ? "bg-success text-success-foreground" :
+                      "bg-muted text-muted-foreground"
+                    }`}>
+                      {done && !active ? <CheckCircle2 className="w-5 h-5" /> : s.id}
+                    </div>
+                    <div className="text-left">
+                      <p className={`text-sm font-bold ${active ? "text-primary" : "text-foreground"}`}>{s.label}</p>
+                      <p className="text-xs text-muted-foreground hidden sm:block">{s.desc}</p>
+                    </div>
+                  </button>
+                  {i < arr.length - 1 && (
+                    <ArrowRight className="hidden md:block mx-2 text-muted-foreground/30 w-5 h-5 shrink-0" />
+                  )}
+                </div>
               );
             })}
           </div>
@@ -1215,8 +1194,8 @@ export function NonStaffSalaryWorkflow() {
           <div
             className={`rounded-md border px-4 py-2 text-sm shadow-sm ${
               toast.type === "success"
-                ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                : "border-rose-300 bg-rose-50 text-rose-800"
+                ? "bg-secondary text-secondary-foreground"
+                : "bg-secondary text-secondary-foreground"
             }`}
           >
             {toast.message}
@@ -1224,496 +1203,68 @@ export function NonStaffSalaryWorkflow() {
         </div>
       ) : null}
 
-      {rekapPopup.open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
-            <h3 className="text-lg font-semibold text-foreground">{rekapPopup.title}</h3>
-            <p className="mt-2 text-sm text-muted-foreground">{rekapPopup.message}</p>
-
-            {rekapPopup.type === "loading" ? (
-              <div className="mt-4 inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700">
-                Memproses update status pembayaran...
-              </div>
-            ) : (
-              <div className="mt-4 flex justify-end">
-                <Button
-                  type="button"
-                  onClick={() =>
-                    setRekapPopup({
-                      open: false,
-                      title: "",
-                      message: "",
-                      type: "loading",
-                    })
-                  }
-                >
-                  Tutup
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-      ) : null}
+      <NonStaffRekapPopup rekapPopup={rekapPopup} setRekapPopup={setRekapPopup} />
 
       {step === 1 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Fase 1. Review & Konfirmasi Data</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <div>
-                <label className="mb-1 block text-sm">Dari tanggal</label>
-                <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm">Sampai tanggal</label>
-                <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
-              </div>
-              <div className="flex items-end">
-                <Button onClick={handleShowData} disabled={loading}>
-                  {loading ? "Memuat..." : "Tampilkan Data"}
-                </Button>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nama</TableHead>
-                    <TableHead>Divisi</TableHead>
-                    <TableHead>Hari Hadir</TableHead>
-                    <TableHead>Setengah Hari</TableHead>
-                    <TableHead>Lembur</TableHead>
-                    <TableHead>Hari Efektif</TableHead>
-                    <TableHead>Upah Harian</TableHead>
-                    <TableHead>Estimasi Gaji Pokok</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {effectiveReviewRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8}>Belum ada data review.</TableCell>
-                    </TableRow>
-                  ) : (
-                    effectiveReviewRows.map((row) => {
-                      const value = manualHariEfektif[row.karyawanId] ?? row.hariEfektif;
-                      const gajiPokok = Math.round(value * row.upahHarian);
-                      return (
-                        <TableRow key={row.karyawanId}>
-                          <TableCell>{row.nama}</TableCell>
-                          <TableCell>{row.divisi}</TableCell>
-                          <TableCell>{row.hariHadir}</TableCell>
-                          <TableCell>{row.setengahHari}</TableCell>
-                          <TableCell>{row.lembur}</TableCell>
-                          <TableCell>
-                            {canEditSalary ? (
-                              <>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  step="0.5"
-                                  value={value}
-                                  disabled={Boolean(savingHariEfektifByKaryawanId[row.karyawanId])}
-                                  onChange={(event) =>
-                                    setManualHariEfektif((prev) => ({
-                                      ...prev,
-                                      [row.karyawanId]: toNumber(event.target.value),
-                                    }))
-                                  }
-                                  onBlur={() => {
-                                    void handleHariEfektifBlur(row);
-                                  }}
-                                  className="h-8 w-24"
-                                />
-                                {savingHariEfektifByKaryawanId[row.karyawanId] ? (
-                                  <p className="mt-1 text-xs text-muted-foreground">Menyimpan...</p>
-                                ) : null}
-                              </>
-                            ) : (
-                              <span className="font-medium">{value}</span>
-                            )}
-                          </TableCell>
-                          <TableCell>{formatCurrency(row.upahHarian)}</TableCell>
-                          <TableCell>{formatCurrency(gajiPokok)}</TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-
-            {canEditSalary ? (
-              <div className="flex justify-end">
-                <Button onClick={handleConfirmAndContinue} disabled={submitting || effectiveReviewRows.length === 0}>
-                  {submitting ? "Memproses Draft & Menyimpan..." : "Konfirmasi & Lanjut ke Input Bonus/Potongan"}
-                </Button>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Preview selesai. Untuk lanjut input bonus/potongan gunakan akun AKUNTANSI.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <NonStaffStep1Review
+          startDate={startDate}
+          setStartDate={setStartDate}
+          endDate={endDate}
+          setEndDate={setEndDate}
+          selectedDivisions={selectedDivisions}
+          setSelectedDivisions={setSelectedDivisions}
+          loading={loading}
+          effectiveReviewRows={effectiveReviewRows}
+          manualHariEfektif={manualHariEfektif}
+          setManualHariEfektif={setManualHariEfektif}
+          savingHariEfektifByKaryawanId={savingHariEfektifByKaryawanId}
+          canEditSalary={canEditSalary}
+          submitting={submitting}
+          handleShowData={handleShowData}
+          handleHariEfektifBlur={handleHariEfektifBlur}
+          handleConfirmAndContinue={handleConfirmAndContinue}
+        />
       ) : null}
 
       {step === 2 && canEditSalary ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Fase 2. Input Bonus & Potongan</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="overflow-x-auto rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nama</TableHead>
-                    <TableHead>Divisi</TableHead>
-                    <TableHead>Hari Efektif</TableHead>
-                    <TableHead>Upah Harian</TableHead>
-                    <TableHead>Total dari Hari</TableHead>
-                    <TableHead>Total Bonus</TableHead>
-                    <TableHead>Total Potongan</TableHead>
-                    <TableHead>Gaji Akhir</TableHead>
-                    <TableHead>Detail Bonus</TableHead>
-                    <TableHead>Detail Potongan</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Aksi</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {snapshotRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={11}>Belum ada snapshot data.</TableCell>
-                    </TableRow>
-                  ) : (
-                    snapshotRows.map((row) => {
-                      const input = inputsBySalaryId[row.gajiId] || buildDefaultInputState();
-                      const calc = calculatedForSnapshot(row);
-                      const totalDariHari = Math.round(row.hariEfektif * row.upahHarian);
-
-                      const bonusDetails = input.bonusItems.filter(
-                        (item) => item.judul.trim() && toNumber(item.nominal) !== 0
-                      );
-                      const potonganDetails = input.potonganItems.filter(
-                        (item) => item.judul.trim() && toNumber(item.nominal) !== 0
-                      );
-
-                      return (
-                        <TableRow key={row.gajiId}>
-                          <TableCell>{row.nama}</TableCell>
-                          <TableCell>{row.divisi}</TableCell>
-                          <TableCell>{row.hariEfektif}</TableCell>
-                          <TableCell>{formatCurrency(row.upahHarian)}</TableCell>
-                          <TableCell>{formatCurrency(totalDariHari)}</TableCell>
-                          <TableCell>{formatCurrency(calc.totalBonus)}</TableCell>
-                          <TableCell>{formatCurrency(calc.totalPotongan)}</TableCell>
-                          <TableCell>{formatCurrency(calc.gajiBersih)}</TableCell>
-                          <TableCell>
-                            {bonusDetails.length === 0 ? (
-                              <span className="text-muted-foreground">-</span>
-                            ) : (
-                              <div className="space-y-1 text-xs">
-                                {bonusDetails.map((item, idx) => (
-                                  <p key={`bonus-detail-${row.gajiId}-${idx}`}>
-                                    {item.judul}: <span className="font-medium">{formatCurrency(toNumber(item.nominal))}</span>
-                                  </p>
-                                ))}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {potonganDetails.length === 0 ? (
-                              <span className="text-muted-foreground">-</span>
-                            ) : (
-                              <div className="space-y-1 text-xs">
-                                {potonganDetails.map((item, idx) => (
-                                  <p key={`potongan-detail-${row.gajiId}-${idx}`}>
-                                    {item.judul}: <span className="font-medium">{formatCurrency(toNumber(item.nominal))}</span>
-                                  </p>
-                                ))}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {doneBySalaryId[row.gajiId] ? <Badge>Selesai</Badge> : <Badge variant="secondary">Belum</Badge>}
-                          </TableCell>
-                          <TableCell>
-                            <Button variant="outline" size="sm" onClick={() => openInputDialog(row)}>
-                              Input
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-
-            {allDone ? (
-              <div className="flex justify-end">
-                <Button variant="outline" onClick={() => setStep(3)}>
-                  Lanjut ke Export
-                </Button>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
+        <NonStaffStep2BonusPotongan
+          snapshotRows={snapshotRows}
+          inputsBySalaryId={inputsBySalaryId}
+          doneBySalaryId={doneBySalaryId}
+          calculatedForSnapshot={calculatedForSnapshot}
+          openInputDialog={openInputDialog}
+          allDone={allDone}
+          setStep={setStep}
+        />
       ) : null}
 
       {step === 3 && canEditSalary ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Fase 3. Export</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="overflow-x-auto rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nama</TableHead>
-                    <TableHead>Divisi</TableHead>
-                    <TableHead>Hari Efektif</TableHead>
-                    <TableHead>Upah Harian</TableHead>
-                    <TableHead>Gaji Pokok</TableHead>
-                    <TableHead>Total Bonus</TableHead>
-                    <TableHead>Total Potongan</TableHead>
-                    <TableHead>Gaji Bersih</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {snapshotRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8}>Belum ada data untuk export.</TableCell>
-                    </TableRow>
-                  ) : (
-                    snapshotRows.map((row) => {
-                      const calc = calculatedForSnapshot(row);
-                      return (
-                        <TableRow key={`rekap-${row.gajiId}`}>
-                          <TableCell>{row.nama}</TableCell>
-                          <TableCell>{row.divisi}</TableCell>
-                          <TableCell>{row.hariEfektif}</TableCell>
-                          <TableCell>{formatCurrency(row.upahHarian)}</TableCell>
-                          <TableCell>{formatCurrency(row.gajiPokok)}</TableCell>
-                          <TableCell>{formatCurrency(calc.totalBonus)}</TableCell>
-                          <TableCell>{formatCurrency(calc.totalPotongan)}</TableCell>
-                          <TableCell>{formatCurrency(calc.gajiBersih)}</TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              {divisionSummary.length === 0 ? (
-                <Card>
-                  <CardContent className="pt-6 text-sm text-muted-foreground">Belum ada summary divisi.</CardContent>
-                </Card>
-              ) : (
-                divisionSummary.map((item) => (
-                  <Card key={item.divisi}>
-                    <CardContent className="space-y-1 pt-6">
-                      <p className="text-sm font-semibold">{item.divisi}</p>
-                      <p className="text-sm">Total: <span className="font-semibold">{formatCurrency(item.total)}</span></p>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={handleExportSlipGabungan} disabled={submitting || snapshotRows.length === 0}>
-                Export Slip Gabungan
-              </Button>
-              <Button variant="outline" onClick={handleExportRekapSemua} disabled={submitting || snapshotRows.length === 0}>
-                Export Rekap Semua
-              </Button>
-              <Button variant="secondary" onClick={handleSimpanRekapan} disabled={submitting || snapshotRows.length === 0}>
-                Simpan Rekapan (Set Terbayar)
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <NonStaffStep3Export
+          snapshotRows={snapshotRows}
+          calculatedForSnapshot={calculatedForSnapshot}
+          divisionSummary={divisionSummary}
+          submitting={submitting}
+          handleExportSlipGabungan={handleExportSlipGabungan}
+          handleExportRekapSemua={handleExportRekapSemua}
+          handleSimpanRekapan={handleSimpanRekapan}
+        />
       ) : null}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedSnapshot?.nama} - {selectedSnapshot?.divisi} - {formatPeriod(startDate, endDate)}
-            </DialogTitle>
-            <DialogDescription>Input bonus dan potongan untuk karyawan ini.</DialogDescription>
-          </DialogHeader>
-
-          {selectedSnapshot ? (
-            <div className="space-y-4">
-              <Card>
-                <CardContent className="pt-6">
-                  <p className="mb-2 text-sm font-semibold">Ringkasan Kehadiran</p>
-                  <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-3">
-                    <p>Hari Hadir: <span className="font-semibold">{selectedSnapshot.hariHadir}</span></p>
-                    <p>Setengah Hari: <span className="font-semibold">{selectedSnapshot.setengahHari}</span></p>
-                    <p>Lembur: <span className="font-semibold">{selectedSnapshot.lembur}</span></p>
-                    <p>Hari Efektif: <span className="font-semibold">{selectedSnapshot.hariEfektif}</span></p>
-                    <p>Upah Harian: <span className="font-semibold">{formatCurrency(selectedSnapshot.upahHarian)}</span></p>
-                    <p>Gaji Pokok: <span className="font-semibold">{formatCurrency(selectedSnapshot.gajiPokok)}</span></p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Bonus</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Judul Bonus</TableHead>
-                        <TableHead>Nominal</TableHead>
-                        <TableHead>Hapus</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(inputsBySalaryId[selectedSnapshot.gajiId]?.bonusItems || []).map((item, index) => (
-                        <TableRow key={`bonus-${index}`}>
-                          <TableCell>
-                            <Input
-                              value={item.judul}
-                              disabled={!canEditSalary}
-                              onChange={(event) =>
-                                updateItem(selectedSnapshot.gajiId, "bonusItems", index, "judul", event.target.value)
-                              }
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              min={0}
-                              placeholder="0"
-                              value={toNumber(item.nominal) === 0 ? "" : item.nominal}
-                              disabled={!canEditSalary}
-                              onChange={(event) =>
-                                updateItem(selectedSnapshot.gajiId, "bonusItems", index, "nominal", event.target.value)
-                              }
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled={!canEditSalary}
-                              onClick={() => deleteItem(selectedSnapshot.gajiId, "bonusItems", index)}
-                            >
-                              Hapus
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  <Button variant="outline" size="sm" disabled={!canEditSalary} onClick={() => addItem(selectedSnapshot.gajiId, "bonusItems")}>
-                    + Tambah Bonus
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Potongan</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Judul Potongan</TableHead>
-                        <TableHead>Nominal</TableHead>
-                        <TableHead>Hapus</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(inputsBySalaryId[selectedSnapshot.gajiId]?.potonganItems || []).map((item, index) => (
-                        <TableRow key={`potongan-${index}`}>
-                          <TableCell>
-                            <Input
-                              value={item.judul}
-                              disabled={item.isDefault}
-                              onChange={(event) =>
-                                updateItem(selectedSnapshot.gajiId, "potonganItems", index, "judul", event.target.value)
-                              }
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              min={0}
-                              placeholder="0"
-                              value={toNumber(item.nominal) === 0 ? "" : item.nominal}
-                              disabled={!canEditSalary}
-                              onChange={(event) =>
-                                updateItem(selectedSnapshot.gajiId, "potonganItems", index, "nominal", event.target.value)
-                              }
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled={item.isDefault}
-                              onClick={() => deleteItem(selectedSnapshot.gajiId, "potonganItems", index)}
-                            >
-                              Hapus
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  <Button variant="outline" size="sm" onClick={() => addItem(selectedSnapshot.gajiId, "potonganItems")}>
-                    + Tambah Potongan
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Preview Slip Live</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span>Gaji Pokok</span>
-                    <span>{formatCurrency(selectedSnapshot.gajiPokok)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Total Bonus</span>
-                    <span>{formatCurrency(calculatedForSnapshot(selectedSnapshot).totalBonus)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Total Potongan</span>
-                    <span>{formatCurrency(calculatedForSnapshot(selectedSnapshot).totalPotongan)}</span>
-                  </div>
-                  <div className="flex justify-between border-t pt-2 font-semibold">
-                    <span>Gaji Bersih</span>
-                    <span>{formatCurrency(calculatedForSnapshot(selectedSnapshot).gajiBersih)}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          ) : null}
-
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDialogOpen(false)}>Batal</Button>
-            <Button onClick={saveInputSalary} disabled={submitting || !canEditSalary}>Simpan</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <NonStaffInputDialog
+        dialogOpen={dialogOpen}
+        setDialogOpen={setDialogOpen}
+        selectedSnapshot={selectedSnapshot}
+        startDate={startDate}
+        endDate={endDate}
+        inputsBySalaryId={inputsBySalaryId}
+        canEditSalary={canEditSalary}
+        calculatedForSnapshot={calculatedForSnapshot}
+        updateItem={updateItem}
+        addItem={addItem}
+        deleteItem={deleteItem}
+        submitting={submitting}
+        saveInputSalary={saveInputSalary}
+      />
 
     </div>
   );

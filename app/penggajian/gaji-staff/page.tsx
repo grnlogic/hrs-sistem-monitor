@@ -1,5 +1,5 @@
-import { SalaryStepperPage } from "../_components/salary-stepper-page";
+import { redirect } from "next/navigation";
 
 export default function PenggajianStaffPage() {
-  return <SalaryStepperPage pageType="staff" />;
+  redirect("/dashboard/salary/staff");
 }

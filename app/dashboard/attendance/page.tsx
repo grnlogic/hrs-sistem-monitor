@@ -27,11 +27,7 @@ import {
 import {
   Search,
   Plus,
-  Calendar,
-  Clock,
-  CheckCircle,
   XCircle,
-  AlertCircle,
   Trash2,
   Edit,
   Download,
@@ -196,7 +192,7 @@ export default function AttendancePage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "Hadir":
-        return <Badge className="bg-green-100 text-green-800">Hadir</Badge>;
+        return <Badge className="bg-zinc-100 text-zinc-900">Hadir</Badge>;
       case "Alpha":
         return <Badge variant="destructive">Alpha</Badge>;
       default:
@@ -439,7 +435,7 @@ export default function AttendancePage() {
     return (
       <div className="flex flex-1 flex-col gap-4 p-4">
         <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zinc-900"></div>
         </div>
       </div>
     );
@@ -517,7 +513,6 @@ export default function AttendancePage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Absensi</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{attendanceStats.total}</div>
@@ -527,10 +522,9 @@ export default function AttendancePage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">✅ Hadir</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold text-zinc-700">
               {attendanceStats.hadir}
             </div>
             <p className="text-xs text-muted-foreground">Karyawan</p>
@@ -539,10 +533,9 @@ export default function AttendancePage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">🌓 Setengah Hari</CardTitle>
-            <AlertCircle className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">
+            <div className="text-2xl font-bold text-zinc-600">
               {attendanceStats.setengahHari}
             </div>
             <p className="text-xs text-muted-foreground">Karyawan</p>
@@ -551,10 +544,9 @@ export default function AttendancePage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">🕒 Lembur</CardTitle>
-            <Clock className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-purple-600">
+            <div className="text-2xl font-bold text-zinc-600">
               {attendanceStats.lembur}
             </div>
             <p className="text-xs text-muted-foreground">Karyawan</p>
@@ -563,10 +555,9 @@ export default function AttendancePage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">📝 Izin</CardTitle>
-            <Clock className="h-4 w-4 text-orange-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">
+            <div className="text-2xl font-bold text-zinc-600">
               {attendanceStats.izin}
             </div>
             <p className="text-xs text-muted-foreground">Karyawan</p>
@@ -575,10 +566,9 @@ export default function AttendancePage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">❌ Tidak Hadir</CardTitle>
-            <Clock className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
+            <div className="text-2xl font-bold text-zinc-700">
               {attendanceStats.tidakHadir}
             </div>
             <p className="text-xs text-muted-foreground">Karyawan</p>
@@ -595,16 +585,16 @@ export default function AttendancePage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-4 mb-6">
             <div className="flex items-center gap-2 mb-2">
-              <Filter className="w-4 h-4 text-blue-600" />
-              <h3 className="font-semibold text-blue-800">
+              <Filter className="w-4 h-4 text-zinc-700" />
+              <h3 className="font-semibold text-zinc-900">
                 Filter & Pencarian Data
               </h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-400" />
                 <Input
                   placeholder="Cari nama atau NIK..."
                   value={searchTerm}
@@ -653,7 +643,7 @@ export default function AttendancePage() {
               dateFilter ||
               statusFilter !== "all" ||
               departmentFilter !== "all") && (
-              <div className="mt-3 text-sm text-blue-700">
+              <div className="mt-3 text-sm text-zinc-800">
                 📊 Menampilkan {filteredData.length} dari {attendanceData.length} data
                 {searchTerm && ` • Pencarian: "${searchTerm}"`}
                 {dateFilter &&
@@ -712,37 +702,37 @@ export default function AttendancePage() {
                       </TableCell>
                       <TableCell>
                         {normalizeStatus(attendance.status) === "HADIR" && (
-                          <Badge className="bg-green-100 text-green-800 border-green-200">✅ Hadir</Badge>
+                          <Badge className="bg-zinc-100 text-zinc-900 border-zinc-200">✅ Hadir</Badge>
                         )}
                         {normalizeStatus(attendance.status) === "SETENGAH_HARI" && (
-                          <Badge className="bg-orange-100 text-orange-800 border-orange-200">🌓 Setengah Hari</Badge>
+                          <Badge className="bg-zinc-100 text-zinc-800 border-zinc-200">🌓 Setengah Hari</Badge>
                         )}
                         {normalizeStatus(attendance.status) === "IZIN" && (
-                          <Badge className="bg-blue-100 text-blue-800 border-blue-200">📝 Tidak Hadir (Izin)</Badge>
+                          <Badge className="bg-zinc-100 text-zinc-900 border-zinc-200">📝 Tidak Hadir (Izin)</Badge>
                         )}
                         {normalizeStatus(attendance.status) === "TIDAK_HADIR" && (
-                          <Badge className="bg-red-100 text-red-800 border-red-200">❌ Tidak Hadir</Badge>
+                          <Badge className="bg-zinc-100 text-red-800 border-zinc-200">❌ Tidak Hadir</Badge>
                         )}
                         {attendance.isLembur && (
-                          <Badge className="ml-2 bg-purple-100 text-purple-800 border-purple-200">🕒 Lembur</Badge>
+                          <Badge className="ml-2 bg-zinc-100 text-zinc-800 border-zinc-200">🕒 Lembur</Badge>
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="border-slate-200 text-slate-700 bg-slate-50">
+                        <Badge variant="outline" className="border-zinc-200 text-zinc-700 bg-zinc-50">
                           {Number(attendance.hariEfektif ?? hitungHariEfektif(attendance.status, attendance.isLembur))}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm text-gray-600">🏢 {employee?.departemen || "-"}</span>
+                        <span className="text-sm text-zinc-600">🏢 {employee?.departemen || "-"}</span>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm text-gray-600">{attendance.notes || "-"}</span>
+                        <span className="text-sm text-zinc-600">{attendance.notes || "-"}</span>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => handleEdit(attendance)}
-                            className="text-blue-600 hover:text-blue-800 p-2 rounded-md hover:bg-blue-50 transition-colors"
+                            className="text-zinc-700 hover:text-zinc-900 p-2 rounded-md hover:bg-zinc-50 transition-colors"
                             title="Edit absensi"
                           >
                             <Edit className="w-4 h-4" />
@@ -751,14 +741,14 @@ export default function AttendancePage() {
                             <div className="flex gap-1">
                               <button
                                 onClick={() => handleDelete(attendance.id)}
-                                className="text-red-600 hover:text-red-800 p-1 rounded text-xs bg-red-50 border border-red-200"
+                                className="text-red-600 hover:text-red-800 p-1 rounded text-xs bg-zinc-50 border border-zinc-200"
                                 title="Konfirmasi hapus"
                               >
                                 ✓ Ya
                               </button>
                               <button
                                 onClick={() => setDeleteConfirm(null)}
-                                className="text-gray-600 hover:text-gray-800 p-1 rounded text-xs bg-gray-50 border border-gray-200"
+                                className="text-zinc-600 hover:text-zinc-800 p-1 rounded text-xs bg-zinc-50 border border-zinc-200"
                                 title="Batal hapus"
                               >
                                 ✗ Batal
@@ -767,7 +757,7 @@ export default function AttendancePage() {
                           ) : (
                             <button
                               onClick={() => handleDelete(attendance.id)}
-                              className="text-red-600 hover:text-red-800 p-2 rounded-md hover:bg-red-50 transition-colors"
+                              className="text-red-600 hover:text-red-800 p-2 rounded-md hover:bg-zinc-50 transition-colors"
                               title="Hapus absensi"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -784,11 +774,11 @@ export default function AttendancePage() {
 
           {filteredData.length === 0 && !isLoading && (
             <div className="text-center py-12">
-              <div className="text-gray-400 text-6xl mb-4">📭</div>
-              <p className="text-lg font-semibold text-gray-600 mb-2">
+              <div className="text-zinc-400 text-6xl mb-4">📭</div>
+              <p className="text-lg font-semibold text-zinc-600 mb-2">
                 Tidak ada data absensi ditemukan
               </p>
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-sm text-zinc-500 mb-4">
                 {searchTerm ||
                 dateFilter ||
                 statusFilter !== "all" ||
@@ -818,7 +808,7 @@ export default function AttendancePage() {
                 <label className="block text-sm font-medium mb-1">
                   Karyawan:
                 </label>
-                <p className="text-gray-700 bg-gray-50 p-2 rounded">
+                <p className="text-zinc-700 bg-zinc-50 p-2 rounded">
                   {editingItem.employee?.namaLengkap} (
                   {editingItem.employee?.nik})
                 </p>
@@ -828,7 +818,7 @@ export default function AttendancePage() {
                 <label className="block text-sm font-medium mb-1">
                   Tanggal:
                 </label>
-                <p className="text-gray-700 bg-gray-50 p-2 rounded">
+                <p className="text-zinc-700 bg-zinc-50 p-2 rounded">
                   {new Date(editingItem.tanggal).toLocaleDateString("id-ID")}
                 </p>
               </div>
@@ -879,7 +869,7 @@ export default function AttendancePage() {
                   id="edit-lembur"
                   className="w-4 h-4"
                 />
-                <label htmlFor="edit-lembur" className="text-sm text-gray-600">
+                <label htmlFor="edit-lembur" className="text-sm text-zinc-600">
                   Lembur (+1 hari efektif)
                 </label>
               </div>

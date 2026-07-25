@@ -1,9 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ButtonHTMLAttributes } from "react";
 import { createEditor, Descendant, Editor, Element as SlateElement, Text, Transforms } from "slate";
-import { Editable, ReactEditor, Slate, useFocused, useSelected, withReact } from "slate-react";
+import { Editable, ReactEditor, Slate, withReact } from "slate-react";
 import { withHistory } from "slate-history";
 import { Button } from "@/components/ui/form/button";
 import {
@@ -15,28 +14,16 @@ import {
 } from "@/components/ui/display/card";
 import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
 import {
-  AlignCenter,
-  AlignLeft,
-  AlignRight,
-  Columns,
-  Bold,
-  Braces,
-  Grid2X2,
-  Italic,
-  List,
-  ListOrdered,
   Loader2,
-  ImagePlus,
-  Rows,
   RotateCcw,
   Save,
-  Square,
-  Underline,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { PKB_PLACEHOLDERS } from "@/lib/pkb-placeholders";
 import { DEFAULT_PKB_TEMPLATE_NODES } from "@/lib/pkb-template-default";
-import { cn } from "@/lib/utils";
+
+import { Element, Leaf } from "./_components/slate-elements";
+import { EditorToolbar } from "./_components/editor-toolbar";
+import { PlaceholderPanel } from "./_components/placeholder-panel";
+import { UsageNotesCard } from "./_components/usage-notes-card";
 
 const LIST_TYPES = ["numbered-list", "bulleted-list"] as const;
 
@@ -404,155 +391,6 @@ const isAlignActive = (editor: Editor, align: Alignment) => {
   return !!match;
 };
 
-const Element = ({ attributes, children, element }: any) => {
-  const style = element.align ? { textAlign: element.align } : undefined;
-  switch (element.type) {
-    case "image":
-      return <ImageElement attributes={attributes} element={element}>{children}</ImageElement>;
-    case "heading":
-      return (
-        <h2 className="text-xl font-semibold uppercase tracking-wide" style={style} {...attributes}>
-          {children}
-        </h2>
-      );
-    case "quote":
-      return (
-        <blockquote className="border-l-4 border-slate-300 pl-3 italic text-slate-600" style={style} {...attributes}>
-          {children}
-        </blockquote>
-      );
-    case "numbered-list":
-      return (
-        <ol className="list-decimal pl-6" style={style} {...attributes}>
-          {children}
-        </ol>
-      );
-    case "bulleted-list":
-      return (
-        <ul className="list-disc pl-6" style={style} {...attributes}>
-          {children}
-        </ul>
-      );
-    case "list-item":
-      return (
-        <li className="mb-1" {...attributes}>
-          {children}
-        </li>
-      );
-    case "divider":
-      return (
-        <div {...attributes}>
-          <hr className="my-4 border-2 border-slate-700" />
-          {children}
-        </div>
-      );
-    case "table":
-      const tableWidth = Math.min(100, Math.max(40, Number(element.width) || 100));
-      const tableAlign = element.tableAlign || "center";
-      const tablePositionStyle =
-        tableAlign === "left"
-          ? { marginLeft: 0, marginRight: "auto" }
-          : tableAlign === "right"
-            ? { marginLeft: "auto", marginRight: 0 }
-            : { marginLeft: "auto", marginRight: "auto" };
-      return (
-        <table className="border border-slate-400 mt-6" style={{ width: `${tableWidth}%`, ...tablePositionStyle }} {...attributes}>
-          <tbody>{children}</tbody>
-        </table>
-      );
-    case "table-row":
-      return <tr {...attributes}>{children}</tr>;
-    case "table-cell":
-      return (
-        <td className="border border-slate-400 text-center py-6" colSpan={element.colspan ?? 1} {...attributes}>
-          {children}
-        </td>
-      );
-    case "signature-container": {
-      const width = Math.min(100, Math.max(40, Number(element.width) || 100));
-      const align = (element.containerAlign || "center") as SignatureAlign;
-      const positionStyle =
-        align === "left"
-          ? { marginLeft: 0, marginRight: "auto" }
-          : align === "right"
-            ? { marginLeft: "auto", marginRight: 0 }
-            : { marginLeft: "auto", marginRight: "auto" };
-
-      return (
-        <div
-          className="mt-6 grid grid-cols-2 gap-6"
-          style={{ width: `${width}%`, ...positionStyle }}
-          {...attributes}
-        >
-          {children}
-        </div>
-      );
-    }
-    case "signature-box":
-      return (
-        <div className="flex min-h-[130px] flex-col justify-between rounded-md border border-slate-500 px-3 py-4" {...attributes}>
-          {children}
-        </div>
-      );
-    default:
-      return (
-        <p className="leading-relaxed" style={style} {...attributes}>
-          {children}
-        </p>
-      );
-  }
-};
-
-function ImageElement({ attributes, children, element }: any) {
-  const selected = useSelected();
-  const focused = useFocused();
-  const width = Math.min(720, Math.max(40, Number(element.width) || 120));
-  const align = (element.align || "center") as ImageAlign;
-
-  return (
-    <div {...attributes}>
-      <div
-        contentEditable={false}
-        className={cn(
-          "my-3",
-          align === "left" && "text-left",
-          align === "center" && "text-center",
-          align === "right" && "text-right"
-        )}
-      >
-        {/* Border shown only when image is currently selected in Slate */}
-        <img
-          src={element.src}
-          alt={element.alt || "PKB image"}
-          style={{ width, maxWidth: "100%", height: "auto", display: "inline-block" }}
-          className={cn(selected && focused ? "ring-2 ring-blue-500" : "ring-0")}
-        />
-      </div>
-      {children}
-    </div>
-  );
-}
-
-const Leaf = ({ attributes, children, leaf }: any) => {
-  if (leaf.bold) {
-    children = <strong>{children}</strong>;
-  }
-  if (leaf.italic) {
-    children = <em>{children}</em>;
-  }
-  if (leaf.underline) {
-    children = <u>{children}</u>;
-  }
-  if (leaf.code) {
-    children = <code className="rounded bg-slate-100 px-1 py-0.5 text-xs font-semibold">{children}</code>;
-  }
-  return (
-    <span {...attributes}>
-      {children}
-    </span>
-  );
-};
-
 export default function PKBTemplateEditorPage() {
   const editor = useMemo(() => withImages(withHistory(withReact(createEditor()))), []);
   const initialTemplate = useMemo(() => cloneDefaultTemplate(), []);
@@ -734,13 +572,13 @@ export default function PKBTemplateEditorPage() {
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Editor Template PKB</h1>
-          <p className="text-sm text-slate-500">Template ini dipakai otomatis di Step 2 saat mencetak PKB.</p>
+          <p className="text-sm text-zinc-500">Template ini dipakai otomatis di Step 2 saat mencetak PKB.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-zinc-500">
             Terakhir disimpan:
-            <span className="font-semibold text-slate-700"> {statusLabel}</span>
-            {dirty && <span className="ml-2 text-amber-600">(Perubahan belum disimpan)</span>}
+            <span className="font-semibold text-zinc-700"> {statusLabel}</span>
+            {dirty && <span className="ml-2 text-zinc-600">(Perubahan belum disimpan)</span>}
           </div>
           <Button variant="outline" onClick={handleReset} disabled={loading || saving}>
             <RotateCcw className="mr-2 h-4 w-4" /> Reset Default
@@ -773,7 +611,7 @@ export default function PKBTemplateEditorPage() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="flex h-96 items-center justify-center text-slate-500">
+              <div className="flex h-96 items-center justify-center text-zinc-500">
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Memuat template...
               </div>
             ) : (
@@ -790,251 +628,36 @@ export default function PKBTemplateEditorPage() {
                   }
                 }}
               >
-                <div className="mb-4 flex flex-wrap gap-2 rounded-lg bg-slate-50 p-2 shadow-inner">
-                  <ToolbarButton icon={Bold} label="Bold" active={isMarkActive(editor, "bold")} onMouseDown={(e) => { e.preventDefault(); toggleMark(editor, "bold"); }} />
-                  <ToolbarButton icon={Italic} label="Italic" active={isMarkActive(editor, "italic")} onMouseDown={(e) => { e.preventDefault(); toggleMark(editor, "italic"); }} />
-                  <ToolbarButton icon={Underline} label="Underline" active={isMarkActive(editor, "underline")} onMouseDown={(e) => { e.preventDefault(); toggleMark(editor, "underline"); }} />
-                  <ToolbarButton icon={ListOrdered} label="Numbered" active={isBlockActive(editor, "numbered-list")} onMouseDown={(e) => { e.preventDefault(); toggleBlock(editor, "numbered-list"); }} />
-                  <ToolbarButton icon={List} label="Bullet" active={isBlockActive(editor, "bulleted-list")} onMouseDown={(e) => { e.preventDefault(); toggleBlock(editor, "bulleted-list"); }} />
-                  <ToolbarButton icon={AlignLeft} label="Left" active={isAlignActive(editor, "left")} onMouseDown={(e) => { e.preventDefault(); setAlignment(editor, "left"); }} />
-                  <ToolbarButton icon={AlignCenter} label="Center" active={isAlignActive(editor, "center")} onMouseDown={(e) => { e.preventDefault(); setAlignment(editor, "center"); }} />
-                  <ToolbarButton icon={AlignRight} label="Right" active={isAlignActive(editor, "right")} onMouseDown={(e) => { e.preventDefault(); setAlignment(editor, "right"); }} />
-                  <label className="inline-flex">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={async (event) => {
-                        const inputEl = event.currentTarget;
-                        const file = inputEl.files?.[0];
-                        if (!file) return;
-                        await insertImageFromFile(file);
-                        inputEl.value = "";
-                      }}
-                    />
-                    <span
-                      role="button"
-                      aria-label="Upload Image"
-                      className={cn(
-                        "flex h-9 items-center rounded-md border px-3 text-sm transition cursor-pointer",
-                        "border-slate-200 text-slate-500 hover:border-slate-400"
-                      )}
-                    >
-                      {imageUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
-                    </span>
-                  </label>
-                  <ToolbarButton
-                    icon={Grid2X2}
-                    label="Tambah Tabel"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      insertTable(editor, 3, 2);
-                      setDirty(true);
-                    }}
-                  />
-                  <ToolbarButton
-                    icon={Square}
-                    label="Tambah Box TTD"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      insertSignatureBoxes(editor);
-                      setDirty(true);
-                    }}
-                  />
-                </div>
+                <EditorToolbar
+                  editor={editor}
+                  imageUploading={imageUploading}
+                  activeImage={activeImage}
+                  activeTable={activeTable}
+                  activeSignature={activeSignature}
+                  isMarkActive={isMarkActive}
+                  isBlockActive={(ed, fmt) => isBlockActive(ed, fmt as BlockType)}
+                  isAlignActive={(ed, align) => isAlignActive(ed, align as Alignment)}
+                  toggleMark={toggleMark}
+                  toggleBlock={(ed, fmt) => toggleBlock(ed, fmt as BlockType)}
+                  setAlignment={(ed, align) => setAlignment(ed, align as Alignment)}
+                  onInsertImageFromFile={insertImageFromFile}
+                  onSetImageWidth={(width) => setImageWidth(editor, width)}
+                  onSetImageAlign={(align) => setImageAlign(editor, align)}
+                  onInsertTable={() => { insertTable(editor, 3, 2); }}
+                  onSetTableWidth={(width) => setTableWidth(editor, width)}
+                  onSetTableAlign={(align) => setTableAlign(editor, align)}
+                  onAddTableRow={() => addTableRow(editor)}
+                  onAddTableColumn={() => addTableColumn(editor)}
+                  onInsertSignature={() => { insertSignatureBoxes(editor); }}
+                  onSetSignatureWidth={(width) => setSignatureWidth(editor, width)}
+                  onSetSignatureAlign={(align) => setSignatureAlign(editor, align)}
+                  onSetDirty={setDirty}
+                />
 
-                <div className="mb-4 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="font-semibold text-slate-700">Image aktif:</span>
-                    <span>{activeImage ? "Ya" : "Pilih gambar dulu"}</span>
-                    <input
-                      type="range"
-                      min={40}
-                      max={320}
-                      step={10}
-                      value={activeImage?.width ?? 120}
-                      disabled={!activeImage}
-                      onChange={(event) => {
-                        const changed = setImageWidth(editor, Number(event.target.value));
-                        if (changed) setDirty(true);
-                      }}
-                    />
-                    <span>{activeImage?.width ?? 120}px</span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={!activeImage}
-                      onClick={() => {
-                        const changed = setImageAlign(editor, "left");
-                        if (changed) setDirty(true);
-                      }}
-                    >
-                      Kiri
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={!activeImage}
-                      onClick={() => {
-                        const changed = setImageAlign(editor, "center");
-                        if (changed) setDirty(true);
-                      }}
-                    >
-                      Tengah
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={!activeImage}
-                      onClick={() => {
-                        const changed = setImageAlign(editor, "right");
-                        if (changed) setDirty(true);
-                      }}
-                    >
-                      Kanan
-                    </Button>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="font-semibold text-slate-700">Tabel aktif:</span>
-                    <span>{activeTable ? "Ya" : "Pilih area tabel dulu"}</span>
-                    <input
-                      type="range"
-                      min={40}
-                      max={100}
-                      step={5}
-                      value={activeTable?.width ?? 100}
-                      disabled={!activeTable}
-                      onChange={(event) => {
-                        const changed = setTableWidth(editor, Number(event.target.value));
-                        if (changed) setDirty(true);
-                      }}
-                    />
-                    <span>{activeTable?.width ?? 100}%</span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={!activeTable}
-                      onClick={() => {
-                        const changed = setTableAlign(editor, "left");
-                        if (changed) setDirty(true);
-                      }}
-                    >
-                      Kiri
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={!activeTable}
-                      onClick={() => {
-                        const changed = setTableAlign(editor, "center");
-                        if (changed) setDirty(true);
-                      }}
-                    >
-                      Tengah
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={!activeTable}
-                      onClick={() => {
-                        const changed = setTableAlign(editor, "right");
-                        if (changed) setDirty(true);
-                      }}
-                    >
-                      Kanan
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={!activeTable}
-                      onClick={() => {
-                        const changed = addTableRow(editor);
-                        if (changed) setDirty(true);
-                      }}
-                    >
-                      <Rows className="mr-1 h-4 w-4" /> Tambah Baris
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={!activeTable}
-                      onClick={() => {
-                        const changed = addTableColumn(editor);
-                        if (changed) setDirty(true);
-                      }}
-                    >
-                      <Columns className="mr-1 h-4 w-4" /> Tambah Kolom
-                    </Button>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="font-semibold text-slate-700">Box TTD aktif:</span>
-                    <span>{activeSignature ? "Ya" : "Pilih area box tanda tangan"}</span>
-                    <input
-                      type="range"
-                      min={40}
-                      max={100}
-                      step={5}
-                      value={activeSignature?.width ?? 100}
-                      disabled={!activeSignature}
-                      onChange={(event) => {
-                        const changed = setSignatureWidth(editor, Number(event.target.value));
-                        if (changed) setDirty(true);
-                      }}
-                    />
-                    <span>{activeSignature?.width ?? 100}%</span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={!activeSignature}
-                      onClick={() => {
-                        const changed = setSignatureAlign(editor, "left");
-                        if (changed) setDirty(true);
-                      }}
-                    >
-                      Kiri
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={!activeSignature}
-                      onClick={() => {
-                        const changed = setSignatureAlign(editor, "center");
-                        if (changed) setDirty(true);
-                      }}
-                    >
-                      Tengah
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={!activeSignature}
-                      onClick={() => {
-                        const changed = setSignatureAlign(editor, "right");
-                        if (changed) setDirty(true);
-                      }}
-                    >
-                      Kanan
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-slate-100 p-4">
-                  <div className="overflow-auto rounded-xl border border-slate-200 bg-slate-200/70 p-4">
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-100 p-4">
+                  <div className="overflow-auto rounded-xl border border-zinc-200 bg-zinc-200/70 p-4">
                     <div className="relative mx-auto h-[297mm] w-[210mm] overflow-hidden rounded-md bg-white shadow-xl">
-                      <div className="pointer-events-none absolute inset-[12mm] border border-dashed border-slate-300" />
+                      <div className="pointer-events-none absolute inset-[12mm] border border-dashed border-zinc-300" />
 
                       <div
                         className="absolute inset-[12mm] overflow-y-auto p-6"
@@ -1073,72 +696,10 @@ export default function PKBTemplateEditorPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle>Placeholder Dinamis</CardTitle>
-            <CardDescription>
-              Gunakan placeholder untuk mengganti nilai otomatis saat Step 2 berjalan. Klik tombol di samping label untuk memasukkan token ke posisi kursor.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {PKB_PLACEHOLDERS.map((placeholder) => (
-              <div key={placeholder.key} className="flex items-start gap-3 rounded-lg border border-slate-200 p-3">
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-slate-800">{placeholder.label}</p>
-                  <p className="text-xs text-slate-500">{`{{${placeholder.key}}}`} &middot; {placeholder.description}</p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0"
-                  onClick={() => insertPlaceholder(placeholder.key)}
-                >
-                  <Braces className="mr-1 h-4 w-4" /> Sisipkan
-                </Button>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+        <PlaceholderPanel onInsertPlaceholder={insertPlaceholder} />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Catatan Penggunaan</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-slate-600">
-          <ul className="list-disc space-y-1 pl-5">
-            <li>Template ini disimpan dalam database SQLite lokal agar dapat dengan mudah dipanggil ulang.</li>
-            <li>Step 2 (Print PKB) akan selalu mengambil versi terbaru yang telah disimpan.</li>
-            <li>Anda dapat upload gambar lewat toolbar atau drag file gambar langsung ke area dokumen.</li>
-            <li>Klik gambar atau tabel untuk mengaktifkan kontrol ukuran dan posisi di panel atas editor.</li>
-            <li>Jika Anda menambahkan placeholder baru, pastikan nama variabel sesuai daftar di samping.</li>
-            <li>Gunakan tombol Reset jika ingin kembali ke format standar perusahaan.</li>
-          </ul>
-        </CardContent>
-      </Card>
+      <UsageNotesCard />
     </div>
-  );
-}
-
-type ToolbarButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  icon: LucideIcon;
-  label: string;
-  active?: boolean;
-};
-
-function ToolbarButton({ icon: Icon, label, active, className, ...props }: ToolbarButtonProps) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      className={cn(
-        "flex h-9 items-center rounded-md border px-3 text-sm transition",
-        active ? "border-blue-500 bg-blue-50 text-blue-600" : "border-slate-200 text-slate-500 hover:border-slate-400",
-        className
-      )}
-      {...props}
-    >
-      <Icon className="h-4 w-4" />
-    </button>
   );
 }

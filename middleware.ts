@@ -50,7 +50,7 @@ export async function middleware(req: NextRequest) {
 
   if (pathname === "/") {
     if (!hasValidSession) return NextResponse.next();
-    const redirectPath = role === "AKUNTANSI" ? "/penggajian/gaji-staff" : "/dashboard";
+    const redirectPath = role === "AKUNTANSI" ? "/dashboard/salary/staff" : "/dashboard";
     return NextResponse.redirect(new URL(redirectPath, req.url));
   }
 
@@ -68,7 +68,7 @@ export async function middleware(req: NextRequest) {
     }
 
     if (role === "AKUNTANSI" && !isSalaryPath(pathname)) {
-      return NextResponse.redirect(new URL("/penggajian", req.url));
+      return NextResponse.redirect(new URL("/dashboard/salary/staff", req.url));
     }
   }
 
@@ -80,5 +80,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/dashboard/:path*", "/penggajian/:path*"],
+  matcher: ["/", "/dashboard/:path*"],
 };

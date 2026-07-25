@@ -51,6 +51,22 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        sidebar: {
+          bg: "hsl(var(--sidebar-bg))",
+          surface: "hsl(var(--sidebar-surface))",
+          border: "hsl(var(--sidebar-border))",
+          text: "hsl(var(--sidebar-text))",
+          "text-muted": "hsl(var(--sidebar-text-muted))",
+          active: "hsl(var(--sidebar-active))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -74,4 +90,4 @@ module.exports = {
     },
   },
   plugins: [require("tailwindcss-animate")],
-} 
+}

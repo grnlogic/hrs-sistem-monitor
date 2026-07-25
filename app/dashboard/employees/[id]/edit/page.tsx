@@ -402,7 +402,7 @@ export default function EditEmployeePage() {
     return (
       <div className="flex flex-1 flex-col gap-4 p-4">
         <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zinc-900"></div>
         </div>
       </div>
     );
@@ -439,8 +439,8 @@ export default function EditEmployeePage() {
           </Alert>
         )}
         {success && (
-          <Alert className="border-green-200 bg-green-50">
-            <AlertDescription className="text-green-800">
+          <Alert className="border-zinc-200 bg-zinc-50">
+            <AlertDescription className="text-zinc-900">
               {success}
             </AlertDescription>
           </Alert>
@@ -491,7 +491,7 @@ export default function EditEmployeePage() {
                   />
                 </ReactCrop>
               </div>
-              <p className="text-sm text-gray-600 mt-2">
+              <p className="text-sm text-zinc-600 mt-2">
                 Drag untuk mengatur area crop. Foto akan dipotong menjadi bentuk
                 persegi.
               </p>
@@ -538,7 +538,7 @@ export default function EditEmployeePage() {
                       <Crop className="h-4 w-4 mr-2" />
                       {currentFotoUrl ? "Ganti Foto" : "Pilih & Crop Foto"}
                     </Button>
-                    <span className="text-sm text-gray-500">
+                    <span className="text-sm text-zinc-500">
                       JPG, PNG, GIF (max 10MB) - Akan di-crop menjadi persegi
                     </span>
                   </div>
@@ -557,10 +557,10 @@ export default function EditEmployeePage() {
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-zinc-500">
                       {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
                     </p>
-                    <p className="text-xs text-green-600">
+                    <p className="text-xs text-zinc-700">
                       ✓ Foto sudah di-crop menjadi persegi
                     </p>
                   </div>
@@ -648,7 +648,7 @@ export default function EditEmployeePage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-zinc-500">
                   Lokasi asal karyawan sesuai PKB. Bisa berbeda saat absensi jika dipindahtugaskan.
                 </p>
               </div>
@@ -728,7 +728,7 @@ export default function EditEmployeePage() {
             </div>
             {/* Bagian Opsional */}
             <div className="mt-6 mb-2">
-              <h2 className="text-lg font-semibold mb-2 text-blue-700">
+              <h2 className="text-lg font-semibold mb-2 text-zinc-800">
                 Data Opsional
               </h2>
             </div>
@@ -927,7 +927,7 @@ export default function EditEmployeePage() {
 
             {/* Kontak Darurat Section */}
             <div className="mt-6 mb-2">
-              <h2 className="text-lg font-semibold mb-2 text-orange-700">
+              <h2 className="text-lg font-semibold mb-2 text-zinc-700">
                 Kontak Darurat
               </h2>
             </div>

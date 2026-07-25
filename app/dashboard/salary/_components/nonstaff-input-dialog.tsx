@@ -1,0 +1,400 @@
+"use client";
+
+import { Input } from "@/components/ui/form/input";
+import { Button } from "@/components/ui/form/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/display/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/overlay/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/display/table";
+import { formatCurrency } from "@/lib/utils";
+import { Plus, Trash2, Save } from "lucide-react";
+import {
+  type SnapshotRow,
+  type InputState,
+  type CalculatedSnapshot,
+  buildDefaultInputState,
+  toNumber,
+} from "./nonstaff-salary-shared";
+
+type NonStaffInputDialogProps = {
+  dialogOpen: boolean;
+  setDialogOpen: (open: boolean) => void;
+  selectedSnapshot: SnapshotRow | undefined;
+  startDate: string;
+  endDate: string;
+  inputsBySalaryId: Record<string, InputState>;
+  canEditSalary: boolean;
+  calculatedForSnapshot: (row: SnapshotRow) => CalculatedSnapshot;
+  updateItem: (
+    salaryId: string,
+    key: "bonusItems" | "potonganItems",
+    index: number,
+    field: "judul" | "nominal",
+    value: string
+  ) => void;
+  addItem: (salaryId: string, key: "bonusItems" | "potonganItems") => void;
+  deleteItem: (
+    salaryId: string,
+    key: "bonusItems" | "potonganItems",
+    index: number
+  ) => void;
+  submitting: boolean;
+  saveInputSalary: () => void;
+};
+
+function formatPeriod(startDate: string, endDate: string): string {
+  const format = (iso: string) => {
+    const date = new Date(iso);
+    return date.toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+  };
+  return `${format(startDate)} s/d ${format(endDate)}`;
+}
+
+export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
+  const {
+    dialogOpen,
+    setDialogOpen,
+    selectedSnapshot,
+    startDate,
+    endDate,
+    inputsBySalaryId,
+    canEditSalary,
+    calculatedForSnapshot,
+    updateItem,
+    addItem,
+    deleteItem,
+    submitting,
+    saveInputSalary,
+  } = props;
+
+  return (
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>
+            {selectedSnapshot?.nama} - {selectedSnapshot?.divisi} -{" "}
+            {formatPeriod(startDate, endDate)}
+          </DialogTitle>
+          <DialogDescription>
+            Input bonus dan potongan untuk karyawan ini.
+          </DialogDescription>
+        </DialogHeader>
+
+        {selectedSnapshot ? (
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="pt-6">
+                <p className="mb-2 text-sm font-semibold">
+                  Ringkasan Kehadiran
+                </p>
+                <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-3">
+                  <p>
+                    Hari Hadir:{" "}
+                    <span className="font-semibold">
+                      {selectedSnapshot.hariHadir}
+                    </span>
+                  </p>
+                  <p>
+                    Setengah Hari:{" "}
+                    <span className="font-semibold">
+                      {selectedSnapshot.setengahHari}
+                    </span>
+                  </p>
+                  <p>
+                    Lembur:{" "}
+                    <span className="font-semibold">
+                      {selectedSnapshot.lembur}
+                    </span>
+                  </p>
+                  <p>
+                    Hari Efektif:{" "}
+                    <span className="font-semibold">
+                      {selectedSnapshot.hariEfektif}
+                    </span>
+                  </p>
+                  <p>
+                    Upah Harian:{" "}
+                    <span className="font-semibold">
+                      {formatCurrency(selectedSnapshot.upahHarian)}
+                    </span>
+                  </p>
+                  <p>
+                    Gaji Pokok:{" "}
+                    <span className="font-semibold">
+                      {formatCurrency(selectedSnapshot.gajiPokok)}
+                    </span>
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Bonus</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Judul Bonus</TableHead>
+                      <TableHead>Nominal</TableHead>
+                      <TableHead>Hapus</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(
+                      inputsBySalaryId[selectedSnapshot.gajiId]
+                        ?.bonusItems || []
+                    ).map((item, index) => (
+                      <TableRow key={`bonus-${index}`}>
+                        <TableCell>
+                          <Input
+                            value={item.judul}
+                            disabled={!canEditSalary}
+                            onChange={(event) =>
+                              updateItem(
+                                selectedSnapshot.gajiId,
+                                "bonusItems",
+                                index,
+                                "judul",
+                                event.target.value
+                              )
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder="0"
+                            value={
+                              toNumber(item.nominal) === 0
+                                ? ""
+                                : item.nominal
+                            }
+                            disabled={!canEditSalary}
+                            onChange={(event) =>
+                              updateItem(
+                                selectedSnapshot.gajiId,
+                                "bonusItems",
+                                index,
+                                "nominal",
+                                event.target.value
+                              )
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            disabled={!canEditSalary}
+                            onClick={() =>
+                              deleteItem(
+                                selectedSnapshot.gajiId,
+                                "bonusItems",
+                                index
+                              )
+                            }
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!canEditSalary}
+                  onClick={() =>
+                    addItem(selectedSnapshot.gajiId, "bonusItems")
+                  }
+                  className="mt-2 gap-1 text-primary border-primary/20 hover:bg-primary/5"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Tambah Bonus
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Potongan</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Judul Potongan</TableHead>
+                      <TableHead>Nominal</TableHead>
+                      <TableHead>Hapus</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(
+                      inputsBySalaryId[selectedSnapshot.gajiId]
+                        ?.potonganItems || []
+                    ).map((item, index) => (
+                      <TableRow key={`potongan-${index}`}>
+                        <TableCell>
+                          <Input
+                            value={item.judul}
+                            disabled={item.isDefault}
+                            onChange={(event) =>
+                              updateItem(
+                                selectedSnapshot.gajiId,
+                                "potonganItems",
+                                index,
+                                "judul",
+                                event.target.value
+                              )
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder="0"
+                            value={
+                              toNumber(item.nominal) === 0
+                                ? ""
+                                : item.nominal
+                            }
+                            disabled={!canEditSalary}
+                            onChange={(event) =>
+                              updateItem(
+                                selectedSnapshot.gajiId,
+                                "potonganItems",
+                                index,
+                                "nominal",
+                                event.target.value
+                              )
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            disabled={item.isDefault}
+                            onClick={() =>
+                              deleteItem(
+                                selectedSnapshot.gajiId,
+                                "potonganItems",
+                                index
+                              )
+                            }
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    addItem(selectedSnapshot.gajiId, "potonganItems")
+                  }
+                  className="mt-2 gap-1 text-primary border-primary/20 hover:bg-primary/5"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Tambah Potongan
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Preview Slip Live
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span>Gaji Pokok</span>
+                  <span>
+                    {formatCurrency(selectedSnapshot.gajiPokok)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Total Bonus</span>
+                  <span>
+                    {formatCurrency(
+                      calculatedForSnapshot(selectedSnapshot).totalBonus
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Total Potongan</span>
+                  <span>
+                    {formatCurrency(
+                      calculatedForSnapshot(selectedSnapshot).totalPotongan
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t pt-2 font-semibold">
+                  <span>Gaji Bersih</span>
+                  <span>
+                    {formatCurrency(
+                      calculatedForSnapshot(selectedSnapshot).gajiBersih
+                    )}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        ) : null}
+
+        <DialogFooter className="pt-4 border-t sm:justify-between items-center">
+          <Button variant="ghost" onClick={() => setDialogOpen(false)}>
+            Batal
+          </Button>
+          <Button
+            onClick={saveInputSalary}
+            disabled={submitting || !canEditSalary}
+            className="gap-2 w-full sm:w-auto"
+          >
+            {submitting ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />{" "}
+                Menyimpan...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" /> Simpan Perubahan
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -12,7 +12,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/navigation/tabs";
 import {
   Card,
   CardContent,
@@ -29,7 +29,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/components/ui/form/select";
 import { galleryAPI, resolveMediaUrl, type GaleriItem, type GaleriTipeMedia } from "@/lib/api";
 
 type Lokasi = "PJP" | "SP" | "PRIMA";
@@ -76,8 +76,8 @@ function kindLabel(kind: ArsipKind) {
 
 function kindIcon(kind: ArsipKind) {
   if (kind === "PDF") return <FileText className="h-4 w-4 text-red-600" />;
-  if (kind === "DOC") return <FileText className="h-4 w-4 text-blue-600" />;
-  if (kind === "XLS") return <FileSpreadsheet className="h-4 w-4 text-emerald-600" />;
+  if (kind === "DOC") return <FileText className="h-4 w-4 text-zinc-700" />;
+  if (kind === "XLS") return <FileSpreadsheet className="h-4 w-4 text-zinc-600" />;
   return <Archive className="h-4 w-4 text-muted-foreground" />;
 }
 
@@ -901,16 +901,16 @@ export default function ArsipPage() {
       <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as ArsipFilter)}>
         <TabsList>
           <TabsTrigger value="SEMUA">
-            <Archive className="mr-2 h-4 w-4" /> Semua
+            Semua
           </TabsTrigger>
           <TabsTrigger value="PDF">
-            <FileText className="mr-2 h-4 w-4" /> PDF
+            PDF
           </TabsTrigger>
           <TabsTrigger value="DOC">
-            <FileText className="mr-2 h-4 w-4" /> Word
+            Word
           </TabsTrigger>
           <TabsTrigger value="XLS">
-            <FileSpreadsheet className="mr-2 h-4 w-4" /> Excel
+            Excel
           </TabsTrigger>
         </TabsList>
 

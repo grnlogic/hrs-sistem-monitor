@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/form/select";
-import { ArrowLeft, Save, Clock, Download, Search, CheckCircle2, XCircle } from "lucide-react";
+import { ArrowLeft, Save, Download, Search, CheckCircle2, XCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
 import { attendanceAPI, employeeAPI } from "@/lib/api";
 import { NAMA_PT } from "@/lib/constants/perusahaan";
@@ -393,7 +393,7 @@ export default function NewAttendancePage() {
     return (
       <div className="flex flex-1 flex-col gap-4 p-4">
         <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zinc-900"></div>
         </div>
       </div>
     );
@@ -422,8 +422,8 @@ export default function NewAttendancePage() {
         )}
 
         {submitStats && (
-          <Alert className="border-blue-200 bg-blue-50">
-            <AlertDescription className="text-blue-800">
+          <Alert className="border-zinc-200 bg-zinc-50">
+            <AlertDescription className="text-zinc-900">
               Rekap kirim: Hadir {submitStats.hadirCount}, Setengah Hari {submitStats.setengahHariCount}, Lembur {submitStats.lemburCount},
               Izin {submitStats.izinCount}, Tidak Hadir {submitStats.tidakHadirCount}.
             </AlertDescription>
@@ -432,8 +432,7 @@ export default function NewAttendancePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
+            <CardTitle className="text-sm font-medium">
               Informasi Absensi
             </CardTitle>
             <CardDescription>
@@ -553,27 +552,27 @@ export default function NewAttendancePage() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-              <div className="p-3 rounded border bg-indigo-50 border-indigo-200">
-                <p className="text-xs text-indigo-800">Total Diisi</p>
-                <p className="text-xl font-bold text-indigo-900">{summary.total}</p>
+              <div className="p-3 rounded border bg-zinc-50 border-zinc-200">
+                <p className="text-xs text-zinc-800">Total Diisi</p>
+                <p className="text-xl font-bold text-zinc-900">{summary.total}</p>
               </div>
-              <div className="p-3 rounded border bg-green-50 border-green-200">
-                <p className="text-xs text-green-800">Hadir</p>
-                <p className="text-xl font-bold text-green-900">{summary.hadir}</p>
+              <div className="p-3 rounded border bg-zinc-50 border-zinc-200">
+                <p className="text-xs text-zinc-900">Hadir</p>
+                <p className="text-xl font-bold text-zinc-900">{summary.hadir}</p>
               </div>
-              <div className="p-3 rounded border bg-orange-50 border-orange-200">
-                <p className="text-xs text-orange-800">Setengah Hari</p>
-                <p className="text-xl font-bold text-orange-900">{summary.setengahHari}</p>
+              <div className="p-3 rounded border bg-zinc-50 border-zinc-200">
+                <p className="text-xs text-zinc-800">Setengah Hari</p>
+                <p className="text-xl font-bold text-zinc-900">{summary.setengahHari}</p>
               </div>
-              <div className="p-3 rounded border bg-yellow-50 border-yellow-200">
-                <p className="text-xs text-yellow-800">Lembur</p>
-                <p className="text-xl font-bold text-yellow-900">{summary.lembur}</p>
+              <div className="p-3 rounded border bg-zinc-50 border-zinc-200">
+                <p className="text-xs text-zinc-800">Lembur</p>
+                <p className="text-xl font-bold text-zinc-900">{summary.lembur}</p>
               </div>
-              <div className="p-3 rounded border bg-blue-50 border-blue-200">
-                <p className="text-xs text-blue-800">Izin</p>
-                <p className="text-xl font-bold text-blue-900">{summary.izin}</p>
+              <div className="p-3 rounded border bg-zinc-50 border-zinc-200">
+                <p className="text-xs text-zinc-900">Izin</p>
+                <p className="text-xl font-bold text-zinc-900">{summary.izin}</p>
               </div>
-              <div className="p-3 rounded border bg-red-50 border-red-200">
+              <div className="p-3 rounded border bg-zinc-50 border-zinc-200">
                 <p className="text-xs text-red-800">Tidak Hadir</p>
                 <p className="text-xl font-bold text-red-900">{summary.tidakHadir}</p>
               </div>
@@ -594,13 +593,13 @@ export default function NewAttendancePage() {
                 <TableBody>
                   {!showFilteredEmployees ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-gray-500">
+                      <TableCell colSpan={6} className="text-center py-6 text-zinc-500">
                         Gunakan filter lalu klik Terapkan Filter untuk menampilkan daftar.
                       </TableCell>
                     </TableRow>
                   ) : displayedEmployees.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-gray-500">
+                      <TableCell colSpan={6} className="text-center py-6 text-zinc-500">
                         Tidak ada karyawan sesuai filter.
                       </TableCell>
                     </TableRow>
@@ -617,7 +616,7 @@ export default function NewAttendancePage() {
                         <TableRow key={employee.id}>
                           <TableCell>
                             <div className="font-medium">{employee.namaLengkap}</div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs text-zinc-500">
                               {employee.jabatan} • {employee.departemen}
                             </div>
                           </TableCell>
@@ -676,14 +675,14 @@ export default function NewAttendancePage() {
                             />
                           </TableCell>
                           <TableCell>
-                            <span className="inline-flex min-w-14 justify-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-sm font-medium text-slate-700">
+                            <span className="inline-flex min-w-14 justify-center rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-sm font-medium text-zinc-700">
                               {hitungHariEfektif(rowData.status, rowData.lembur)}
                             </span>
                           </TableCell>
                           <TableCell>
                             {rowData.status === "IZIN" || rowData.status === "TIDAK_HADIR" ? (
                               <div className="space-y-1">
-                                <Label className="text-xs text-gray-500">Keterangan (opsional)</Label>
+                                <Label className="text-xs text-zinc-500">Keterangan (opsional)</Label>
                                 <Input
                                   value={rowData.keterangan}
                                   onChange={(e) =>
@@ -695,7 +694,7 @@ export default function NewAttendancePage() {
                                 />
                               </div>
                             ) : (
-                              <span className="text-sm text-gray-400">-</span>
+                              <span className="text-sm text-zinc-400">-</span>
                             )}
                           </TableCell>
                         </TableRow>
@@ -741,8 +740,8 @@ export default function NewAttendancePage() {
             style={{ animation: "toastPop 220ms ease-out" }}
             className={`flex items-center gap-2 rounded-md border px-4 py-3 text-sm shadow-lg animate-pulse ${
               saveToast.type === "success"
-                ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                : "border-rose-300 bg-rose-50 text-rose-800"
+                ? "border-zinc-300 bg-zinc-50 text-zinc-800"
+                : "border-zinc-300 bg-zinc-50 text-zinc-800"
             }`}
           >
             {saveToast.type === "success" ? (

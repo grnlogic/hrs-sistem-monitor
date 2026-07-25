@@ -2,112 +2,39 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
-import { Badge } from "@/components/ui/display/badge";
-import { Button } from "@/components/ui/form/button";
-import { Input } from "@/components/ui/form/input";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/overlay/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/display/table";
+  CheckCircle2,
+  ArrowRight,
+} from "lucide-react";
 import { attendanceAPI, employeeAPI, generateSalaryAPI, salaryAPI, setAuthToken } from "@/lib/api";
 import { exportSalaryRecapPdf, exportSalarySlipsPdf, type SalarySlipPayload } from "@/lib/salary-slip-pdf";
-import { formatCurrency } from "@/lib/utils";
 
-type PageType = "staff" | "nonstaff";
-type Step = 1 | 2 | 3;
-type WorkflowStatus = "DRAFT" | "GENERATED" | "INPUT_DONE" | "EXPORTED";
+// Shared types and utilities
+import {
+  type PageType,
+  type Step,
+  type WorkflowStatus,
+  type EmployeeRow,
+  type SalaryRow,
+  type AttendanceSummary,
+  type SalaryItem,
+  type SalaryInputState,
+  type EstimatedRow,
+  type CalculatedRow,
+  fixedBonusTemplate,
+  fixedPotonganTemplate,
+  monthOptions,
+  toNumber,
+  buildDefaultInputState,
+} from "./salary-stepper-shared";
 
-type EmployeeRow = {
-  id: string;
-  namaLengkap: string;
-  departemen: string;
-  statusKaryawan: string;
-  gajiPerBulan: number;
-  gajiPerHari: number;
-  bpjsGabunganNominal?: number;
-  lokasiKerja?: string;
-};
+// Extracted step / dialog components
+import { StaffStep1Generate } from "./staff-step1-generate";
+import { StaffStep2BonusPotongan } from "./staff-step2-bonus-potongan";
+import { StaffStep3Export } from "./staff-step3-export";
+import { StaffInputDialog } from "./staff-input-dialog";
 
-type SalaryRow = {
-  id: string;
-  karyawanId: string;
-  nama: string;
-  divisi: string;
-  statusKaryawan: string;
-  gajiPokok: number;
-  lokasiKerja?: string;
-};
-
-type AttendanceSummary = {
-  hadir: number;
-  setengahHari: number;
-  lembur: number;
-  lokasiCount?: Record<"PJP" | "SP" | "PRIMA", number>;
-};
-
-type SalaryItem = {
-  id?: string;
-  judul: string;
-  nominal: number;
-  isDefault?: boolean;
-};
-
-type SalaryInputState = {
-  bonusItems: SalaryItem[];
-  potonganItems: SalaryItem[];
-  // TODO: integrasi PKB akan ditambahkan
-  bonusPKB: number | null;
-};
-
-const fixedBonusTemplate: SalaryItem[] = [{ judul: "Bonus", nominal: 0, isDefault: true }];
-
-const fixedPotonganTemplate: SalaryItem[] = [
-  { judul: "Pinjaman", nominal: 0, isDefault: true },
-  { judul: "Sumbangan", nominal: 0, isDefault: true },
-  { judul: "BPJS", nominal: 0, isDefault: true },
-  { judul: "Undangan", nominal: 0, isDefault: true },
-  { judul: "Warung", nominal: 0, isDefault: true },
-];
-
-function buildDefaultInputState(): SalaryInputState {
-  return {
-    bonusItems: fixedBonusTemplate.map((item) => ({ ...item })),
-    potonganItems: fixedPotonganTemplate.map((item) => ({ ...item })),
-    bonusPKB: null,
-  };
-}
-
-const monthOptions = [
-  { value: 1, label: "Januari" },
-  { value: 2, label: "Februari" },
-  { value: 3, label: "Maret" },
-  { value: 4, label: "April" },
-  { value: 5, label: "Mei" },
-  { value: 6, label: "Juni" },
-  { value: 7, label: "Juli" },
-  { value: 8, label: "Agustus" },
-  { value: 9, label: "September" },
-  { value: 10, label: "Oktober" },
-  { value: 11, label: "November" },
-  { value: 12, label: "Desember" },
-];
-
-function toNumber(value: unknown): number {
-  const parsed = Number(value || 0);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
+/* ---------- Helper functions (stay in parent) ---------- */
 
 function resolveEmployeeName(row: any): string {
   const directName = row?.karyawan?.namaLengkap || row?.karyawan?.nama_lengkap || row?.nama || row?.namaLengkap;
@@ -179,6 +106,8 @@ function hasFirstWeekDayInRange(startDate: string, endDate: string) {
 
   return false;
 }
+
+/* ---------- Main component ---------- */
 
 export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
   const { data: session, status } = useSession();
@@ -462,7 +391,7 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, session?.accessToken, pageType, periodDependency, role, inputDoneBySalaryId]);
 
-  async function handleGenerate() {
+  async function handleGenerate(selectedDivisions?: string[]) {
     setSubmitting(true);
     setError("");
     setMessage("");
@@ -473,7 +402,7 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
       }
 
       if (pageType === "staff") {
-        await generateSalaryAPI.generateStaffBulanan(monthPeriod);
+        await generateSalaryAPI.generateStaffBulanan(monthPeriod, selectedDivisions);
       } else {
         if (!nonStaffStartDate || !nonStaffEndDate) {
           throw new Error("Tanggal mulai dan tanggal akhir wajib diisi.");
@@ -583,7 +512,7 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
     });
   }
 
-  function calculatedRow(row: SalaryRow) {
+  function calculatedRow(row: SalaryRow): CalculatedRow {
     const inputState = inputsBySalaryId[row.id] || buildDefaultInputState();
     const totalBonus = inputState.bonusItems.reduce((sum, item) => sum + toNumber(item.nominal), 0);
     const totalPotongan = inputState.potonganItems.reduce((sum, item) => sum + toNumber(item.nominal), 0);
@@ -719,447 +648,126 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
   }
 
   return (
-    <div className="space-y-6 p-6 text-slate-900">
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
+    <div className="space-y-6 p-6">
+      <div className="rounded-lg border bg-card p-4">
         <h1 className="text-xl font-semibold">
           {pageType === "staff" ? "Gaji Staff" : "Gaji Non-Staff"}
         </h1>
-        <p className="mt-1 text-sm text-slate-600">
+        <p className="mt-1 text-sm text-muted-foreground">
           Status periode: <span className="font-semibold">{workflowStatus}</span> | Periode: <span className="font-semibold">{periodLabel}</span>
         </p>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          {[1, 2, 3].map((step) => {
-            const done = activeStep > step || (step === 3 && workflowStatus === "EXPORTED");
-            const active = activeStep === step;
+      <div className="rounded-lg border bg-card p-4">
+        <div className="flex flex-col md:flex-row items-center gap-4">
+          {[
+            { id: 1, label: "Generate", desc: "Tarik data absensi" },
+            { id: 2, label: "Input Bonus & Potongan", desc: "Sesuaikan gaji" },
+            { id: 3, label: "Export PDF", desc: "Cetak slip & rekap" }
+          ].map((s, i, arr) => {
+            const stepId = s.id as Step;
+            const done = activeStep > stepId || (stepId === 3 && workflowStatus === "EXPORTED");
+            const active = activeStep === stepId;
+            const clickable = done || active;
             return (
-              <button
-                key={step}
-                type="button"
-                className="border-b border-slate-200 pb-2 text-left"
-                onClick={() => setActiveStep(step as Step)}
-              >
-                <div className="flex items-center gap-2 text-sm">
-                  <span className={active ? "font-bold" : "font-medium text-slate-600"}>
-                    {done ? "✓" : `${step}.`} {step === 1 ? "Generate" : step === 2 ? "Input Bonus & Potongan" : "Export"}
-                  </span>
-                </div>
-                {active && <div className="mt-1 h-0.5 w-24 bg-slate-900" />}
-              </button>
+              <div key={s.id} className="flex items-center w-full">
+                <button
+                  type="button"
+                  onClick={() => { if (clickable) setActiveStep(stepId); }}
+                  className={`flex items-center gap-3 w-full p-3 rounded-lg transition-all duration-200 ${
+                    active ? "bg-primary/10 border border-primary/20 shadow-sm" : 
+                    done ? "hover:bg-accent border border-transparent cursor-pointer" : 
+                    "opacity-50 cursor-not-allowed border border-transparent"
+                  }`}
+                >
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm shrink-0 ${
+                    active ? "bg-primary text-primary-foreground shadow-sm" :
+                    done ? "bg-success text-success-foreground" :
+                    "bg-muted text-muted-foreground"
+                  }`}>
+                    {done && !active ? <CheckCircle2 className="w-5 h-5" /> : s.id}
+                  </div>
+                  <div className="text-left">
+                    <p className={`text-sm font-bold ${active ? "text-primary" : "text-foreground"}`}>{s.label}</p>
+                    <p className="text-xs text-muted-foreground hidden sm:block">{s.desc}</p>
+                  </div>
+                </button>
+                {i < arr.length - 1 && (
+                  <ArrowRight className="hidden md:block mx-2 text-muted-foreground/40 w-5 h-5 shrink-0" />
+                )}
+              </div>
             );
           })}
         </div>
       </div>
 
-      {error && <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-red-600">{error}</div>}
-      {message && <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">{message}</div>}
+      {error && <div className="rounded-lg border bg-card p-3 text-sm text-destructive">{error}</div>}
+      {message && <div className="rounded-lg border bg-card p-3 text-sm text-foreground">{message}</div>}
 
       {activeStep === 1 && (
-      <section className="rounded-lg border border-slate-200 bg-white p-4">
-        <h2 className="text-base font-semibold">Fase 1. Generate</h2>
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-          {pageType === "staff" ? (
-            <>
-              <div>
-                <label className="mb-1 block text-sm text-slate-700">Bulan</label>
-                <select
-                  className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                >
-                  {monthOptions.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-700">Tahun</label>
-                <select
-                  className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(Number(e.target.value))}
-                >
-                  {years.map((year) => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
-              </div>
-            </>
-          ) : (
-            <>
-              <div>
-                <label className="mb-1 block text-sm text-slate-700">Dari Tanggal</label>
-                <Input
-                  type="date"
-                  value={nonStaffStartDate}
-                  onChange={(e) => setNonStaffStartDate(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-700">Sampai Tanggal</label>
-                <Input
-                  type="date"
-                  value={nonStaffEndDate}
-                  onChange={(e) => setNonStaffEndDate(e.target.value)}
-                />
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="mt-4 overflow-x-auto rounded-md border border-slate-200">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nama</TableHead>
-                <TableHead>Divisi</TableHead>
-                {pageType === "staff" ? (
-                  <>
-                    <TableHead>Status Karyawan</TableHead>
-                    <TableHead>Gaji Pokok</TableHead>
-                  </>
-                ) : (
-                  <>
-                    <TableHead>Upah Harian</TableHead>
-                    <TableHead>Hari Hadir</TableHead>
-                    <TableHead>Setengah Hari</TableHead>
-                    <TableHead>Lembur</TableHead>
-                    <TableHead>Estimasi Gaji</TableHead>
-                  </>
-                )}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading && (
-                <TableRow>
-                  <TableCell colSpan={pageType === "staff" ? 4 : 8}>Memuat data...</TableCell>
-                </TableRow>
-              )}
-              {!loading && estimatedRows.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={pageType === "staff" ? 4 : 8}>Tidak ada data karyawan.</TableCell>
-                </TableRow>
-              )}
-              {!loading &&
-                estimatedRows.map((row) => {
-                  if (pageType === "staff") {
-                    return (
-                      <TableRow key={row.karyawanId}>
-                        <TableCell>{row.nama}</TableCell>
-                        <TableCell>{row.divisi}</TableCell>
-                        <TableCell>{"statusKaryawan" in row ? row.statusKaryawan : "-"}</TableCell>
-                        <TableCell>{formatCurrency(row.gajiPokok)}</TableCell>
-                      </TableRow>
-                    );
-                  }
-
-                  const employee = employees.find((item) => item.id === row.karyawanId);
-                  const summary = attendanceFor(row.karyawanId);
-                  const canEdit = role === "HRD" && workflowStatus === "DRAFT";
-
-                  return (
-                    <TableRow key={row.karyawanId}>
-                      <TableCell>{row.nama}</TableCell>
-                      <TableCell>{row.divisi}</TableCell>
-                      <TableCell>{formatCurrency(toNumber(employee?.gajiPerHari))}</TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          min={0}
-                          disabled={!canEdit}
-                          className="h-8 w-20"
-                          value={summary.hadir}
-                          onChange={(e) =>
-                            setAttendanceOverrides((prev) => ({
-                              ...prev,
-                              [row.karyawanId]: { ...summary, hadir: toNumber(e.target.value) },
-                            }))
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          min={0}
-                          disabled={!canEdit}
-                          className="h-8 w-20"
-                          value={summary.setengahHari}
-                          onChange={(e) =>
-                            setAttendanceOverrides((prev) => ({
-                              ...prev,
-                              [row.karyawanId]: { ...summary, setengahHari: toNumber(e.target.value) },
-                            }))
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          min={0}
-                          disabled={!canEdit}
-                          className="h-8 w-20"
-                          value={summary.lembur}
-                          onChange={(e) =>
-                            setAttendanceOverrides((prev) => ({
-                              ...prev,
-                              [row.karyawanId]: { ...summary, lembur: toNumber(e.target.value) },
-                            }))
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>{formatCurrency(toNumber(row.gajiPokok))}</TableCell>
-                    </TableRow>
-                  );
-                })}
-            </TableBody>
-          </Table>
-        </div>
-
-        <div className="mt-4 flex justify-end">
-          <Button onClick={handleGenerate} disabled={!canGenerate || submitting}>
-            {submitting ? "Memproses..." : "Generate"}
-          </Button>
-        </div>
-      </section>
+        <StaffStep1Generate
+          pageType={pageType}
+          selectedMonth={selectedMonth}
+          setSelectedMonth={setSelectedMonth}
+          selectedYear={selectedYear}
+          setSelectedYear={setSelectedYear}
+          nonStaffStartDate={nonStaffStartDate}
+          setNonStaffStartDate={setNonStaffStartDate}
+          nonStaffEndDate={nonStaffEndDate}
+          setNonStaffEndDate={setNonStaffEndDate}
+          years={years}
+          loading={loading}
+          estimatedRows={estimatedRows}
+          employees={employees}
+          attendanceFor={attendanceFor}
+          setAttendanceOverrides={setAttendanceOverrides}
+          workflowStatus={workflowStatus}
+          role={role}
+          canGenerate={canGenerate}
+          submitting={submitting}
+          handleGenerate={handleGenerate}
+        />
       )}
 
       {activeStep === 2 && (
-      <section className="rounded-lg border border-slate-200 bg-white p-4">
-        <h2 className="text-base font-semibold">Fase 2. Input Bonus & Potongan</h2>
-
-        <div className="mt-4 overflow-x-auto rounded-md border border-slate-200">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nama</TableHead>
-                <TableHead>Divisi</TableHead>
-                <TableHead>Gaji Pokok</TableHead>
-                <TableHead>Status Input</TableHead>
-                <TableHead>Aksi</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {generatedRows.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5}>Belum ada data generate untuk periode ini.</TableCell>
-                </TableRow>
-              )}
-              {generatedRows.map((row) => {
-                const calc = calculatedRow(row);
-                return (
-                  <TableRow key={row.id}>
-                    <TableCell>{row.nama}</TableCell>
-                    <TableCell>{row.divisi}</TableCell>
-                    <TableCell>{formatCurrency(calc.gajiPokok)}</TableCell>
-                    <TableCell>
-                      {inputDoneBySalaryId[row.id] ? <Badge>Selesai</Badge> : <Badge variant="secondary">Belum</Badge>}
-                    </TableCell>
-                    <TableCell>
-                      <Button variant="outline" size="sm" onClick={() => openInputDialog(row)}>
-                        {phase2ReadOnly ? "Lihat" : "Input"}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-
-        {allInputDone && (
-          <div className="mt-4">
-            <Button variant="outline" disabled={!canPhase2Action} onClick={() => setActiveStep(3)}>
-              Lanjut ke Export
-            </Button>
-          </div>
-        )}
-      </section>
+        <StaffStep2BonusPotongan
+          generatedRows={generatedRows}
+          inputDoneBySalaryId={inputDoneBySalaryId}
+          calculatedRow={calculatedRow}
+          openInputDialog={openInputDialog}
+          phase2ReadOnly={phase2ReadOnly}
+          canPhase2Action={canPhase2Action}
+          allInputDone={allInputDone}
+          setActiveStep={setActiveStep}
+        />
       )}
 
       {activeStep === 3 && (
-      <section className="rounded-lg border border-slate-200 bg-white p-4">
-        <h2 className="text-base font-semibold">Fase 3. Export PDF</h2>
-
-        <div className="mt-4 overflow-x-auto rounded-md border border-slate-200">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nama</TableHead>
-                <TableHead>Divisi</TableHead>
-                {pageType === "nonstaff" && <TableHead>Hari Efektif</TableHead>}
-                {pageType === "nonstaff" && <TableHead>Upah Harian</TableHead>}
-                <TableHead>Gaji Pokok</TableHead>
-                <TableHead>Total Bonus</TableHead>
-                <TableHead>Total Potongan</TableHead>
-                <TableHead>Gaji Bersih</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {generatedRows.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={pageType === "staff" ? 6 : 8}>Belum ada data untuk export.</TableCell>
-                </TableRow>
-              )}
-              {generatedRows.map((row) => {
-                const calc = calculatedRow(row);
-                return (
-                  <TableRow key={`rekap-${row.id}`}>
-                    <TableCell>{row.nama}</TableCell>
-                    <TableCell>{row.divisi}</TableCell>
-                    {pageType === "nonstaff" && <TableCell>{calc.hariEfektif ?? "-"}</TableCell>}
-                    {pageType === "nonstaff" && <TableCell>{calc.upahHarian ? formatCurrency(calc.upahHarian) : "-"}</TableCell>}
-                    <TableCell>{formatCurrency(calc.gajiPokok)}</TableCell>
-                    <TableCell>{formatCurrency(calc.totalBonus)}</TableCell>
-                    <TableCell>{formatCurrency(calc.totalPotongan)}</TableCell>
-                    <TableCell>{formatCurrency(calc.gajiBersih)}</TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button variant="outline" disabled={!canPhase3Action || generatedRows.length === 0} onClick={exportSlipsPerKaryawan}>
-            Export Slip Gabungan (15 per halaman)
-          </Button>
-          <Button variant="outline" disabled={!canPhase3Action || generatedRows.length === 0} onClick={exportRekapSemua}>
-            Export Rekap Semua
-          </Button>
-        </div>
-      </section>
+        <StaffStep3Export
+          pageType={pageType}
+          generatedRows={generatedRows}
+          calculatedRow={calculatedRow}
+          canPhase3Action={canPhase3Action}
+          exportSlipsPerKaryawan={exportSlipsPerKaryawan}
+          exportRekapSemua={exportRekapSemua}
+        />
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedSalary?.nama} - {selectedSalary?.divisi} - {periodLabel}
-            </DialogTitle>
-            <DialogDescription>Input bonus dan potongan.</DialogDescription>
-          </DialogHeader>
-
-          {selectedSalary && (
-            <div className="space-y-4">
-              {pageType === "nonstaff" && (
-                <div className="rounded-md border border-slate-200 p-3 text-sm">
-                  <p className="font-medium">Ringkasan Kehadiran</p>
-                  <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-3">
-                    <p>Hari Hadir: <span className="font-semibold">{attendanceFor(selectedSalary.karyawanId).hadir}</span></p>
-                    <p>Setengah Hari: <span className="font-semibold">{attendanceFor(selectedSalary.karyawanId).setengahHari}</span></p>
-                    <p>Lembur: <span className="font-semibold">{attendanceFor(selectedSalary.karyawanId).lembur}</span></p>
-                    <p>Hari Efektif: <span className="font-semibold">{calculatedRow(selectedSalary).hariEfektif ?? 0}</span></p>
-                    <p>Upah Harian: <span className="font-semibold">{formatCurrency(calculatedRow(selectedSalary).upahHarian || 0)}</span></p>
-                    <p>Gaji Pokok: <span className="font-semibold">{formatCurrency(calculatedRow(selectedSalary).gajiPokok)}</span></p>
-                    {(selectedSalary.divisi || "").toLowerCase().includes("blending") && (
-                      <p>
-                        Tunjangan Blending: <span className="font-semibold">
-                          {formatCurrency(
-                            calculatedRow(selectedSalary).tunjanganItems.reduce((sum, item) => sum + item.nominal, 0)
-                          )}
-                        </span>
-                      </p>
-                    )}
-                  </div>
-                  <div className="mt-2">
-                    <label className="mb-1 block text-sm text-slate-700">Bonus PKB (Segera Hadir)</label>
-                    <Input disabled value="-" />
-                  </div>
-                </div>
-              )}
-
-              <div className="rounded-md border border-slate-200 p-3">
-                <p className="mb-2 text-sm font-medium">Bonus</p>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Komponen</TableHead>
-                      <TableHead>Nominal</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(inputsBySalaryId[selectedSalary.id]?.bonusItems || []).map((item, index) => (
-                      <TableRow key={`bonus-${index}`}>
-                        <TableCell>
-                          <p className="font-medium text-slate-700">{item.judul}</p>
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            disabled={phase2ReadOnly}
-                            type="number"
-                            min={0}
-                            value={item.nominal}
-                            onChange={(e) => updateItem(selectedSalary.id, "bonusItems", index, "nominal", e.target.value)}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <div className="rounded-md border border-slate-200 p-3">
-                <p className="mb-2 text-sm font-medium">Potongan</p>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Komponen</TableHead>
-                      <TableHead>Nominal</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(inputsBySalaryId[selectedSalary.id]?.potonganItems || []).map((item, index) => (
-                      <TableRow key={`potongan-${index}`}>
-                        <TableCell>
-                          <p className="font-medium text-slate-700">{item.judul}</p>
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            disabled={phase2ReadOnly}
-                            type="number"
-                            min={0}
-                            value={item.nominal}
-                            onChange={(e) => updateItem(selectedSalary.id, "potonganItems", index, "nominal", e.target.value)}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <div className="rounded-md border border-slate-200 p-3 text-sm">
-                <p className="font-medium">Preview Slip</p>
-                <div className="mt-2 space-y-1">
-                  <div className="flex justify-between">
-                    <span>Gaji Pokok</span>
-                    <span>{formatCurrency(calculatedRow(selectedSalary).gajiPokok)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Total Bonus</span>
-                    <span>{formatCurrency(calculatedRow(selectedSalary).totalBonus)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Total Potongan</span>
-                    <span>{formatCurrency(calculatedRow(selectedSalary).totalPotongan)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-slate-200 pt-2 font-semibold">
-                    <span>Gaji Bersih</span>
-                    <span>{formatCurrency(calculatedRow(selectedSalary).gajiBersih)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDialogOpen(false)}>Batal</Button>
-            <Button onClick={saveInputSalary} disabled={!canPhase2Action || submitting}>Simpan</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <StaffInputDialog
+        pageType={pageType}
+        dialogOpen={dialogOpen}
+        setDialogOpen={setDialogOpen}
+        selectedSalary={selectedSalary}
+        periodLabel={periodLabel}
+        inputsBySalaryId={inputsBySalaryId}
+        attendanceFor={attendanceFor}
+        calculatedRow={calculatedRow}
+        updateItem={updateItem}
+        phase2ReadOnly={phase2ReadOnly}
+        canPhase2Action={canPhase2Action}
+        submitting={submitting}
+        saveInputSalary={saveInputSalary}
+      />
     </div>
   );
 }

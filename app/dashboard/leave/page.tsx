@@ -38,9 +38,7 @@ import {
   Eye,
   Check,
   X,
-  Calendar,
   Users,
-  Clock,
 } from "lucide-react";
 import {
   Select,
@@ -171,9 +169,9 @@ export default function LeavePage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "APPROVED":
-        return <Badge className="bg-green-100 text-green-800">Disetujui</Badge>;
+        return <Badge className="bg-zinc-100 text-zinc-900">Disetujui</Badge>;
       case "PENDING":
-        return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>;
+        return <Badge className="bg-zinc-100 text-zinc-800">Pending</Badge>;
       case "REJECTED":
         return <Badge variant="destructive">Ditolak</Badge>;
       default:
@@ -185,16 +183,16 @@ export default function LeavePage() {
     switch (type) {
       case "CUTI_TAHUNAN":
         return (
-          <Badge className="bg-blue-100 text-blue-800">Cuti Tahunan</Badge>
+          <Badge className="bg-zinc-100 text-zinc-900">Cuti Tahunan</Badge>
         );
       case "CUTI_MELAHIRKAN":
         return (
-          <Badge className="bg-purple-100 text-purple-800">
+          <Badge className="bg-zinc-100 text-zinc-800">
             Cuti Melahirkan
           </Badge>
         );
       case "CUTI_LAINNYA":
-        return <Badge className="bg-orange-100 text-orange-800">Cuti Lainnya</Badge>;
+        return <Badge className="bg-zinc-100 text-zinc-800">Cuti Lainnya</Badge>;
       default:
         return <Badge variant="outline">{type}</Badge>;
     }
@@ -250,7 +248,6 @@ export default function LeavePage() {
             <CardTitle className="text-sm font-medium">
               Total Pengajuan
             </CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{leaveStats.total}</div>
@@ -260,10 +257,10 @@ export default function LeavePage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Disetujui</CardTitle>
-            <div className="h-2 w-2 rounded-full bg-green-500" />
+            <div className="h-2 w-2 rounded-full bg-zinc-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold text-zinc-700">
               {leaveStats.approved}
             </div>
             <p className="text-xs text-muted-foreground">Pengajuan</p>
@@ -272,10 +269,10 @@ export default function LeavePage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <div className="h-2 w-2 rounded-full bg-yellow-500" />
+            <div className="h-2 w-2 rounded-full bg-zinc-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">
+            <div className="text-2xl font-bold text-zinc-600">
               {leaveStats.pending}
             </div>
             <p className="text-xs text-muted-foreground">Pengajuan</p>
@@ -284,7 +281,7 @@ export default function LeavePage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Ditolak</CardTitle>
-            <div className="h-2 w-2 rounded-full bg-red-500" />
+            <div className="h-2 w-2 rounded-full bg-zinc-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
@@ -310,7 +307,6 @@ export default function LeavePage() {
             <CardTitle className="text-sm font-medium">
               Batas Cuti/Tahun
             </CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{maxConfiguredLimit || 12}</div>
@@ -332,7 +328,7 @@ export default function LeavePage() {
         <CardContent>
           <div className="flex gap-4 mb-6">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-400" />
               <Input
                 placeholder="Cari berdasarkan nama atau NIP..."
                 value={searchTerm}
@@ -446,14 +442,14 @@ export default function LeavePage() {
                                   <span className="text-sm font-medium">
                                     {sisa}/{batas} hari
                                   </span>
-                                  <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                                  <div className="w-16 bg-zinc-200 rounded-full h-1.5">
                                     <div
                                       className={`h-1.5 rounded-full ${
                                         sisa > batas / 2
-                                          ? "bg-green-500"
+                                          ? "bg-zinc-500"
                                           : sisa > batas / 4
-                                          ? "bg-yellow-500"
-                                          : "bg-red-500"
+                                          ? "bg-zinc-500"
+                                          : "bg-zinc-500"
                                       }`}
                                       style={{ width: `${persen}%` }}
                                     ></div>
@@ -463,7 +459,7 @@ export default function LeavePage() {
                             })()}
                           </div>
                         ) : (
-                          <span className="text-sm text-gray-400">-</span>
+                          <span className="text-sm text-zinc-400">-</span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
@@ -482,7 +478,7 @@ export default function LeavePage() {
                             {leave.status === "PENDING" && (
                               <>
                                 <DropdownMenuItem
-                                  className="text-green-600"
+                                  className="text-zinc-700"
                                   onClick={() => handleApprove(leave.id)}
                                 >
                                   <Check className="mr-2 h-4 w-4" />
@@ -520,7 +516,7 @@ export default function LeavePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6 space-y-4">
             <h3 className="text-lg font-semibold">Tolak Pengajuan Cuti</h3>
-            <p className="text-sm text-slate-500">Masukkan alasan penolakan untuk karyawan ini.</p>
+            <p className="text-sm text-zinc-500">Masukkan alasan penolakan untuk karyawan ini.</p>
             <textarea
               className="w-full border rounded-lg p-3 text-sm min-h-[80px] focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Alasan penolakan..."

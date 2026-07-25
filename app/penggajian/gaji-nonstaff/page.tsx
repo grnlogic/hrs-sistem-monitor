@@ -1,5 +1,5 @@
-import { NonStaffSalaryWorkflow } from "@/app/dashboard/salary/_components/nonstaff-salary-workflow";
+import { redirect } from "next/navigation";
 
 export default function PenggajianNonStaffPage() {
-  return <NonStaffSalaryWorkflow />;
+  redirect("/dashboard/salary/non-staff");
 }

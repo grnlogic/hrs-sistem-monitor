@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/form/select";
 import { Textarea } from "@/components/ui/form/textarea";
-import { ArrowLeft, Save, Calendar, Clock } from "lucide-react";
+import { ArrowLeft, Save } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
 import { leaveAPI, employeeAPI } from "@/lib/api";
 
@@ -186,8 +186,8 @@ export default function NewLeavePage() {
         )}
 
         {success && (
-          <Alert className="border-green-200 bg-green-50">
-            <AlertDescription className="text-green-800">
+          <Alert className="border-zinc-200 bg-zinc-50">
+            <AlertDescription className="text-zinc-900">
               {success}
             </AlertDescription>
           </Alert>
@@ -195,8 +195,7 @@ export default function NewLeavePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
+            <CardTitle>
               Informasi Cuti
             </CardTitle>
             <CardDescription>Masukkan detail pengajuan cuti</CardDescription>
@@ -284,8 +283,8 @@ export default function NewLeavePage() {
               <div
                 className={`text-sm rounded-md border px-3 py-2 ${
                   Number(leaveInfo.sisaCuti || 0) > 0
-                    ? "border-green-200 bg-green-50 text-green-700"
-                    : "border-red-200 bg-red-50 text-red-700"
+                    ? "border-zinc-200 bg-zinc-50 text-zinc-800"
+                    : "border-zinc-200 bg-zinc-50 text-red-700"
                 }`}
               >
                 Sisa jatah cuti tahunan: {Number(leaveInfo.sisaCuti || 0)} hari
@@ -315,8 +314,7 @@ export default function NewLeavePage() {
         {leaveInfo && (
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5" />
+              <CardTitle>
                 Informasi Sisa Cuti
               </CardTitle>
               <CardDescription>
@@ -325,47 +323,47 @@ export default function NewLeavePage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">
+                <div className="text-center p-4 bg-zinc-50 rounded-lg">
+                  <div className="text-2xl font-bold text-zinc-700">
                     {leaveInfo.jumlahCutiTahunIni}
                   </div>
-                  <div className="text-sm text-blue-600">Hari Cuti Diambil</div>
+                  <div className="text-sm text-zinc-700">Hari Cuti Diambil</div>
                 </div>
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">
+                <div className="text-center p-4 bg-zinc-50 rounded-lg">
+                  <div className="text-2xl font-bold text-zinc-700">
                     {leaveInfo.sisaCuti}
                   </div>
-                  <div className="text-sm text-green-600">Sisa Hari Cuti</div>
+                  <div className="text-sm text-zinc-700">Sisa Hari Cuti</div>
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-2xl font-bold text-gray-600">
+                <div className="text-center p-4 bg-zinc-50 rounded-lg">
+                  <div className="text-2xl font-bold text-zinc-600">
                     {leaveInfo.batasMaksimal}
                   </div>
-                  <div className="text-sm text-gray-600">Batas Maksimal</div>
+                  <div className="text-sm text-zinc-600">Batas Maksimal</div>
                 </div>
               </div>
               <div className="mt-4">
-                <div className="w-full bg-gray-200 rounded-full h-3">
+                <div className="w-full bg-zinc-200 rounded-full h-3">
                   <div
                     className={`h-3 rounded-full ${
                       leaveInfo.sisaCuti > 6
-                        ? "bg-green-500"
+                        ? "bg-zinc-500"
                         : leaveInfo.sisaCuti > 3
-                        ? "bg-yellow-500"
-                        : "bg-red-500"
+                        ? "bg-zinc-500"
+                        : "bg-zinc-500"
                     }`}
                     style={{
                       width: `${leavePercent}%`,
                     }}
                   ></div>
                 </div>
-                <p className="text-xs text-gray-500 mt-2 text-center">
+                <p className="text-xs text-zinc-500 mt-2 text-center">
                   {leavePercent}% sisa hari cuti tersedia
                 </p>
               </div>
-              <div className="mt-4 border rounded-lg p-4 bg-slate-50">
+              <div className="mt-4 border rounded-lg p-4 bg-zinc-50">
                 <div className="text-sm font-medium mb-2">Catatan</div>
-                <p className="text-xs text-slate-600">
+                <p className="text-xs text-zinc-600">
                   Jatah cuti tahunan mengikuti ketentuan perusahaan: 12 hari per tahun dan reset pada tahun baru.
                 </p>
               </div>

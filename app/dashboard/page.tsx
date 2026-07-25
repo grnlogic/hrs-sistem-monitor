@@ -133,15 +133,15 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="p-6 space-y-6 max-w-6xl mx-auto">
-        <div className="h-8 bg-slate-200 rounded w-48 animate-pulse" />
+        <div className="h-8 bg-zinc-200 rounded w-48 animate-pulse" />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-28 bg-slate-100 rounded-xl animate-pulse" />
+            <div key={i} className="h-28 bg-zinc-100 rounded-xl animate-pulse" />
           ))}
         </div>
         <div className="grid lg:grid-cols-2 gap-4">
           {[...Array(2)].map((_, i) => (
-            <div key={i} className="h-64 bg-slate-100 rounded-xl animate-pulse" />
+            <div key={i} className="h-64 bg-zinc-100 rounded-xl animate-pulse" />
           ))}
         </div>
       </div>
@@ -155,7 +155,7 @@ export default function DashboardPage() {
           <CardContent className="pt-6 text-center">
             <AlertTriangle className="h-10 w-10 mx-auto mb-3 text-red-500" />
             <p className="font-semibold text-red-600">Error</p>
-            <p className="text-sm text-slate-500 mt-1">{error}</p>
+            <p className="text-sm text-zinc-500 mt-1">{error}</p>
           </CardContent>
         </Card>
       </div>
@@ -167,7 +167,7 @@ export default function DashboardPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
+        <p className="text-sm text-zinc-500 mt-0.5">
           Ringkasan sistem HRD — {new Date().toLocaleDateString("id-ID", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
         </p>
       </div>
@@ -176,8 +176,8 @@ export default function DashboardPage() {
       <Card>
         <CardContent className="pt-5 pb-4">
           <div className="mb-4">
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Mulai Kerja Hari Ini</p>
-            <p className="text-sm text-slate-600 mt-1">Akses fitur yang paling sering dipakai dulu, lalu scroll ke bawah untuk summary analisis.</p>
+            <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Mulai Kerja Hari Ini</p>
+            <p className="text-sm text-zinc-600 mt-1">Akses fitur yang paling sering dipakai dulu, lalu scroll ke bawah untuk summary analisis.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link href="/dashboard/employees/new">
@@ -204,8 +204,8 @@ export default function DashboardPage() {
 
       {/* Summary Section */}
       <div>
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Summary Analisis</p>
-        <p className="text-sm text-slate-600 mt-1">Gunakan data berikut untuk monitoring, analisis tren, dan bahan rapat.</p>
+        <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Summary Analisis</p>
+        <p className="text-sm text-zinc-600 mt-1">Gunakan data berikut untuk monitoring, analisis tren, dan bahan rapat.</p>
       </div>
 
       {/* Stat Cards */}
@@ -260,18 +260,18 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {recentAttendance.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-6">Belum ada data absensi</p>
+              <p className="text-sm text-zinc-400 text-center py-6">Belum ada data absensi</p>
             ) : (
               recentAttendance.map((a: any) => (
-                <div key={a.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
+                <div key={a.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-zinc-50">
                   <div className="flex items-center gap-2.5">
                     <div className={`w-2 h-2 rounded-full ${
-                      isStatus(a.status, "Hadir", "Present", "HADIR", "LEMBUR") ? "bg-green-500" :
-                      isStatus(a.status, "Terlambat", "Late", "TERLAMBAT") ? "bg-amber-500" : "bg-red-500"
+                      isStatus(a.status, "Hadir", "Present", "HADIR", "LEMBUR") ? "bg-zinc-500" :
+                      isStatus(a.status, "Terlambat", "Late", "TERLAMBAT") ? "bg-zinc-500" : "bg-zinc-500"
                     }`} />
                     <div>
                       <p className="text-sm font-medium">{empName(a.karyawanId || a.karyawan?.id)}</p>
-                      <p className="text-[11px] text-slate-400">
+                      <p className="text-[11px] text-zinc-400">
                         {new Date(a.tanggal || a.date || a.createdAt).toLocaleDateString("id-ID")} · {a.waktuMasuk || a.checkIn || "-"} — {a.waktuPulang || a.checkOut || "-"}
                       </p>
                     </div>
@@ -305,13 +305,13 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {recentEmployees.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-6">Belum ada data karyawan</p>
+              <p className="text-sm text-zinc-400 text-center py-6">Belum ada data karyawan</p>
             ) : (
               recentEmployees.map((emp: any) => (
-                <div key={emp.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
+                <div key={emp.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-zinc-50">
                   <div>
                     <p className="text-sm font-medium">{emp.namaLengkap || emp.name || "-"}</p>
-                    <p className="text-[11px] text-slate-400">{emp.jabatan || emp.position || "-"} · {emp.departemen || emp.department || "-"}</p>
+                    <p className="text-[11px] text-zinc-400">{emp.jabatan || emp.position || "-"} · {emp.departemen || emp.department || "-"}</p>
                   </div>
                   <Badge variant="outline" className="text-[10px]">
                     {emp.statusKaryawan || emp.status || "Aktif"}
@@ -337,14 +337,14 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           {recentLeaves.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-4">Belum ada data cuti</p>
+            <p className="text-sm text-zinc-400 text-center py-4">Belum ada data cuti</p>
           ) : (
             <div className="grid sm:grid-cols-2 gap-2">
               {recentLeaves.map((c: any) => (
-                <div key={c.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
+                <div key={c.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-zinc-50">
                   <div>
                     <p className="text-sm font-medium">{empName(c.karyawanId || c.karyawan?.id)}</p>
-                    <p className="text-[11px] text-slate-400">
+                    <p className="text-[11px] text-zinc-400">
                       {c.jenisCuti || c.type || "-"} · {c.tanggalMulai || c.startDate || "-"}
                     </p>
                   </div>
@@ -379,10 +379,10 @@ function StatCard({
   href: string;
 }) {
   const colors = {
-    blue: "bg-blue-50 text-blue-600",
-    green: "bg-green-50 text-green-600",
-    purple: "bg-purple-50 text-purple-600",
-    amber: "bg-amber-50 text-amber-600",
+    blue: "bg-zinc-50 text-zinc-700",
+    green: "bg-zinc-50 text-zinc-700",
+    purple: "bg-zinc-50 text-zinc-600",
+    amber: "bg-zinc-50 text-zinc-600",
   };
 
   return (
@@ -390,11 +390,11 @@ function StatCard({
       <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
         <CardContent className="pt-5 pb-4">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-medium text-slate-500">{title}</span>
+            <span className="text-xs font-medium text-zinc-500">{title}</span>
             <div className={`p-1.5 rounded-lg ${colors[color]}`}>{icon}</div>
           </div>
           <p className="text-2xl font-bold tracking-tight">{value}</p>
-          <p className="text-[11px] text-slate-400 mt-1">{sub}</p>
+          <p className="text-[11px] text-zinc-400 mt-1">{sub}</p>
         </CardContent>
       </Card>
     </Link>
