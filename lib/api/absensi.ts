@@ -46,14 +46,14 @@ export const attendanceAPI = {
       hadir: data.status === "Hadir",
       status: data.status,
     }
-    return apiRequest("/absensi/json", {
+    return apiRequest("/absensi", {
       method: "POST",
       body: JSON.stringify(mapped),
     })
   },
 
   createJson: async (data: any) => {
-    return apiRequest("/absensi/json", {
+    return apiRequest("/absensi", {
       method: "POST",
       body: JSON.stringify(data),
     })
