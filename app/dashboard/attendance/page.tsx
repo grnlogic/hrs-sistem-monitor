@@ -124,7 +124,7 @@ export default function AttendancePage() {
   const mondayString = getMonday(new Date(today)).toLocaleDateString("en-CA");
   const todayString = today.toLocaleDateString("en-CA");
 
-  const [startDate, setStartDate] = useState(mondayString);
+  const [startDate, setStartDate] = useState(todayString);
   const [endDate, setEndDate] = useState(todayString);
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
@@ -522,7 +522,15 @@ export default function AttendancePage() {
 
   const handleExportDailyReportPDF = async () => {
     const rows = filteredData.map((item) => {
-      const { employee, totalHadir, totalSetengahHari, totalIzin, totalSakit, totalAlpa, totalLibur, totalLembur, totalHariEfektif } = item;
+      const { employee, totalHadir, totalSetengahHari, totalIzin, totalSakit, totalAlpa, totalLibur, totalLembur } = item;
+      const notesList = item.records
+        .filter((rec: any) => rec.notes && rec.notes !== "-" && rec.notes !== "")
+        .map((rec: any) => {
+          const dateObj = new Date(rec.tanggal);
+          const dateStr = dateObj.toLocaleDateString("id-ID", { day: "2-digit", month: "short" });
+          return `${dateStr}: ${rec.notes}`;
+        })
+        .join("; ");
       return {
         nama: employee?.namaLengkap || "(Tanpa Nama)",
         nik: employee?.nik || "-",
@@ -534,7 +542,7 @@ export default function AttendancePage() {
         sakit: String(totalSakit),
         alpa: String(totalAlpa),
         libur: String(totalLibur),
-        hariEfektif: String(totalHariEfektif),
+        catatan: notesList || "-",
       };
     });
 
@@ -560,7 +568,7 @@ export default function AttendancePage() {
 
       autoTable(doc, {
         startY: 28,
-        head: [["Nama Karyawan", "NIK", "Departemen", "Hadir", "Setengah", "Lembur", "Izin", "Sakit", "Alpa", "Libur", "Hari Efektif"]],
+        head: [["Nama Karyawan", "NIK", "Departemen", "Hadir", "Setengah", "Lembur", "Izin", "Sakit", "Alpa", "Libur", "Catatan"]],
         body: rows.map((row) => [
           row.nama,
           row.nik,
@@ -572,7 +580,7 @@ export default function AttendancePage() {
           row.sakit,
           row.alpa,
           row.libur,
-          row.hariEfektif,
+          row.catatan,
         ]),
         styles: { fontSize: 8 },
         margin: { left: 14, right: 14 },
@@ -834,7 +842,7 @@ export default function AttendancePage() {
                   <TableHead>🏢 Departemen</TableHead>
                   <TableHead>📊 Rincian Kehadiran</TableHead>
                   <TableHead>🕒 Lembur</TableHead>
-                  <TableHead>⏱️ Total Hari Efektif</TableHead>
+                  <TableHead className="w-[200px]">📝 Catatan Periode</TableHead>
                   <TableHead className="text-center">⚙️ Aksi</TableHead>
                 </TableRow>
               </TableHeader>
@@ -898,10 +906,26 @@ export default function AttendancePage() {
                           <span className="text-sm text-zinc-400">-</span>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="border-zinc-300 text-zinc-800 bg-zinc-50 font-bold">
-                          {totalHariEfektif} Hari
-                        </Badge>
+                      <TableCell className="max-w-[200px]">
+                        {(() => {
+                          const notesList = item.records
+                            .filter((rec: any) => rec.notes && rec.notes !== "-" && rec.notes !== "")
+                            .map((rec: any) => {
+                              const dateObj = new Date(rec.tanggal);
+                              const dateStr = dateObj.toLocaleDateString("id-ID", { day: "2-digit", month: "short" });
+                              return `${dateStr}: ${rec.notes}`;
+                            });
+                          if (notesList.length === 0) return <span className="text-zinc-400 text-xs">-</span>;
+                          return (
+                            <div className="text-xs text-zinc-700 max-h-[60px] overflow-y-auto space-y-0.5 leading-tight">
+                              {notesList.map((note: string, idx: number) => (
+                                <div key={idx} className="border-b last:border-0 pb-0.5 mb-0.5 text-ellipsis overflow-hidden whitespace-nowrap" title={note}>
+                                  📌 {note}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center gap-2">
