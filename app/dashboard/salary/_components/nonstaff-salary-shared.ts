@@ -89,10 +89,7 @@ export type CalculatedSnapshot = {
 /* ---------- Constants ---------- */
 
 export const DEFAULT_BONUS: SalaryItem[] = [{ judul: "Bonus", nominal: 0 }];
-export const DEFAULT_POTONGAN: SalaryItem[] = [
-  { judul: "BPJS Kesehatan", nominal: 0, isDefault: true },
-  { judul: "BPJS Ketenagakerjaan", nominal: 0, isDefault: true },
-];
+export const DEFAULT_POTONGAN: SalaryItem[] = [];
 
 /* ---------- Utilities ---------- */
 
