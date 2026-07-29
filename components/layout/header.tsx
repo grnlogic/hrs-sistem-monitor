@@ -42,7 +42,9 @@ export function Header() {
 
       <div className="flex flex-1 items-center justify-between">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold">Employee Monitoring System</h2>
+          <h2 className="text-sm sm:text-lg font-semibold truncate max-w-[170px] sm:max-w-none">
+            Employee Monitoring System
+          </h2>
         </div>
 
         <DropdownMenu>

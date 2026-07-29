@@ -34,7 +34,7 @@ import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
 import { attendanceAPI, employeeAPI } from "@/lib/api";
 import { NAMA_PT } from "@/lib/constants/perusahaan";
 
-type AbsensiStatus = "HADIR" | "SETENGAH_HARI" | "IZIN" | "TIDAK_HADIR";
+type AbsensiStatus = "HADIR" | "SETENGAH_HARI" | "IZIN" | "TIDAK_HADIR" | "SAKIT" | "ALPA" | "LIBUR";
 
 type EmployeeOption = {
   id: number;
@@ -67,7 +67,9 @@ const ABSENSI_STATUS_OPTIONS: Array<{ value: AbsensiStatus; label: string }> = [
   { value: "HADIR", label: "Hadir" },
   { value: "SETENGAH_HARI", label: "Setengah Hari" },
   { value: "IZIN", label: "Izin" },
-  { value: "TIDAK_HADIR", label: "Tidak Hadir" },
+  { value: "SAKIT", label: "Sakit" },
+  { value: "ALPA", label: "Alpa" },
+  { value: "LIBUR", label: "Libur/Off" },
 ];
 
 const getTodayDate = () => new Date().toLocaleDateString("en-CA");
@@ -75,7 +77,10 @@ const getTodayDate = () => new Date().toLocaleDateString("en-CA");
 const formatStatusLabel = (status: AbsensiStatus) => {
   if (status === "HADIR") return "Hadir";
   if (status === "SETENGAH_HARI") return "Setengah Hari";
-  if (status === "IZIN") return "Tidak Hadir (Izin)";
+  if (status === "IZIN") return "Izin";
+  if (status === "SAKIT") return "Sakit";
+  if (status === "ALPA") return "Alpa";
+  if (status === "LIBUR") return "Libur/Off";
   return "Tidak Hadir";
 };
 
@@ -204,11 +209,13 @@ export default function NewAttendancePage() {
       if (currentStatus === "HADIR") acc.hadir += 1;
       if (currentStatus === "SETENGAH_HARI") acc.setengahHari += 1;
       if (currentStatus === "IZIN") acc.izin += 1;
-      if (currentStatus === "TIDAK_HADIR") acc.tidakHadir += 1;
+      if (currentStatus === "SAKIT") acc.sakit += 1;
+      if (currentStatus === "ALPA") acc.alpa += 1;
+      if (currentStatus === "LIBUR") acc.libur += 1;
       if (isLembur) acc.lembur += 1;
       return acc;
     },
-    { total: 0, hadir: 0, setengahHari: 0, lembur: 0, izin: 0, tidakHadir: 0 }
+    { total: 0, hadir: 0, setengahHari: 0, lembur: 0, izin: 0, sakit: 0, alpa: 0, libur: 0 }
   );
 
   const applyFilter = () => {
@@ -288,7 +295,9 @@ export default function NewAttendancePage() {
           ["Setengah Hari", String(summary.setengahHari)],
           ["Lembur", String(summary.lembur)],
           ["Izin", String(summary.izin)],
-          ["Tidak Hadir", String(summary.tidakHadir)],
+          ["Sakit", String(summary.sakit)],
+          ["Alpa", String(summary.alpa)],
+          ["Libur/Off", String(summary.libur)],
         ],
         styles: { fontSize: 9 },
       });
@@ -351,15 +360,45 @@ export default function NewAttendancePage() {
     setSubmitStats(null);
 
     try {
-      await attendanceAPI.submitBulk({
-        tanggal: selectedDate,
-        data: displayedEmployees.map((emp) => ({
+      const dataToSubmit = displayedEmployees.map((emp) => {
+        const draftStatus = absensiMap[emp.id]?.status || "HADIR";
+        let submitStatus = draftStatus;
+        let draftKeterangan = absensiMap[emp.id]?.keterangan?.trim() || "";
+
+        if (draftStatus === "SAKIT") {
+          submitStatus = "TIDAK_HADIR";
+          if (!draftKeterangan.toLowerCase().includes("sakit")) {
+            draftKeterangan = "Sakit" + (draftKeterangan ? ` - ${draftKeterangan}` : "");
+          }
+        } else if (draftStatus === "ALPA") {
+          submitStatus = "TIDAK_HADIR";
+          if (!draftKeterangan.toLowerCase().includes("alpa")) {
+            draftKeterangan = "Alpa" + (draftKeterangan ? ` - ${draftKeterangan}` : "");
+          }
+        } else if (draftStatus === "LIBUR") {
+          submitStatus = "TIDAK_HADIR";
+          if (!draftKeterangan.toLowerCase().includes("libur")) {
+            draftKeterangan = "Libur" + (draftKeterangan ? ` - ${draftKeterangan}` : "");
+          }
+        } else if (draftStatus === "IZIN") {
+          submitStatus = "IZIN";
+          if (!draftKeterangan.toLowerCase().includes("izin")) {
+            draftKeterangan = "Izin" + (draftKeterangan ? ` - ${draftKeterangan}` : "");
+          }
+        }
+
+        return {
           karyawanId: emp.id,
-          status: absensiMap[emp.id]?.status || "HADIR",
+          status: submitStatus,
           isLembur: Boolean(absensiMap[emp.id]?.lembur),
           lokasi: absensiMap[emp.id]?.lokasi || emp.lokasiDefault,
-          keterangan: absensiMap[emp.id]?.keterangan?.trim() || undefined,
-        })),
+          keterangan: draftKeterangan || undefined,
+        };
+      });
+
+      await attendanceAPI.submitBulk({
+        tanggal: selectedDate,
+        data: dataToSubmit,
       });
 
       const successCount = displayedEmployees.length;
@@ -372,7 +411,7 @@ export default function NewAttendancePage() {
         setengahHariCount: summary.setengahHari,
         lemburCount: summary.lembur,
         izinCount: summary.izin,
-        tidakHadirCount: summary.tidakHadir,
+        tidakHadirCount: summary.sakit + summary.alpa + summary.libur,
       });
 
       if (successCount > 0) {
@@ -535,10 +574,18 @@ export default function NewAttendancePage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setAllStatusForDisplayed("TIDAK_HADIR")}
+                onClick={() => setAllStatusForDisplayed("ALPA")}
                 disabled={displayedEmployees.length === 0}
               >
-                Set Semua Tidak Hadir
+                Set Semua Alpa
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAllStatusForDisplayed("LIBUR")}
+                disabled={displayedEmployees.length === 0}
+              >
+                Set Semua Libur
               </Button>
               <Button
                 type="button"
@@ -551,30 +598,38 @@ export default function NewAttendancePage() {
               </Button>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2">
               <div className="p-3 rounded border bg-zinc-50 border-zinc-200">
-                <p className="text-xs text-zinc-800">Total Diisi</p>
+                <p className="text-xs text-zinc-600 font-medium">Total Diisi</p>
                 <p className="text-xl font-bold text-zinc-900">{summary.total}</p>
               </div>
               <div className="p-3 rounded border bg-zinc-50 border-zinc-200">
-                <p className="text-xs text-zinc-900">Hadir</p>
+                <p className="text-xs text-zinc-600 font-medium">Hadir</p>
                 <p className="text-xl font-bold text-zinc-900">{summary.hadir}</p>
               </div>
               <div className="p-3 rounded border bg-zinc-50 border-zinc-200">
-                <p className="text-xs text-zinc-800">Setengah Hari</p>
+                <p className="text-xs text-zinc-600 font-medium">Setengah Hari</p>
                 <p className="text-xl font-bold text-zinc-900">{summary.setengahHari}</p>
               </div>
               <div className="p-3 rounded border bg-zinc-50 border-zinc-200">
-                <p className="text-xs text-zinc-800">Lembur</p>
+                <p className="text-xs text-zinc-600 font-medium">Lembur</p>
                 <p className="text-xl font-bold text-zinc-900">{summary.lembur}</p>
               </div>
               <div className="p-3 rounded border bg-zinc-50 border-zinc-200">
-                <p className="text-xs text-zinc-900">Izin</p>
-                <p className="text-xl font-bold text-zinc-900">{summary.izin}</p>
+                <p className="text-xs text-zinc-600 font-medium text-blue-700">Izin</p>
+                <p className="text-xl font-bold text-blue-800">{summary.izin}</p>
               </div>
               <div className="p-3 rounded border bg-zinc-50 border-zinc-200">
-                <p className="text-xs text-red-800">Tidak Hadir</p>
-                <p className="text-xl font-bold text-red-900">{summary.tidakHadir}</p>
+                <p className="text-xs text-zinc-600 font-medium text-amber-700">Sakit</p>
+                <p className="text-xl font-bold text-amber-800">{summary.sakit}</p>
+              </div>
+              <div className="p-3 rounded border bg-zinc-50 border-zinc-200">
+                <p className="text-xs text-zinc-600 font-medium text-red-700">Alpa</p>
+                <p className="text-xl font-bold text-red-800">{summary.alpa}</p>
+              </div>
+              <div className="p-3 rounded border bg-zinc-50 border-zinc-200">
+                <p className="text-xs text-zinc-600 font-medium text-zinc-700">Libur/Off</p>
+                <p className="text-xl font-bold text-zinc-800">{summary.libur}</p>
               </div>
             </div>
 
@@ -680,7 +735,7 @@ export default function NewAttendancePage() {
                             </span>
                           </TableCell>
                           <TableCell>
-                            {rowData.status === "IZIN" || rowData.status === "TIDAK_HADIR" ? (
+                            {["IZIN", "SAKIT", "ALPA", "LIBUR"].includes(rowData.status) ? (
                               <div className="space-y-1">
                                 <Label className="text-xs text-zinc-500">Keterangan (opsional)</Label>
                                 <Input

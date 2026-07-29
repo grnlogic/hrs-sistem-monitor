@@ -93,6 +93,13 @@ export const attendanceAPI = {
     }>
   },
 
+  update: async (id: string | number, data: any) => {
+    return apiRequest(`/absensi/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    })
+  },
+
   delete: async (id: string) => {
     return apiRequest(`/absensi/${id}`, {
       method: "DELETE",
@@ -100,6 +107,12 @@ export const attendanceAPI = {
   },
 
   deleteAll: async () => {
+    return apiRequest("/absensi/clear-all", {
+      method: "DELETE",
+    })
+  },
+
+  clearAll: async () => {
     return apiRequest("/absensi/clear-all", {
       method: "DELETE",
     })

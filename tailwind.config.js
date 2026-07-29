@@ -60,8 +60,12 @@ module.exports = {
           foreground: "hsl(var(--success-foreground))",
         },
         sidebar: {
+          DEFAULT: "hsl(var(--sidebar-bg))",
+          foreground: "hsl(var(--sidebar-text))",
           bg: "hsl(var(--sidebar-bg))",
           surface: "hsl(var(--sidebar-surface))",
+          accent: "hsl(var(--sidebar-surface))",
+          "accent-foreground": "hsl(var(--sidebar-text))",
           border: "hsl(var(--sidebar-border))",
           text: "hsl(var(--sidebar-text))",
           "text-muted": "hsl(var(--sidebar-text-muted))",

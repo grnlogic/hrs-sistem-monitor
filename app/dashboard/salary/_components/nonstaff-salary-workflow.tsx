@@ -531,6 +531,7 @@ export function NonStaffSalaryWorkflow() {
           lokasiDefault: normalizeLokasi(row.lokasiDefault || row.lokasi_default),
           lokasiKerja: String(row.lokasiKerja || row.lokasi_kerja || ""),
         }))
+        .filter((employee) => employee.statusKaryawan !== "NON_AKTIF" && employee.statusKaryawan !== "TIDAK_AKTIF" && employee.statusKaryawan !== "NONAKTIF")
         .filter((employee) => isNonStaff(employee))
         .filter((employee) => employeeInLokasi(employee, userLokasi))
         .filter((employee) => selectedDivisions.length === 0 || selectedDivisions.includes(employee.departemen));
@@ -900,6 +901,14 @@ export function NonStaffSalaryWorkflow() {
     }
   }
 
+  function handleMarkAllDone() {
+    const nextDoneMap: Record<string, boolean> = {};
+    snapshotRows.forEach((row) => {
+      nextDoneMap[row.gajiId] = true;
+    });
+    setDoneBySalaryId(nextDoneMap);
+  }
+
   async function handleExportSlipGabungan() {
     try {
       setSubmitting(true);
@@ -1235,6 +1244,7 @@ export function NonStaffSalaryWorkflow() {
           openInputDialog={openInputDialog}
           allDone={allDone}
           setStep={setStep}
+          onMarkAllDone={handleMarkAllDone}
         />
       ) : null}
 

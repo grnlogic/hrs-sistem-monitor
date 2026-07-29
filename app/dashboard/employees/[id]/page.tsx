@@ -24,7 +24,7 @@ import { FilesTab } from "./_components/files-tab";
 import { EmployeeProfileCard } from "./_components/employee-profile-card";
 import { CropModal } from "./_components/crop-modal";
 import { FilePreviewModal } from "./_components/file-preview-modal";
-import { getSalaryRowKey } from "./_components/utils";
+import { getSalaryRowKey, determineSubStatus } from "./_components/utils";
 
 // Aspect ratio untuk foto profil (1:1 square)
 const ASPECT_RATIO = 1;
@@ -63,7 +63,7 @@ export default function EmployeeDetailPage() {
   const [selectedExportedSalaryKey, setSelectedExportedSalaryKey] = useState<string | null>(null);
   const [attendanceHistory, setAttendanceHistory] = useState<any[]>([]);
   const [izinSakitHistory, setIzinSakitHistory] = useState<any[]>([]);
-  const [izinSakitFilter, setIzinSakitFilter] = useState<"all" | "IZIN" | "TIDAK_HADIR">("all");
+  const [izinSakitFilter, setIzinSakitFilter] = useState<"all" | "IZIN" | "SAKIT" | "ALPA" | "LIBUR">("all");
   const [leaveHistory, setLeaveHistory] = useState<any[]>([]);
   const [violationHistory, setViolationHistory] = useState<any[]>([]);
   const [leaveInfo, setLeaveInfo] = useState<any>(null);
@@ -636,7 +636,10 @@ export default function EmployeeDetailPage() {
 
   const filteredIzinSakitHistory = useMemo(() => {
     if (izinSakitFilter === "all") return izinSakitHistory;
-    return izinSakitHistory.filter((item) => item?.status === izinSakitFilter);
+    return izinSakitHistory.filter((item) => {
+      const sub = determineSubStatus(item?.status, item?.keterangan || item?.notes);
+      return sub === izinSakitFilter;
+    });
   }, [izinSakitFilter, izinSakitHistory]);
 
   if (loading) {
@@ -760,6 +763,7 @@ export default function EmployeeDetailPage() {
 
         <TabsContent value="izin-sakit">
           <IzinSakitTab
+            izinSakitHistory={izinSakitHistory}
             filteredIzinSakitHistory={filteredIzinSakitHistory}
             izinSakitFilter={izinSakitFilter}
             setIzinSakitFilter={setIzinSakitFilter}

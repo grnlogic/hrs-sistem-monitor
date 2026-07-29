@@ -34,6 +34,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
@@ -131,6 +132,7 @@ export function AppSidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const { data: session } = useSession();
+  const { isMobile, setOpenMobile } = useSidebar();
 
   const user = React.useMemo(
     () => ({
@@ -207,6 +209,7 @@ export function AppSidebar() {
                         >
                           <a
                             href={item.url}
+                            onClick={() => { if (isMobile) setOpenMobile(false); }}
                             className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150
                               ${isActive
                                 ? "bg-sidebar-surface text-sidebar-text border border-sidebar-border border-l-2 border-l-sidebar-active"
@@ -254,6 +257,7 @@ export function AppSidebar() {
                     >
                       <a
                         href={item.url}
+                        onClick={() => { if (isMobile) setOpenMobile(false); }}
                         className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150
                           ${isActive
                             ? "bg-sidebar-surface text-sidebar-text border border-sidebar-border border-l-2 border-l-sidebar-active"
@@ -299,6 +303,7 @@ export function AppSidebar() {
                         >
                           <a
                             href={item.url}
+                            onClick={() => { if (isMobile) setOpenMobile(false); }}
                             className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150
                               ${isActive
                                 ? "bg-sidebar-surface text-sidebar-text border border-sidebar-border border-l-2 border-l-sidebar-active"

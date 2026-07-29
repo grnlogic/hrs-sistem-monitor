@@ -252,17 +252,17 @@ function companyProfileByLokasi(value: unknown): {
 //  Tujuan: muat 6 kolom × 2 baris = 12 slip per halaman landscape A4.
 //  Setiap slip sangat ramping, font dikecilkan, padding dipersempit.
 //
-const S_PAD        = 1.8;  // mm — padding kiri/kanan dalam slip
-const S_HDR_H      = 9.2;  // mm — tinggi area header (background abu)
-const S_HDR_NAME_Y = 3.8;  // mm dari originY
-const S_HDR_PER_Y  = 6.2;  // mm dari originY
-const S_HDR_LOC_Y  = 8.4;  // mm dari originY
-const S_BODY_START = 12.5; // mm dari originY — baris pertama body
-const S_ROW_GAP    = 2.9;  // mm — jarak antar baris
-const S_SEC_GAP    = 2.4;  // mm — gap setelah label section
-const S_COLON_OFF  = 16;   // mm dari contentX — posisi titik dua ":"
-const S_LOGO_BOX_W = 10;   // mm — lebar kotak logo (contain, tidak stretch)
-const S_LOGO_BOX_H = 5.2;  // mm — tinggi kotak logo
+const S_PAD        = 4.0;  // mm — padding kiri/kanan dalam slip
+const S_HDR_H      = 14.0; // mm — tinggi area header (background abu)
+const S_HDR_NAME_Y = 5.5;  // mm dari originY
+const S_HDR_PER_Y  = 9.5;  // mm dari originY
+const S_HDR_LOC_Y  = 12.8; // mm dari originY
+const S_BODY_START = 20.0; // mm dari originY — baris pertama body
+const S_ROW_GAP    = 4.6;  // mm — jarak antar baris
+const S_SEC_GAP    = 4.0;  // mm — gap setelah label section
+const S_COLON_OFF  = 30;   // mm dari contentX — posisi titik dua ":"
+const S_LOGO_BOX_W = 16;   // mm — lebar kotak logo (contain, tidak stretch)
+const S_LOGO_BOX_H = 8.0;  // mm — tinggi kotak logo
 
 // ─── Draw single Staff slip ───────────────────────────────────────────────────
 
@@ -298,20 +298,20 @@ async function drawSingleSlip(
 
   // Header — company name
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(5.8);
+  doc.setFontSize(14.0);
   doc.setTextColor(30, 30, 30);
   doc.text(
-    truncateText(profile.companyName.toUpperCase(), 20),
+    truncateText(profile.companyName.toUpperCase(), 32),
     contentX,
     originY + S_HDR_NAME_Y
   );
 
   // Header — period & lokasi
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(4.6);
+  doc.setFontSize(10.0);
   doc.setTextColor(70, 70, 70);
   doc.text(
-    truncateText(payload.periodLabel.toUpperCase(), 26),
+    truncateText(payload.periodLabel.toUpperCase(), 36),
     contentX,
     originY + S_HDR_PER_Y
   );
@@ -328,7 +328,7 @@ async function drawSingleSlip(
     const { w, h } = fitInBox(natural.width, natural.height, S_LOGO_BOX_W, S_LOGO_BOX_H);
     // rata kanan, vertikal di tengah kotak
     const logoX = rightX - w;
-    const logoY = originY + 1.6 + (S_LOGO_BOX_H - h) / 2;
+    const logoY = originY + 2.0 + (S_LOGO_BOX_H - h) / 2;
     doc.addImage(logoDataUrl, profile.logoFormat, logoX, logoY, w, h, undefined, "FAST");
   }
 
@@ -338,7 +338,7 @@ async function drawSingleSlip(
 
   const addRow = (label: string, value: string, bold = false) => {
     doc.setFont("helvetica", bold ? "bold" : "normal");
-    doc.setFontSize(bold ? 5.2 : 4.8);
+    doc.setFontSize(bold ? 10.5 : 10.0);
     doc.text(label, contentX, rowY);
     doc.text(":", contentX + S_COLON_OFF, rowY);
     doc.text(value, rightX, rowY, { align: "right" });
@@ -352,7 +352,7 @@ async function drawSingleSlip(
 
   // Section label: Potongan
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(5.0);
+  doc.setFontSize(10.5);
   doc.setTextColor(80, 80, 80);
   doc.text("Potongan", contentX, rowY);
   rowY += S_SEC_GAP;
@@ -384,13 +384,13 @@ export async function exportSalarySlipsPdf(
   const jsPDF = await loadJsPdfCtor();
   const doc   = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
 
-  const columns      = 6;
+  const columns      = 3;
   const rows         = 2;
   const slipsPerPage = columns * rows;
   const startX       = 6;
   const startY       = 6;
-  const gapX         = 2.2;
-  const gapY         = 3.5;
+  const gapX         = 3.0;
+  const gapY         = 4.5;
   const pageWidth    = 297;
   const pageHeight   = 210;
   const slipWidth    = (pageWidth  - startX * 2 - gapX * (columns - 1)) / columns;
@@ -504,12 +504,12 @@ function safeItems(
 //  Tujuan: muat 5 kolom × 3 baris = 15 slip per halaman landscape A4
 //  (fleksibel tergantung jumlah baris bonus/potongan).
 //
-const NS_PAD      = 1.8;  // mm
-const NS_LOGO_W   = 10;   // mm — lebar kotak logo (contain)
-const NS_LOGO_H   = 5.0;  // mm — tinggi kotak logo
-const NS_ROW_GAP  = 2.4;  // mm
-const NS_SEC_GAP  = 2.0;  // mm
-const NS_DIV_GAP  = 1.4;  // mm setelah divider
+const NS_PAD      = 4.0;  // mm
+const NS_LOGO_W   = 16;   // mm — lebar kotak logo (contain)
+const NS_LOGO_H   = 8.0;  // mm — tinggi kotak logo
+const NS_ROW_GAP  = 4.6;  // mm
+const NS_SEC_GAP  = 4.0;  // mm
+const NS_DIV_GAP  = 2.5;  // mm setelah divider
 
 // ─── Draw single Non-Staff slip ───────────────────────────────────────────────
 
@@ -543,21 +543,21 @@ async function drawNonStaffSlip(
     const natural = await getImageNaturalSize(logoDataUrl);
     const { w, h } = fitInBox(natural.width, natural.height, NS_LOGO_W, NS_LOGO_H);
     const logoX = rightX - w;
-    const logoY = y + 1.5 + (NS_LOGO_H - h) / 2;
+    const logoY = y + 2.5 + (NS_LOGO_H - h) / 2;
     doc.addImage(logoDataUrl, profile.logoFormat, logoX, logoY, w, h, undefined, "FAST");
   }
 
   // Company name
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(5.6);
+  doc.setFontSize(14.0);
   doc.setTextColor(30, 30, 30);
-  doc.text(truncateText(profile.companyName, 22), leftX, cursorY);
-  cursorY += 2.4;
+  doc.text(truncateText(profile.companyName, 32), leftX, cursorY);
+  cursorY += 5.0;
 
   // Divider helper
   const divider = () => {
     doc.setDrawColor(200, 204, 212);
-    doc.setLineWidth(0.12);
+    doc.setLineWidth(0.25);
     doc.line(leftX, cursorY, rightX, cursorY);
     cursorY += NS_DIV_GAP;
   };
@@ -566,28 +566,28 @@ async function drawNonStaffSlip(
 
   // Judul & periode
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(5.4);
+  doc.setFontSize(12.0);
   doc.setTextColor(20, 20, 20);
   doc.text("SLIP GAJI NON-STAFF", leftX, cursorY);
-  cursorY += 2.2;
+  cursorY += 4.5;
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(4.5);
+  doc.setFontSize(10.0);
   doc.setTextColor(70, 70, 70);
   doc.text(
     `Periode: ${formatPeriodRangeLabel(payload.periodStart, payload.periodEnd)}`,
     leftX,
     cursorY
   );
-  cursorY += 2.0;
+  cursorY += 3.8;
   divider();
 
   // Pair row helper
   const linePair = (label: string, value: string, bold = false) => {
     doc.setFont("helvetica", bold ? "bold" : "normal");
-    doc.setFontSize(bold ? 5.0 : 4.6);
+    doc.setFontSize(bold ? 10.5 : 10.0);
     doc.setTextColor(20, 20, 20);
-    doc.text(truncateText(label, 20), leftX, cursorY);
+    doc.text(truncateText(label, 26), leftX, cursorY);
     doc.text(value, rightX, cursorY, { align: "right" });
     cursorY += NS_ROW_GAP;
   };
@@ -603,7 +603,7 @@ async function drawNonStaffSlip(
 
   // Pendapatan
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(4.8);
+  doc.setFontSize(10.5);
   doc.setTextColor(60, 60, 60);
   doc.text("PENDAPATAN", leftX, cursorY);
   cursorY += NS_SEC_GAP;
@@ -619,7 +619,7 @@ async function drawNonStaffSlip(
 
   // Potongan
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(4.8);
+  doc.setFontSize(10.5);
   doc.setTextColor(60, 60, 60);
   doc.text("POTONGAN", leftX, cursorY);
   cursorY += NS_SEC_GAP;
@@ -645,13 +645,13 @@ export async function exportNonStaffSlipGabunganPdf(
   const jsPDF = await loadJsPdfCtor();
   const doc   = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
 
-  const columns  = 5;
-  const rows     = 3;
+  const columns  = 3;
+  const rows     = 2;
   const perPage  = columns * rows;
   const startX   = 5;
   const startY   = 5;
-  const gapX     = 2.0;
-  const gapY     = 2.5;
+  const gapX     = 3.0;
+  const gapY     = 4.0;
   const pageW    = 297;
   const pageH    = 210;
   const slipW    = (pageW - startX * 2 - gapX * (columns - 1)) / columns;

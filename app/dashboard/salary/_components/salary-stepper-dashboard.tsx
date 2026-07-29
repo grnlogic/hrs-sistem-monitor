@@ -268,18 +268,20 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
 
     try {
       const employeeRes = await employeeAPI.getAll();
-      const mappedEmployees: EmployeeRow[] = (Array.isArray(employeeRes) ? employeeRes : []).map((row: any) => ({
-        id: String(row.id),
-        namaLengkap: row.namaLengkap || row.nama_lengkap || "-",
-        departemen: row.departemen || "-",
-        statusKaryawan: row.statusKaryawan || row.status_karyawan || "-",
-        gajiPerBulan: toNumber(row.gajiPerBulan ?? row.gaji_per_bulan),
-        gajiPerHari: toNumber(row.gajiPerHari ?? row.gaji_per_hari),
-        bpjsGabunganNominal:
-          toNumber(row.bpjsKesehatan ?? row.bpjs_kesehatan) +
-          toNumber(row.bpjsKetenagakerjaan ?? row.bpjs_ketenagakerjaan),
-        lokasiKerja: row.lokasiKerja || row.lokasi_kerja || "",
-      }));
+      const mappedEmployees: EmployeeRow[] = (Array.isArray(employeeRes) ? employeeRes : [])
+        .map((row: any) => ({
+          id: String(row.id),
+          namaLengkap: row.namaLengkap || row.nama_lengkap || "-",
+          departemen: row.departemen || "-",
+          statusKaryawan: row.statusKaryawan || row.status_karyawan || "-",
+          gajiPerBulan: toNumber(row.gajiPerBulan ?? row.gaji_per_bulan),
+          gajiPerHari: toNumber(row.gajiPerHari ?? row.gaji_per_hari),
+          bpjsGabunganNominal:
+            toNumber(row.bpjsKesehatan ?? row.bpjs_kesehatan) +
+            toNumber(row.bpjsKetenagakerjaan ?? row.bpjs_ketenagakerjaan),
+          lokasiKerja: row.lokasiKerja || row.lokasi_kerja || "",
+        }))
+        .filter((emp) => emp.statusKaryawan !== "NON_AKTIF" && emp.statusKaryawan !== "TIDAK_AKTIF" && emp.statusKaryawan !== "NONAKTIF");
       setEmployees(mappedEmployees);
 
       if (pageType === "nonstaff") {
@@ -582,6 +584,15 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
     }
   }
 
+  function handleMarkAllDone() {
+    const nextDoneMap: Record<string, boolean> = {};
+    generatedRows.forEach((row) => {
+      nextDoneMap[row.id] = true;
+    });
+    setInputDoneBySalaryId(nextDoneMap);
+    setWorkflowStatus("INPUT_DONE");
+  }
+
   async function exportSlipsPerKaryawan() {
     if (!canPhase3Action) return;
 
@@ -739,6 +750,7 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
           canPhase2Action={canPhase2Action}
           allInputDone={allInputDone}
           setActiveStep={setActiveStep}
+          onMarkAllDone={handleMarkAllDone}
         />
       )}
 

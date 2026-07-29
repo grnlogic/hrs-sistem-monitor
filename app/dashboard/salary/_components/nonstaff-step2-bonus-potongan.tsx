@@ -34,6 +34,7 @@ type NonStaffStep2Props = {
   openInputDialog: (row: SnapshotRow) => void;
   allDone: boolean;
   setStep: (step: 2 | 3) => void;
+  onMarkAllDone: () => void;
 };
 
 export function NonStaffStep2BonusPotongan(props: NonStaffStep2Props) {
@@ -45,6 +46,7 @@ export function NonStaffStep2BonusPotongan(props: NonStaffStep2Props) {
     openInputDialog,
     allDone,
     setStep,
+    onMarkAllDone,
   } = props;
 
   return (
@@ -196,7 +198,21 @@ export function NonStaffStep2BonusPotongan(props: NonStaffStep2Props) {
               <ArrowRight className="w-4 h-4" />
             </Button>
           </div>
-        ) : null}
+        ) : (
+          snapshotRows.length > 0 && (
+            <div className="flex justify-end pt-4 border-t mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onMarkAllDone}
+                size="lg"
+                className="w-full md:w-auto"
+              >
+                Tandai Semua Selesai (Tanpa Penyesuaian)
+              </Button>
+            </div>
+          )
+        )}
       </CardContent>
     </Card>
   );

@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/form/button"
 import { Input } from "@/components/ui/form/input"
 import { Separator } from "@/components/ui/layout/separator"
-import { Sheet, SheetContent } from "@/components/ui/overlay/sheet"
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/overlay/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/overlay/tooltip"
 
 const SIDEBAR_COOKIE_NAME = "sidebar:state"
@@ -166,6 +166,7 @@ const Sidebar = React.forwardRef<
           }
           side={side}
         >
+          <SheetTitle className="sr-only">Navigasi Utama</SheetTitle>
           <div className="flex h-full w-full flex-col">{children}</div>
         </SheetContent>
       </Sheet>

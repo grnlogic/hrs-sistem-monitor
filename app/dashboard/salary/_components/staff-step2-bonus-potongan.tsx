@@ -27,6 +27,7 @@ type StaffStep2Props = {
   canPhase2Action: boolean;
   allInputDone: boolean;
   setActiveStep: (step: 2 | 3) => void;
+  onMarkAllDone: () => void;
 };
 
 export function StaffStep2BonusPotongan(props: StaffStep2Props) {
@@ -39,6 +40,7 @@ export function StaffStep2BonusPotongan(props: StaffStep2Props) {
     canPhase2Action,
     allInputDone,
     setActiveStep,
+    onMarkAllDone,
   } = props;
 
   return (
@@ -97,7 +99,7 @@ export function StaffStep2BonusPotongan(props: StaffStep2Props) {
         </Table>
       </div>
 
-      {allInputDone && (
+      {allInputDone ? (
         <div className="mt-4 flex justify-end pt-4 border-t">
           <Button
             onClick={() => setActiveStep(3)}
@@ -109,6 +111,21 @@ export function StaffStep2BonusPotongan(props: StaffStep2Props) {
             <ArrowRight className="w-4 h-4" />
           </Button>
         </div>
+      ) : (
+        generatedRows.length > 0 && (
+          <div className="mt-4 flex justify-end pt-4 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onMarkAllDone}
+              disabled={!canPhase2Action}
+              size="lg"
+              className="w-full md:w-auto"
+            >
+              Tandai Semua Selesai (Tanpa Penyesuaian)
+            </Button>
+          </div>
+        )
       )}
     </section>
   );

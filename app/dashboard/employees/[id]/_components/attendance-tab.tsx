@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/display/table";
-import { getStatusBadge } from "./utils";
+import { getStatusBadge, formatIzinSakitTanggal } from "./utils";
 
 interface AttendanceTabProps {
   attendanceHistory: any[];
@@ -48,7 +48,7 @@ export function AttendanceTab({ attendanceHistory }: AttendanceTabProps) {
               attendanceHistory.map((absen, idx) => (
                 <TableRow key={idx}>
                   <TableCell className="font-medium">
-                    {absen.tanggal || "-"}
+                    {formatIzinSakitTanggal(absen.tanggal)}
                   </TableCell>
                   <TableCell>{absen.jamMasuk || "-"}</TableCell>
                   <TableCell>{absen.jamPulang || "-"}</TableCell>

@@ -32,19 +32,52 @@ export function getStatusBadge(status: string) {
   }
 }
 
-export function renderIzinSakitBadge(status?: string) {
-  if (status === "IZIN") {
+export function determineSubStatus(status: string, keterangan?: string): string {
+  const normStatus = String(status || "").trim().toUpperCase();
+  const ket = String(keterangan || "").trim().toLowerCase();
+
+  if (normStatus === "SETENGAH_HARI") return "SETENGAH_HARI";
+  if (normStatus === "HADIR") return "HADIR";
+
+  if (ket.includes("sakit")) return "SAKIT";
+  if (ket.includes("libur")) return "LIBUR";
+  if (ket.includes("alpa")) return "ALPA";
+  if (ket.includes("izin")) return "IZIN";
+
+  if (normStatus === "IZIN") return "IZIN";
+  if (normStatus === "TIDAK_HADIR") return "ALPA";
+
+  return "ALPA";
+}
+
+export function renderIzinSakitBadge(status?: string, keterangan?: string) {
+  const sub = determineSubStatus(status || "", keterangan || "");
+  
+  if (sub === "IZIN") {
     return (
-      <Badge className="border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning)/0.16)] text-[hsl(var(--warning-foreground))] hover:bg-[hsl(var(--warning)/0.22)]">
+      <Badge className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100">
         Izin
       </Badge>
     );
   }
-
-  if (status === "TIDAK_HADIR") {
+  if (sub === "SAKIT") {
     return (
-      <Badge className="border-[hsl(var(--destructive)/0.35)] bg-[hsl(var(--destructive)/0.16)] text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/0.22)]">
-        Tidak Hadir
+      <Badge className="border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100">
+        Sakit
+      </Badge>
+    );
+  }
+  if (sub === "ALPA") {
+    return (
+      <Badge className="border-red-200 bg-red-50 text-red-700 hover:bg-red-100">
+        Alpa
+      </Badge>
+    );
+  }
+  if (sub === "LIBUR") {
+    return (
+      <Badge className="border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100">
+        Libur/Off
       </Badge>
     );
   }
@@ -106,9 +139,13 @@ export function formatIzinSakitTanggal(tanggal?: string) {
   if (!tanggal) return "-";
   const date = new Date(tanggal);
   if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString("id-ID", {
+  
+  const isSunday = date.getDay() === 0;
+  const formatted = date.toLocaleDateString("id-ID", {
     day: "2-digit",
     month: "long",
     year: "numeric",
   });
+  
+  return isSunday ? `${formatted} (MINGGU)` : formatted;
 }

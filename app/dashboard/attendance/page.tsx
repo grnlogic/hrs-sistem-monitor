@@ -79,13 +79,38 @@ const hitungHariEfektif = (status?: string, isLembur?: boolean) => {
   return hari;
 };
 
+const getMonday = (d: Date) => {
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.setDate(diff));
+};
+
+const getDatesInRange = (startStr: string, endStr: string): string[] => {
+  const dates: string[] = [];
+  const start = new Date(startStr);
+  const end = new Date(endStr);
+  const current = new Date(start);
+  
+  while (current <= end) {
+    dates.push(current.toLocaleDateString("en-CA"));
+    current.setDate(current.getDate() + 1);
+  }
+  return dates;
+};
+
 export default function AttendancePage() {
   const [attendanceData, setAttendanceData] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [filteredData, setFilteredData] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [dateFilter, setDateFilter] = useState("");
+  
+  const today = new Date();
+  const mondayString = getMonday(new Date(today)).toLocaleDateString("en-CA");
+  const todayString = today.toLocaleDateString("en-CA");
+
+  const [startDate, setStartDate] = useState(mondayString);
+  const [endDate, setEndDate] = useState(todayString);
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -102,7 +127,7 @@ export default function AttendancePage() {
 
   useEffect(() => {
     filterData();
-  }, [attendanceData, searchTerm, statusFilter, dateFilter, departmentFilter]);
+  }, [attendanceData, searchTerm, statusFilter, startDate, endDate, departmentFilter]);
 
   useEffect(() => {
     return () => {
@@ -150,43 +175,68 @@ export default function AttendancePage() {
   };
 
   const filterData = () => {
-    let filtered = attendanceData;
-    const todayString = new Date().toLocaleDateString("en-CA");
+    const rangeRecords = attendanceData.filter((rec) => {
+      const itemDate = new Date(rec.tanggal || rec.date).toLocaleDateString("en-CA");
+      return itemDate >= startDate && itemDate <= endDate;
+    });
+
+    let filteredEmployees = employees.filter((emp) => {
+      const isNotNonactive = 
+        emp.statusKaryawan !== "NONAKTIF" && 
+        emp.statusKaryawan !== "TIDAK_AKTIF" && 
+        emp.statusKaryawan !== "NON_AKTIF";
+      return isNotNonactive;
+    });
 
     if (searchTerm) {
-      filtered = filtered.filter((item) => {
-        const employee = employees.find((emp) => emp.id === item.karyawanId);
-        return (
-          employee?.namaLengkap
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-          employee?.nik?.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      });
-    }
-
-    if (statusFilter !== "all") {
-      if (statusFilter === "LEMBUR") {
-        filtered = filtered.filter((item) => Boolean(item.isLembur));
-      } else {
-        filtered = filtered.filter((item) => normalizeStatus(item.status) === statusFilter);
-      }
+      const searchLower = searchTerm.toLowerCase();
+      filteredEmployees = filteredEmployees.filter((emp) =>
+        emp.namaLengkap?.toLowerCase().includes(searchLower) ||
+        emp.nik?.toLowerCase().includes(searchLower)
+      );
     }
 
     if (departmentFilter !== "all") {
-      filtered = filtered.filter((item) => {
-        const employee = employees.find((emp) => emp.id === item.karyawanId);
-        return employee?.departemen === departmentFilter;
-      });
+      filteredEmployees = filteredEmployees.filter((emp) => emp.departemen === departmentFilter);
     }
 
-    const activeDateFilter = dateFilter || todayString;
-    filtered = filtered.filter((item) => {
-      const itemDate = new Date(item.tanggal).toLocaleDateString("en-CA");
-      return itemDate === activeDateFilter;
+    let aggregated = filteredEmployees.map((emp) => {
+      const empRecords = rangeRecords.filter((rec) => Number(rec.karyawanId) === Number(emp.id));
+      
+      const totalHadir = empRecords.filter((rec) => normalizeStatus(rec.status) === "HADIR").length;
+      const totalSetengahHari = empRecords.filter((rec) => normalizeStatus(rec.status) === "SETENGAH_HARI").length;
+      const totalIzin = empRecords.filter((rec) => normalizeStatus(rec.status) === "IZIN").length;
+      const totalTidakHadir = empRecords.filter((rec) => normalizeStatus(rec.status) === "TIDAK_HADIR").length;
+      const totalLembur = empRecords.filter((rec) => Boolean(rec.isLembur)).length;
+
+      const totalHariEfektif = empRecords.reduce((sum, rec) => {
+        return sum + (Number(rec.hariEfektif) || 0);
+      }, 0);
+
+      return {
+        id: emp.id,
+        employee: emp,
+        records: empRecords,
+        totalHadir,
+        totalSetengahHari,
+        totalIzin,
+        totalTidakHadir,
+        totalLembur,
+        totalHariEfektif,
+      };
     });
 
-    setFilteredData(filtered);
+    if (statusFilter !== "all") {
+      if (statusFilter === "LEMBUR") {
+        aggregated = aggregated.filter((item) => item.totalLembur > 0);
+      } else {
+        aggregated = aggregated.filter((item) =>
+          item.records.some((rec) => normalizeStatus(rec.status) === statusFilter)
+        );
+      }
+    }
+
+    setFilteredData(aggregated);
   };
 
   const getStatusBadge = (status: string) => {
@@ -200,7 +250,6 @@ export default function AttendancePage() {
     }
   };
 
-  const todayString = new Date().toLocaleDateString("en-CA");
   const statsSource =
     statsTab === "today"
       ? attendanceData.filter(
@@ -208,7 +257,10 @@ export default function AttendancePage() {
             new Date(item.tanggal || item.date).toLocaleDateString("en-CA") ===
             todayString
         )
-      : attendanceData;
+      : attendanceData.filter((item) => {
+          const itemDate = new Date(item.tanggal || item.date).toLocaleDateString("en-CA");
+          return itemDate >= startDate && itemDate <= endDate;
+        });
 
   const attendanceStats = {
     total: statsSource.length,
@@ -224,7 +276,7 @@ export default function AttendancePage() {
     new Set(employees.map((emp) => emp.departemen).filter(Boolean))
   );
 
-  const reportDate = dateFilter || todayString;
+  const reportDate = startDate;
   const attendanceTodayByEmployeeId = attendanceData
     .filter(
       (item) =>
@@ -272,17 +324,74 @@ export default function AttendancePage() {
       };
     });
 
-  const handleEdit = (attendance: any) => {
-    const employee = employees.find((emp) => emp.id === attendance.karyawanId);
+  const handleEdit = (item: any) => {
+    const dates = getDatesInRange(startDate, endDate);
+    const defaultDate = dates.includes(todayString) ? todayString : dates[0];
+    
+    const determineSubStatusFromRecord = (rec: any) => {
+      const normStatus = String(rec.status || "").trim().toUpperCase();
+      const ket = String(rec.keterangan || rec.notes || "").trim().toLowerCase();
+      if (normStatus === "SETENGAH_HARI") return "SETENGAH_HARI";
+      if (normStatus === "HADIR") return "HADIR";
+      if (ket.includes("sakit")) return "SAKIT";
+      if (ket.includes("libur")) return "LIBUR";
+      if (ket.includes("alpa")) return "ALPA";
+      if (ket.includes("izin")) return "IZIN";
+      if (normStatus === "IZIN") return "IZIN";
+      if (normStatus === "TIDAK_HADIR") return "ALPA";
+      return "ALPA";
+    };
+
+    const existingRecord = item.records.find((rec: any) => {
+      return new Date(rec.tanggal).toLocaleDateString("en-CA") === defaultDate;
+    });
+
     setEditingItem({
-      ...attendance,
-      employee: employee,
-      status: normalizeStatus(attendance.status),
-      setengahHari: normalizeStatus(attendance.status) === "SETENGAH_HARI",
-      isLembur: Boolean(attendance.isLembur),
-      hadir: attendance.hadir,
+      employee: item.employee,
+      datesInRange: dates,
+      selectedDate: defaultDate,
+      id: existingRecord ? existingRecord.id : null,
+      status: existingRecord ? determineSubStatusFromRecord(existingRecord) : "BELUM_ABSEN",
+      hadir: existingRecord ? existingRecord.hadir : false,
+      isLembur: existingRecord ? Boolean(existingRecord.isLembur) : false,
+      notes: existingRecord ? (existingRecord.notes || existingRecord.keterangan || "") : "",
+      lokasi: existingRecord ? (existingRecord.lokasi || "PJP") : (item.employee.lokasiDefault || "PJP"),
+      allEmployeeRecords: item.records
     });
     setShowEditModal(true);
+  };
+
+  const handleDateChangeInModal = (dateStr: string) => {
+    if (!editingItem) return;
+    
+    const determineSubStatusFromRecord = (rec: any) => {
+      const normStatus = String(rec.status || "").trim().toUpperCase();
+      const ket = String(rec.keterangan || rec.notes || "").trim().toLowerCase();
+      if (normStatus === "SETENGAH_HARI") return "SETENGAH_HARI";
+      if (normStatus === "HADIR") return "HADIR";
+      if (ket.includes("sakit")) return "SAKIT";
+      if (ket.includes("libur")) return "LIBUR";
+      if (ket.includes("alpa")) return "ALPA";
+      if (ket.includes("izin")) return "IZIN";
+      if (normStatus === "IZIN") return "IZIN";
+      if (normStatus === "TIDAK_HADIR") return "ALPA";
+      return "ALPA";
+    };
+
+    const existingRecord = editingItem.allEmployeeRecords.find((rec: any) => {
+      return new Date(rec.tanggal).toLocaleDateString("en-CA") === dateStr;
+    });
+
+    setEditingItem({
+      ...editingItem,
+      selectedDate: dateStr,
+      id: existingRecord ? existingRecord.id : null,
+      status: existingRecord ? determineSubStatusFromRecord(existingRecord) : "BELUM_ABSEN",
+      hadir: existingRecord ? existingRecord.hadir : false,
+      isLembur: existingRecord ? Boolean(existingRecord.isLembur) : false,
+      notes: existingRecord ? (existingRecord.notes || existingRecord.keterangan || "") : "",
+      lokasi: existingRecord ? (existingRecord.lokasi || "PJP") : (editingItem.employee.lokasiDefault || "PJP"),
+    });
   };
 
   const handleSaveEdit = async () => {
@@ -290,17 +399,61 @@ export default function AttendancePage() {
 
     try {
       setIsLoading(true);
-      const isPresent = isPresentStatus(editingItem.status);
 
-      // Gunakan endpoint PUT yang baru
-      await attendanceAPI.update(editingItem.id, {
-        hadir: isPresent,
-        status: editingItem.status,
-        setengahHari: normalizeStatus(editingItem.status) === "SETENGAH_HARI",
-        isLembur: Boolean(editingItem.isLembur),
-        keterangan: editingItem.notes,
-        lokasi: editingItem.lokasi,
-      });
+      let submitStatus = editingItem.status;
+      let submitKeterangan = editingItem.notes?.trim() || "";
+
+      if (editingItem.status === "SAKIT") {
+        submitStatus = "TIDAK_HADIR";
+        if (!submitKeterangan.toLowerCase().includes("sakit")) {
+          submitKeterangan = "Sakit" + (submitKeterangan ? ` - ${submitKeterangan}` : "");
+        }
+      } else if (editingItem.status === "ALPA") {
+        submitStatus = "TIDAK_HADIR";
+        if (!submitKeterangan.toLowerCase().includes("alpa")) {
+          submitKeterangan = "Alpa" + (submitKeterangan ? ` - ${submitKeterangan}` : "");
+        }
+      } else if (editingItem.status === "LIBUR") {
+        submitStatus = "TIDAK_HADIR";
+        if (!submitKeterangan.toLowerCase().includes("libur")) {
+          submitKeterangan = "Libur" + (submitKeterangan ? ` - ${submitKeterangan}` : "");
+        }
+      } else if (editingItem.status === "IZIN") {
+        submitStatus = "IZIN";
+        if (!submitKeterangan.toLowerCase().includes("izin")) {
+          submitKeterangan = "Izin" + (submitKeterangan ? ` - ${submitKeterangan}` : "");
+        }
+      }
+
+      const isPresent = submitStatus === "HADIR" || submitStatus === "SETENGAH_HARI";
+
+      if (editingItem.id) {
+        if (editingItem.status === "BELUM_ABSEN") {
+          await attendanceAPI.delete(editingItem.id);
+        } else {
+          await attendanceAPI.update(editingItem.id, {
+            hadir: isPresent,
+            status: submitStatus,
+            setengahHari: submitStatus === "SETENGAH_HARI",
+            isLembur: Boolean(editingItem.isLembur),
+            keterangan: submitKeterangan,
+            lokasi: editingItem.lokasi,
+          });
+        }
+      } else {
+        if (editingItem.status !== "BELUM_ABSEN") {
+          await attendanceAPI.createJson({
+            karyawanId: Number(editingItem.employee.id),
+            tanggal: editingItem.selectedDate,
+            hadir: isPresent,
+            status: submitStatus,
+            setengahHari: submitStatus === "SETENGAH_HARI",
+            isLembur: Boolean(editingItem.isLembur),
+            keterangan: submitKeterangan,
+            lokasi: editingItem.lokasi,
+          });
+        }
+      }
 
       await fetchData();
       setShowEditModal(false);
@@ -339,7 +492,7 @@ export default function AttendancePage() {
 
     try {
       setIsLoading(true);
-      await attendanceAPI.deleteToday(todayString);
+      await attendanceAPI.deleteToday();
       await fetchData();
     } catch (err) {
       setError("Gagal menghapus data absensi hari ini");
@@ -367,25 +520,23 @@ export default function AttendancePage() {
   };
 
   const handleExportDailyReportPDF = async () => {
-    const rows = attendanceData
-      .filter(
-        (item) =>
-          new Date(item.tanggal || item.date).toLocaleDateString("en-CA") === reportDate
-      )
-      .map((item) => {
-        const employee = employees.find((emp) => emp.id === item.karyawanId);
-        return {
-          tanggal: new Date(item.tanggal || item.date).toLocaleDateString("id-ID"),
-          nama: employee?.namaLengkap || "(Tanpa Nama)",
-          status: getStatusLabel(item.status),
-          lembur: item.isLembur ? "Lembur" : "-",
-          hariEfektif: String(Number(item.hariEfektif ?? hitungHariEfektif(item.status, item.isLembur))),
-          keterangan: item.notes || "-",
-        };
-      });
+    const rows = filteredData.map((item) => {
+      const { employee, totalHadir, totalSetengahHari, totalIzin, totalTidakHadir, totalLembur, totalHariEfektif } = item;
+      return {
+        nama: employee?.namaLengkap || "(Tanpa Nama)",
+        nik: employee?.nik || "-",
+        departemen: employee?.departemen || "-",
+        hadir: String(totalHadir),
+        setengahHari: String(totalSetengahHari),
+        lembur: String(totalLembur),
+        izin: String(totalIzin),
+        alpa: String(totalTidakHadir),
+        hariEfektif: String(totalHariEfektif),
+      };
+    });
 
     if (rows.length === 0) {
-      setError("Belum ada data absensi harian untuk diekspor");
+      setError("Belum ada data absensi untuk diekspor");
       return;
     }
 
@@ -396,26 +547,29 @@ export default function AttendancePage() {
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
       doc.setFontSize(14);
-      doc.text("Rekapan Harian Absensi Karyawan", 14, 14);
+      doc.text("Rekapan Periodik Absensi Karyawan", 14, 14);
       doc.setFontSize(10);
       doc.text(
-        `Tanggal: ${new Date(reportDate).toLocaleDateString("id-ID")}`,
+        `Periode: ${new Date(startDate).toLocaleDateString("id-ID")} s/d ${new Date(endDate).toLocaleDateString("id-ID")}`,
         14,
         21
       );
 
       autoTable(doc, {
         startY: 28,
-        head: [["Tanggal", "Nama", "Status Kehadiran", "Lembur", "Hari Efektif", "Keterangan"]],
+        head: [["Nama Karyawan", "NIK", "Departemen", "Hadir", "Setengah", "Lembur", "Izin", "Alpa", "Hari Efektif"]],
         body: rows.map((row) => [
-          row.tanggal,
           row.nama,
-          row.status,
+          row.nik,
+          row.departemen,
+          row.hadir,
+          row.setengahHari,
           row.lembur,
+          row.izin,
+          row.alpa,
           row.hariEfektif,
-          row.keterangan,
         ]),
-        styles: { fontSize: 9 },
+        styles: { fontSize: 8 },
         margin: { left: 14, right: 14 },
       });
 
@@ -425,9 +579,9 @@ export default function AttendancePage() {
         URL.revokeObjectURL(pdfPreviewUrl);
       }
       setPdfPreviewUrl(nextPreviewUrl);
-      setPdfFileName(`laporan-harian-absensi-${reportDate}.pdf`);
+      setPdfFileName(`laporan-periodik-absensi-${startDate}-to-${endDate}.pdf`);
     } catch (err) {
-      setError("Gagal export PDF laporan harian");
+      setError("Gagal export PDF laporan");
     }
   };
 
@@ -444,28 +598,28 @@ export default function AttendancePage() {
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             📋 Manajemen Absensi
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Pantau kehadiran dan absensi karyawan harian
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleExportDailyReportPDF}>
-            <Download className="w-4 h-4 mr-2" />
-            Export PDF Laporan Harian
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          <Button variant="outline" onClick={handleExportDailyReportPDF} className="flex-1 sm:flex-initial text-xs sm:text-sm">
+            <Download className="w-4 h-4 mr-2 shrink-0" />
+            Export PDF
           </Button>
-          <Button variant="destructive" onClick={handleDeleteToday}>
-            <Trash2 className="w-4 h-4 mr-2" />
+          <Button variant="destructive" onClick={handleDeleteToday} className="flex-1 sm:flex-initial text-xs sm:text-sm">
+            <Trash2 className="w-4 h-4 mr-2 shrink-0" />
             Hapus Absensi Hari Ini
           </Button>
-          <Button asChild>
+          <Button asChild className="flex-1 sm:flex-initial text-xs sm:text-sm">
             <a href="/dashboard/attendance/new">
-              <Plus className="w-4 h-4 mr-2" />
-              Tambah Absensi
+              <Plus className="w-4 h-4 mr-2 shrink-0" />
+              Tambah
             </a>
           </Button>
         </div>
@@ -486,7 +640,7 @@ export default function AttendancePage() {
               <p className="text-xs text-muted-foreground">
                 {statsTab === "today"
                   ? "Menampilkan statistik absensi hari ini"
-                  : "Menampilkan statistik semua data absensi"}
+                  : "Menampilkan statistik absensi dalam rentang tanggal terpilih"}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -502,14 +656,14 @@ export default function AttendancePage() {
                 variant={statsTab === "all" ? "default" : "outline"}
                 onClick={() => setStatsTab("all")}
               >
-                Keseluruhan
+                Rentang Terpilih
               </Button>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-7">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Absensi</CardTitle>
@@ -602,13 +756,23 @@ export default function AttendancePage() {
                   className="pl-10"
                 />
               </div>
-              <Input
-                type="date"
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="w-full"
-                title="Filter berdasarkan tanggal"
-              />
+              <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full text-sm"
+                  title="Tanggal Mulai"
+                />
+                <span className="text-zinc-500 text-xs text-center">s/d</span>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full text-sm"
+                  title="Tanggal Selesai"
+                />
+              </div>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger>
                   <SelectValue placeholder="Semua Status" />
@@ -640,38 +804,38 @@ export default function AttendancePage() {
               </Select>
             </div>
             {(searchTerm ||
-              dateFilter ||
+              startDate ||
+              endDate ||
               statusFilter !== "all" ||
               departmentFilter !== "all") && (
               <div className="mt-3 text-sm text-zinc-800">
-                📊 Menampilkan {filteredData.length} dari {attendanceData.length} data
+                📊 Menampilkan {filteredData.length} Karyawan
                 {searchTerm && ` • Pencarian: "${searchTerm}"`}
-                {dateFilter &&
-                  ` • Tanggal: ${new Date(dateFilter).toLocaleDateString("id-ID")}`}
+                {startDate && endDate &&
+                  ` • Periode: ${new Date(startDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short" })} s/d ${new Date(endDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}`}
                 {statusFilter !== "all" && ` • Status: ${statusFilter}`}
                 {departmentFilter !== "all" && ` • Departemen: ${departmentFilter}`}
               </div>
             )}
           </div>
 
-          <div className="rounded-md border">
+          <div className="rounded-md border overflow-x-auto w-full">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[250px]">👤 Karyawan</TableHead>
-                  <TableHead>📅 Tanggal</TableHead>
-                  <TableHead>📊 Status</TableHead>
-                  <TableHead>⏱️ Hari Efektif</TableHead>
                   <TableHead>🏢 Departemen</TableHead>
-                  <TableHead>📝 Keterangan</TableHead>
+                  <TableHead>📊 Rincian Kehadiran</TableHead>
+                  <TableHead>🕒 Lembur</TableHead>
+                  <TableHead>⏱️ Total Hari Efektif</TableHead>
                   <TableHead className="text-center">⚙️ Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredData.map((attendance) => {
-                  const employee = employees.find((emp) => emp.id === attendance.karyawanId);
+                {filteredData.map((item) => {
+                  const { employee, totalHadir, totalSetengahHari, totalIzin, totalTidakHadir, totalLembur, totalHariEfektif } = item;
                   return (
-                    <TableRow key={attendance.id}>
+                    <TableRow key={employee.id}>
                       <TableCell>
                         <div className="flex items-center space-x-3">
                           <Avatar className="h-8 w-8">
@@ -693,76 +857,49 @@ export default function AttendancePage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {new Date(attendance.tanggal || attendance.date).toLocaleDateString("id-ID", {
-                          weekday: "short",
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        {normalizeStatus(attendance.status) === "HADIR" && (
-                          <Badge className="bg-zinc-100 text-zinc-900 border-zinc-200">✅ Hadir</Badge>
-                        )}
-                        {normalizeStatus(attendance.status) === "SETENGAH_HARI" && (
-                          <Badge className="bg-zinc-100 text-zinc-800 border-zinc-200">🌓 Setengah Hari</Badge>
-                        )}
-                        {normalizeStatus(attendance.status) === "IZIN" && (
-                          <Badge className="bg-zinc-100 text-zinc-900 border-zinc-200">📝 Tidak Hadir (Izin)</Badge>
-                        )}
-                        {normalizeStatus(attendance.status) === "TIDAK_HADIR" && (
-                          <Badge className="bg-zinc-100 text-red-800 border-zinc-200">❌ Tidak Hadir</Badge>
-                        )}
-                        {attendance.isLembur && (
-                          <Badge className="ml-2 bg-zinc-100 text-zinc-800 border-zinc-200">🕒 Lembur</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="border-zinc-200 text-zinc-700 bg-zinc-50">
-                          {Number(attendance.hariEfektif ?? hitungHariEfektif(attendance.status, attendance.isLembur))}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
                         <span className="text-sm text-zinc-600">🏢 {employee?.departemen || "-"}</span>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm text-zinc-600">{attendance.notes || "-"}</span>
+                        <div className="flex flex-wrap gap-1">
+                          {totalHadir > 0 && (
+                            <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">Hadir: {totalHadir}</Badge>
+                          )}
+                          {totalSetengahHari > 0 && (
+                            <Badge className="bg-amber-50 text-amber-700 border-amber-200">Setengah: {totalSetengahHari}</Badge>
+                          )}
+                          {totalIzin > 0 && (
+                            <Badge className="bg-blue-50 text-blue-700 border-blue-200">Izin: {totalIzin}</Badge>
+                          )}
+                          {totalTidakHadir > 0 && (
+                            <Badge className="bg-red-50 text-red-700 border-red-200">Alpa: {totalTidakHadir}</Badge>
+                          )}
+                          {totalHadir === 0 && totalSetengahHari === 0 && totalIzin === 0 && totalTidakHadir === 0 && (
+                            <span className="text-sm text-zinc-400 italic">Belum ada absensi</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {totalLembur > 0 ? (
+                          <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200">{totalLembur} Kali</Badge>
+                        ) : (
+                          <span className="text-sm text-zinc-400">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="border-zinc-300 text-zinc-800 bg-zinc-50 font-bold">
+                          {totalHariEfektif} Hari
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center gap-2">
                           <button
-                            onClick={() => handleEdit(attendance)}
-                            className="text-zinc-700 hover:text-zinc-900 p-2 rounded-md hover:bg-zinc-50 transition-colors"
-                            title="Edit absensi"
+                            onClick={() => handleEdit(item)}
+                            className="text-zinc-700 hover:text-zinc-900 p-2 rounded-md hover:bg-zinc-100 transition-colors flex items-center gap-1 border border-zinc-200"
+                            title="Edit absensi periodik"
                           >
                             <Edit className="w-4 h-4" />
+                            <span>Edit</span>
                           </button>
-                          {deleteConfirm === attendance.id ? (
-                            <div className="flex gap-1">
-                              <button
-                                onClick={() => handleDelete(attendance.id)}
-                                className="text-red-600 hover:text-red-800 p-1 rounded text-xs bg-zinc-50 border border-zinc-200"
-                                title="Konfirmasi hapus"
-                              >
-                                ✓ Ya
-                              </button>
-                              <button
-                                onClick={() => setDeleteConfirm(null)}
-                                className="text-zinc-600 hover:text-zinc-800 p-1 rounded text-xs bg-zinc-50 border border-zinc-200"
-                                title="Batal hapus"
-                              >
-                                ✗ Batal
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => handleDelete(attendance.id)}
-                              className="text-red-600 hover:text-red-800 p-2 rounded-md hover:bg-zinc-50 transition-colors"
-                              title="Hapus absensi"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -780,7 +917,8 @@ export default function AttendancePage() {
               </p>
               <p className="text-sm text-zinc-500 mb-4">
                 {searchTerm ||
-                dateFilter ||
+                startDate ||
+                endDate ||
                 statusFilter !== "all" ||
                 departmentFilter !== "all"
                   ? "Coba ubah filter pencarian atau tambah data absensi baru"
@@ -800,82 +938,136 @@ export default function AttendancePage() {
       {/* Edit Modal */}
       {showEditModal && editingItem && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">✏️ Edit Absensi</h2>
+          <div className="bg-white rounded-lg p-5 w-full max-w-md mx-4 shadow-xl border">
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <span>✏️</span> Edit Absensi Karyawan
+            </h2>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <label className="block text-sm font-medium text-zinc-500 mb-1">
                   Karyawan:
                 </label>
-                <p className="text-zinc-700 bg-zinc-50 p-2 rounded">
-                  {editingItem.employee?.namaLengkap} (
-                  {editingItem.employee?.nik})
-                </p>
+                <div className="bg-zinc-50 border p-3 rounded-lg">
+                  <div className="font-semibold text-zinc-900">{editingItem.employee?.namaLengkap}</div>
+                  <div className="text-xs text-zinc-500">NIK: {editingItem.employee?.nik} • Departemen: {editingItem.employee?.departemen}</div>
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">
-                  Tanggal:
-                </label>
-                <p className="text-zinc-700 bg-zinc-50 p-2 rounded">
-                  {new Date(editingItem.tanggal).toLocaleDateString("id-ID")}
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Status:
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  Pilih Tanggal Absensi:
                 </label>
                 <Select
-                  value={editingItem.status}
-                  onValueChange={(value) => setEditingItem({ ...editingItem, status: value })}
+                  value={editingItem.selectedDate}
+                  onValueChange={handleDateChangeInModal}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="HADIR">✅ Hadir</SelectItem>
-                    <SelectItem value="SETENGAH_HARI">🌓 Setengah Hari</SelectItem>
-                    <SelectItem value="IZIN">📝 Izin</SelectItem>
-                    <SelectItem value="TIDAK_HADIR">❌ Tidak Hadir</SelectItem>
+                    {editingItem.datesInRange.map((dateStr: string) => {
+                      const hasRecord = editingItem.allEmployeeRecords.some(
+                        (rec: any) => new Date(rec.tanggal).toLocaleDateString("en-CA") === dateStr
+                      );
+                      const dateObj = new Date(dateStr);
+                      const formattedDate = dateObj.toLocaleDateString("id-ID", {
+                        weekday: "long",
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric"
+                      });
+                      return (
+                        <SelectItem key={dateStr} value={dateStr}>
+                          {formattedDate} {hasRecord ? "📝" : "⚪ (Belum Absen)"}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Keterangan:
-                </label>
-                <Input
-                  value={editingItem.notes || ""}
-                  onChange={(e) =>
-                    setEditingItem({ ...editingItem, notes: e.target.value })
-                  }
-                  placeholder="Tambahkan keterangan..."
-                />
-              </div>
+              <div className="border-t pt-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">
+                    Status Kehadiran:
+                  </label>
+                  <Select
+                    value={editingItem.status}
+                    onValueChange={(value) => setEditingItem({ ...editingItem, status: value })}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="BELUM_ABSEN">⚪ Belum Absen / Hapus Data Hari Ini</SelectItem>
+                      <SelectItem value="HADIR">✅ Hadir</SelectItem>
+                      <SelectItem value="SETENGAH_HARI">🌓 Setengah Hari</SelectItem>
+                      <SelectItem value="IZIN">📝 Izin</SelectItem>
+                      <SelectItem value="SAKIT">🤒 Sakit</SelectItem>
+                      <SelectItem value="ALPA">❌ Alpa</SelectItem>
+                      <SelectItem value="LIBUR">🌴 Libur/Off</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={Boolean(editingItem.isLembur)}
-                  onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      isLembur: e.target.checked,
-                    })
-                  }
-                  id="edit-lembur"
-                  className="w-4 h-4"
-                />
-                <label htmlFor="edit-lembur" className="text-sm text-zinc-600">
-                  Lembur (+1 hari efektif)
-                </label>
+                {editingItem.status !== "BELUM_ABSEN" && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700 mb-1">
+                        Lokasi:
+                      </label>
+                      <Select
+                        value={editingItem.lokasi}
+                        onValueChange={(value) => setEditingItem({ ...editingItem, lokasi: value })}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="PJP">🏢 PJP</SelectItem>
+                          <SelectItem value="SP">🏢 SP</SelectItem>
+                          <SelectItem value="PRIMA">🏢 PRIMA</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700 mb-1">
+                        Keterangan:
+                      </label>
+                      <Input
+                        value={editingItem.notes || ""}
+                        onChange={(e) =>
+                          setEditingItem({ ...editingItem, notes: e.target.value })
+                        }
+                        placeholder="Tambahkan keterangan..."
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 py-1">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(editingItem.isLembur)}
+                        onChange={(e) =>
+                          setEditingItem({
+                            ...editingItem,
+                            isLembur: e.target.checked,
+                          })
+                        }
+                        id="edit-lembur"
+                        className="w-4 h-4 rounded text-zinc-900 border-zinc-300 focus:ring-zinc-900"
+                      />
+                      <label htmlFor="edit-lembur" className="text-sm font-medium text-zinc-700 cursor-pointer select-none">
+                        Lembur (+1 hari efektif)
+                      </label>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
-            <div className="flex gap-2 justify-end mt-6">
+            <div className="flex gap-2 justify-end mt-6 border-t pt-4">
               <Button
                 variant="outline"
                 onClick={() => {
