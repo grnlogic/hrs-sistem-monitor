@@ -56,6 +56,21 @@ const normalizeStatus = (status?: string) => {
   return value || "TIDAK_HADIR";
 };
 
+const getDetailedStatus = (rec: any) => {
+  if (!rec) return "BELUM_ABSEN";
+  const normStatus = String(rec.status || "").trim().toUpperCase();
+  const ket = String(rec.notes || rec.keterangan || "").trim().toLowerCase();
+  if (normStatus === "SETENGAH_HARI") return "SETENGAH_HARI";
+  if (normStatus === "HADIR") return "HADIR";
+  if (ket.includes("sakit")) return "SAKIT";
+  if (ket.includes("libur")) return "LIBUR";
+  if (ket.includes("alpa")) return "ALPA";
+  if (ket.includes("izin")) return "IZIN";
+  if (normStatus === "IZIN") return "IZIN";
+  if (normStatus === "TIDAK_HADIR") return "ALPA";
+  return "ALPA";
+};
+
 const isPresentStatus = (status?: string) => {
   const normalized = normalizeStatus(status);
   return normalized === "HADIR" || normalized === "SETENGAH_HARI";
@@ -203,11 +218,23 @@ export default function AttendancePage() {
     let aggregated = filteredEmployees.map((emp) => {
       const empRecords = rangeRecords.filter((rec) => Number(rec.karyawanId) === Number(emp.id));
       
-      const totalHadir = empRecords.filter((rec) => normalizeStatus(rec.status) === "HADIR").length;
-      const totalSetengahHari = empRecords.filter((rec) => normalizeStatus(rec.status) === "SETENGAH_HARI").length;
-      const totalIzin = empRecords.filter((rec) => normalizeStatus(rec.status) === "IZIN").length;
-      const totalTidakHadir = empRecords.filter((rec) => normalizeStatus(rec.status) === "TIDAK_HADIR").length;
+      let totalHadir = 0;
+      let totalSetengahHari = 0;
+      let totalIzin = 0;
+      let totalSakit = 0;
+      let totalAlpa = 0;
+      let totalLibur = 0;
       const totalLembur = empRecords.filter((rec) => Boolean(rec.isLembur)).length;
+
+      empRecords.forEach((rec) => {
+        const sub = getDetailedStatus(rec);
+        if (sub === "HADIR") totalHadir++;
+        else if (sub === "SETENGAH_HARI") totalSetengahHari++;
+        else if (sub === "IZIN") totalIzin++;
+        else if (sub === "SAKIT") totalSakit++;
+        else if (sub === "ALPA") totalAlpa++;
+        else if (sub === "LIBUR") totalLibur++;
+      });
 
       const totalHariEfektif = empRecords.reduce((sum, rec) => {
         return sum + (Number(rec.hariEfektif) || 0);
@@ -220,7 +247,9 @@ export default function AttendancePage() {
         totalHadir,
         totalSetengahHari,
         totalIzin,
-        totalTidakHadir,
+        totalSakit,
+        totalAlpa,
+        totalLibur,
         totalLembur,
         totalHariEfektif,
       };
@@ -231,7 +260,7 @@ export default function AttendancePage() {
         aggregated = aggregated.filter((item) => item.totalLembur > 0);
       } else {
         aggregated = aggregated.filter((item) =>
-          item.records.some((rec) => normalizeStatus(rec.status) === statusFilter)
+          item.records.some((rec) => getDetailedStatus(rec) === statusFilter)
         );
       }
     }
@@ -328,20 +357,6 @@ export default function AttendancePage() {
     const dates = getDatesInRange(startDate, endDate);
     const defaultDate = dates.includes(todayString) ? todayString : dates[0];
     
-    const determineSubStatusFromRecord = (rec: any) => {
-      const normStatus = String(rec.status || "").trim().toUpperCase();
-      const ket = String(rec.keterangan || rec.notes || "").trim().toLowerCase();
-      if (normStatus === "SETENGAH_HARI") return "SETENGAH_HARI";
-      if (normStatus === "HADIR") return "HADIR";
-      if (ket.includes("sakit")) return "SAKIT";
-      if (ket.includes("libur")) return "LIBUR";
-      if (ket.includes("alpa")) return "ALPA";
-      if (ket.includes("izin")) return "IZIN";
-      if (normStatus === "IZIN") return "IZIN";
-      if (normStatus === "TIDAK_HADIR") return "ALPA";
-      return "ALPA";
-    };
-
     const existingRecord = item.records.find((rec: any) => {
       return new Date(rec.tanggal).toLocaleDateString("en-CA") === defaultDate;
     });
@@ -351,7 +366,7 @@ export default function AttendancePage() {
       datesInRange: dates,
       selectedDate: defaultDate,
       id: existingRecord ? existingRecord.id : null,
-      status: existingRecord ? determineSubStatusFromRecord(existingRecord) : "BELUM_ABSEN",
+      status: existingRecord ? getDetailedStatus(existingRecord) : "BELUM_ABSEN",
       hadir: existingRecord ? existingRecord.hadir : false,
       isLembur: existingRecord ? Boolean(existingRecord.isLembur) : false,
       notes: existingRecord ? (existingRecord.notes || existingRecord.keterangan || "") : "",
@@ -364,20 +379,6 @@ export default function AttendancePage() {
   const handleDateChangeInModal = (dateStr: string) => {
     if (!editingItem) return;
     
-    const determineSubStatusFromRecord = (rec: any) => {
-      const normStatus = String(rec.status || "").trim().toUpperCase();
-      const ket = String(rec.keterangan || rec.notes || "").trim().toLowerCase();
-      if (normStatus === "SETENGAH_HARI") return "SETENGAH_HARI";
-      if (normStatus === "HADIR") return "HADIR";
-      if (ket.includes("sakit")) return "SAKIT";
-      if (ket.includes("libur")) return "LIBUR";
-      if (ket.includes("alpa")) return "ALPA";
-      if (ket.includes("izin")) return "IZIN";
-      if (normStatus === "IZIN") return "IZIN";
-      if (normStatus === "TIDAK_HADIR") return "ALPA";
-      return "ALPA";
-    };
-
     const existingRecord = editingItem.allEmployeeRecords.find((rec: any) => {
       return new Date(rec.tanggal).toLocaleDateString("en-CA") === dateStr;
     });
@@ -386,7 +387,7 @@ export default function AttendancePage() {
       ...editingItem,
       selectedDate: dateStr,
       id: existingRecord ? existingRecord.id : null,
-      status: existingRecord ? determineSubStatusFromRecord(existingRecord) : "BELUM_ABSEN",
+      status: existingRecord ? getDetailedStatus(existingRecord) : "BELUM_ABSEN",
       hadir: existingRecord ? existingRecord.hadir : false,
       isLembur: existingRecord ? Boolean(existingRecord.isLembur) : false,
       notes: existingRecord ? (existingRecord.notes || existingRecord.keterangan || "") : "",
@@ -521,7 +522,7 @@ export default function AttendancePage() {
 
   const handleExportDailyReportPDF = async () => {
     const rows = filteredData.map((item) => {
-      const { employee, totalHadir, totalSetengahHari, totalIzin, totalTidakHadir, totalLembur, totalHariEfektif } = item;
+      const { employee, totalHadir, totalSetengahHari, totalIzin, totalSakit, totalAlpa, totalLibur, totalLembur, totalHariEfektif } = item;
       return {
         nama: employee?.namaLengkap || "(Tanpa Nama)",
         nik: employee?.nik || "-",
@@ -530,7 +531,9 @@ export default function AttendancePage() {
         setengahHari: String(totalSetengahHari),
         lembur: String(totalLembur),
         izin: String(totalIzin),
-        alpa: String(totalTidakHadir),
+        sakit: String(totalSakit),
+        alpa: String(totalAlpa),
+        libur: String(totalLibur),
         hariEfektif: String(totalHariEfektif),
       };
     });
@@ -557,7 +560,7 @@ export default function AttendancePage() {
 
       autoTable(doc, {
         startY: 28,
-        head: [["Nama Karyawan", "NIK", "Departemen", "Hadir", "Setengah", "Lembur", "Izin", "Alpa", "Hari Efektif"]],
+        head: [["Nama Karyawan", "NIK", "Departemen", "Hadir", "Setengah", "Lembur", "Izin", "Sakit", "Alpa", "Libur", "Hari Efektif"]],
         body: rows.map((row) => [
           row.nama,
           row.nik,
@@ -566,7 +569,9 @@ export default function AttendancePage() {
           row.setengahHari,
           row.lembur,
           row.izin,
+          row.sakit,
           row.alpa,
+          row.libur,
           row.hariEfektif,
         ]),
         styles: { fontSize: 8 },
@@ -782,7 +787,9 @@ export default function AttendancePage() {
                   <SelectItem value="HADIR">✅ Hadir</SelectItem>
                   <SelectItem value="SETENGAH_HARI">🌓 Setengah Hari</SelectItem>
                   <SelectItem value="IZIN">📝 Izin</SelectItem>
-                  <SelectItem value="TIDAK_HADIR">❌ Tidak Hadir</SelectItem>
+                  <SelectItem value="SAKIT">🤒 Sakit</SelectItem>
+                  <SelectItem value="ALPA">❌ Alpa</SelectItem>
+                  <SelectItem value="LIBUR">🌴 Libur/Off</SelectItem>
                   <SelectItem value="LEMBUR">🕒 Lembur</SelectItem>
                 </SelectContent>
               </Select>
@@ -833,7 +840,7 @@ export default function AttendancePage() {
               </TableHeader>
               <TableBody>
                 {filteredData.map((item) => {
-                  const { employee, totalHadir, totalSetengahHari, totalIzin, totalTidakHadir, totalLembur, totalHariEfektif } = item;
+                  const { employee, totalHadir, totalSetengahHari, totalIzin, totalSakit, totalAlpa, totalLibur, totalLembur, totalHariEfektif } = item;
                   return (
                     <TableRow key={employee.id}>
                       <TableCell>
@@ -870,10 +877,16 @@ export default function AttendancePage() {
                           {totalIzin > 0 && (
                             <Badge className="bg-blue-50 text-blue-700 border-blue-200">Izin: {totalIzin}</Badge>
                           )}
-                          {totalTidakHadir > 0 && (
-                            <Badge className="bg-red-50 text-red-700 border-red-200">Alpa: {totalTidakHadir}</Badge>
+                          {totalSakit > 0 && (
+                            <Badge className="bg-orange-50 text-orange-700 border-orange-200 font-medium">Sakit: {totalSakit}</Badge>
                           )}
-                          {totalHadir === 0 && totalSetengahHari === 0 && totalIzin === 0 && totalTidakHadir === 0 && (
+                          {totalAlpa > 0 && (
+                            <Badge className="bg-red-50 text-red-700 border-red-200">Alpa: {totalAlpa}</Badge>
+                          )}
+                          {totalLibur > 0 && (
+                            <Badge className="bg-zinc-100 text-zinc-700 border-zinc-300 font-medium">Libur: {totalLibur}</Badge>
+                          )}
+                          {totalHadir === 0 && totalSetengahHari === 0 && totalIzin === 0 && totalSakit === 0 && totalAlpa === 0 && totalLibur === 0 && (
                             <span className="text-sm text-zinc-400 italic">Belum ada absensi</span>
                           )}
                         </div>
