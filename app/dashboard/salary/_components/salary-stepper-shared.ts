@@ -46,6 +46,7 @@ export type SalaryInputState = {
   bonusItems: SalaryItem[];
   potonganItems: SalaryItem[];
   bonusPKB: number | null;
+  sisaPiutang?: number | null;
 };
 
 export type EstimatedRow = {

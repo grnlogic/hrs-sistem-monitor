@@ -256,6 +256,8 @@ export function NonStaffSalaryWorkflow() {
   const [savedHariEfektifByKaryawanId, setSavedHariEfektifByKaryawanId] = useState<Record<string, number>>({});
   const [reviewGajiIdByKaryawanId, setReviewGajiIdByKaryawanId] = useState<Record<string, string>>({});
   const [savingHariEfektifByKaryawanId, setSavingHariEfektifByKaryawanId] = useState<Record<string, boolean>>({});
+  const [selectedKaryawanIds, setSelectedKaryawanIds] = useState<string[]>([]);
+  const [manualUpahHarian, setManualUpahHarian] = useState<Record<string, number>>({});
   const [snapshotRows, setSnapshotRows] = useState<SnapshotRow[]>([]);
   const [gajiByEmployeePeriod, setGajiByEmployeePeriod] = useState<GajiPeriodIndex>({});
 
@@ -287,13 +289,16 @@ export function NonStaffSalaryWorkflow() {
     return reviewRows.map((row) => {
       const override = manualHariEfektif[row.karyawanId];
       const hariEfektif = override ?? row.hariEfektif;
+      const upahOverride = manualUpahHarian[row.karyawanId];
+      const upahHarian = upahOverride ?? row.upahHarian;
       return {
         ...row,
         hariEfektif,
-        gajiPokok: Math.round(hariEfektif * row.upahHarian),
+        upahHarian,
+        gajiPokok: Math.round(hariEfektif * upahHarian),
       };
     });
-  }, [reviewRows, manualHariEfektif]);
+  }, [reviewRows, manualHariEfektif, manualUpahHarian]);
 
   const selectedSnapshot = useMemo(
     () => snapshotRows.find((row) => row.gajiId === selectedSalaryId),
@@ -304,7 +309,7 @@ export function NonStaffSalaryWorkflow() {
     const input = inputsBySalaryId[row.gajiId] || buildDefaultInputState();
     const totalBonus = input.bonusItems.reduce((sum, item) => sum + toNumber(item.nominal), 0);
     const totalPotongan = input.potonganItems.reduce((sum, item) => sum + toNumber(item.nominal), 0);
-    const gajiBersih = row.gajiPokok + totalBonus - totalPotongan;
+    const gajiBersih = Math.max(0, row.gajiPokok + totalBonus - totalPotongan);
     return {
       totalBonus,
       totalPotongan,
@@ -502,6 +507,8 @@ export function NonStaffSalaryWorkflow() {
   async function handleShowData() {
     setError("");
     setMessage("");
+    setSelectedKaryawanIds([]);
+    setManualUpahHarian({});
 
     if (!startDate || !endDate) {
       setError("Tanggal mulai dan tanggal akhir wajib diisi.");
@@ -631,7 +638,13 @@ export function NonStaffSalaryWorkflow() {
     try {
       setSubmitting(true);
       // Draft dibuat/di-refresh saat konfirmasi agar flow tidak bergantung tombol terpisah.
-      const resText = await generateSalaryAPI.generateNonStaffMingguan(startDate, endDate, selectedDivisions);
+      const resText = await generateSalaryAPI.generateNonStaffMingguan(
+        startDate,
+        endDate,
+        selectedDivisions,
+        selectedKaryawanIds,
+        manualUpahHarian
+      );
       showToast("success", resText);
 
       const generated = await salaryAPI.getGajiByDateRange(startDate, endDate);
@@ -798,10 +811,11 @@ export function NonStaffSalaryWorkflow() {
         [row.gajiId]: {
           bonusItems: normalizedBonus,
           potonganItems: normalizedPotongan,
+          sisaPiutang: detail?.sisaPiutang !== undefined ? detail.sisaPiutang : null,
         },
       }));
 
-      if (bonusFromApi.length > 0 || potonganFromApi.length > 0) {
+      if (bonusFromApi.length > 0 || potonganFromApi.length > 0 || (detail?.sisaPiutang !== undefined && detail.sisaPiutang !== null)) {
         setDoneBySalaryId((prev) => ({ ...prev, [row.gajiId]: true }));
       }
     } catch (detailErr) {
@@ -837,6 +851,19 @@ export function NonStaffSalaryWorkflow() {
         [salaryId]: {
           ...current,
           [key]: list,
+        },
+      };
+    });
+  }
+
+  function updateSisaPiutang(salaryId: string, value: number | null) {
+    setInputsBySalaryId((prev) => {
+      const current = prev[salaryId] || buildDefaultInputState();
+      return {
+        ...prev,
+        [salaryId]: {
+          ...current,
+          sisaPiutang: value,
         },
       };
     });
@@ -888,6 +915,7 @@ export function NonStaffSalaryWorkflow() {
         karyawanId: selectedSnapshot.karyawanId,
         bonusItems: inputState.bonusItems.filter((item) => item.judul.trim()),
         potonganItems: inputState.potonganItems.filter((item) => item.judul.trim()),
+        sisaPiutang: inputState.sisaPiutang,
       });
 
       setDoneBySalaryId((prev) => ({ ...prev, [selectedSnapshot.gajiId]: true }));
@@ -937,6 +965,7 @@ export function NonStaffSalaryWorkflow() {
             gajiBersih: calc.gajiBersih,
             bonusItems: input.bonusItems,
             potonganItems: input.potonganItems,
+            sisaPiutang: input.sisaPiutang,
           });
           return;
         }
@@ -971,6 +1000,7 @@ export function NonStaffSalaryWorkflow() {
             gajiBersih: partGajiPokok + partBonus - partPotongan,
             bonusItems: input.bonusItems,
             potonganItems: input.potonganItems,
+            sisaPiutang: input.sisaPiutang,
           });
         });
       });
@@ -1214,7 +1244,7 @@ export function NonStaffSalaryWorkflow() {
 
       <NonStaffRekapPopup rekapPopup={rekapPopup} setRekapPopup={setRekapPopup} />
 
-      {step === 1 ? (
+      {step === 1 && (
         <NonStaffStep1Review
           startDate={startDate}
           setStartDate={setStartDate}
@@ -1226,6 +1256,10 @@ export function NonStaffSalaryWorkflow() {
           effectiveReviewRows={effectiveReviewRows}
           manualHariEfektif={manualHariEfektif}
           setManualHariEfektif={setManualHariEfektif}
+          selectedKaryawanIds={selectedKaryawanIds}
+          setSelectedKaryawanIds={setSelectedKaryawanIds}
+          manualUpahHarian={manualUpahHarian}
+          setManualUpahHarian={setManualUpahHarian}
           savingHariEfektifByKaryawanId={savingHariEfektifByKaryawanId}
           canEditSalary={canEditSalary}
           submitting={submitting}
@@ -1233,7 +1267,7 @@ export function NonStaffSalaryWorkflow() {
           handleHariEfektifBlur={handleHariEfektifBlur}
           handleConfirmAndContinue={handleConfirmAndContinue}
         />
-      ) : null}
+      )}
 
       {step === 2 && canEditSalary ? (
         <NonStaffStep2BonusPotongan
@@ -1270,6 +1304,7 @@ export function NonStaffSalaryWorkflow() {
         canEditSalary={canEditSalary}
         calculatedForSnapshot={calculatedForSnapshot}
         updateItem={updateItem}
+        updateSisaPiutang={updateSisaPiutang}
         addItem={addItem}
         deleteItem={deleteItem}
         submitting={submitting}

@@ -56,6 +56,7 @@ type NonStaffInputDialogProps = {
     key: "bonusItems" | "potonganItems",
     index: number
   ) => void;
+  updateSisaPiutang: (salaryId: string, value: number | null) => void;
   submitting: boolean;
   saveInputSalary: () => void;
 };
@@ -85,6 +86,7 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
     updateItem,
     addItem,
     deleteItem,
+    updateSisaPiutang,
     submitting,
     saveInputSalary,
   } = props;
@@ -189,6 +191,7 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                             type="number"
                             min={0}
                             placeholder="0"
+                            onWheel={(e) => e.currentTarget.blur()}
                             value={
                               toNumber(item.nominal) === 0
                                 ? ""
@@ -280,6 +283,7 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                             type="number"
                             min={0}
                             placeholder="0"
+                            onWheel={(e) => e.currentTarget.blur()}
                             value={
                               toNumber(item.nominal) === 0
                                 ? ""
@@ -333,6 +337,31 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
 
             <Card>
               <CardHeader>
+                <CardTitle className="text-base">Sisa Piutang (Informasional)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Input
+                  disabled={!canEditSalary}
+                  type="number"
+                  min={0}
+                  placeholder="Masukkan sisa piutang (kosongkan jika tidak ada)"
+                  onWheel={(e) => e.currentTarget.blur()}
+                  value={
+                    inputsBySalaryId[selectedSnapshot.gajiId]?.sisaPiutang === undefined ||
+                    inputsBySalaryId[selectedSnapshot.gajiId]?.sisaPiutang === null
+                      ? ""
+                      : inputsBySalaryId[selectedSnapshot.gajiId].sisaPiutang
+                  }
+                  onChange={(e) => {
+                    const val = e.target.value === "" ? null : Number(e.target.value);
+                    updateSisaPiutang(selectedSnapshot.gajiId, val);
+                  }}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
                 <CardTitle className="text-base">
                   Preview Slip Live
                 </CardTitle>
@@ -368,6 +397,16 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                     )}
                   </span>
                 </div>
+                {inputsBySalaryId[selectedSnapshot.gajiId]?.sisaPiutang !== undefined &&
+                  inputsBySalaryId[selectedSnapshot.gajiId]?.sisaPiutang !== null &&
+                  inputsBySalaryId[selectedSnapshot.gajiId]?.sisaPiutang! > 0 && (
+                    <div className="flex justify-between border-t pt-2 text-muted-foreground">
+                      <span>Sisa Piutang</span>
+                      <span>
+                        {formatCurrency(inputsBySalaryId[selectedSnapshot.gajiId].sisaPiutang!)}
+                      </span>
+                    </div>
+                  )}
               </CardContent>
             </Card>
           </div>

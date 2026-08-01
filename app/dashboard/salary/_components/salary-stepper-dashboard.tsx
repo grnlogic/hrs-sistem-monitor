@@ -471,10 +471,11 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
           bonusItems: normalizedBonus,
           potonganItems: normalizedPotongan,
           bonusPKB: null,
+          sisaPiutang: detail?.sisaPiutang !== undefined ? detail.sisaPiutang : null,
         },
       }));
 
-      if (bonusItemsFromApi.length > 0 || potonganItemsFromApi.length > 0) {
+      if (bonusItemsFromApi.length > 0 || potonganItemsFromApi.length > 0 || (detail?.sisaPiutang !== undefined && detail.sisaPiutang !== null)) {
         setInputDoneBySalaryId((prev) => ({ ...prev, [row.id]: true }));
       }
     } catch (err) {
@@ -514,13 +515,26 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
     });
   }
 
+  function updateSisaPiutang(salaryId: string, value: number | null) {
+    setInputsBySalaryId((prev) => {
+      const current = prev[salaryId] || buildDefaultInputState();
+      return {
+        ...prev,
+        [salaryId]: {
+          ...current,
+          sisaPiutang: value,
+        },
+      };
+    });
+  }
+
   function calculatedRow(row: SalaryRow): CalculatedRow {
     const inputState = inputsBySalaryId[row.id] || buildDefaultInputState();
     const totalBonus = inputState.bonusItems.reduce((sum, item) => sum + toNumber(item.nominal), 0);
     const totalPotongan = inputState.potonganItems.reduce((sum, item) => sum + toNumber(item.nominal), 0);
 
     if (pageType === "staff") {
-      const gajiBersih = row.gajiPokok + totalBonus - totalPotongan;
+      const gajiBersih = Math.max(0, row.gajiPokok + totalBonus - totalPotongan);
       return {
         hariEfektif: undefined as number | undefined,
         upahHarian: undefined as number | undefined,
@@ -539,7 +553,7 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
     const gajiPokok = Math.round(hariEfektif * upahHarian);
     const blending = (employee?.departemen || "").toLowerCase().includes("blending") ? summary.hadir * 3000 : 0;
     const tunjanganItems: SalaryItem[] = blending > 0 ? [{ judul: "Tunjangan Blending", nominal: blending }] : [];
-    const gajiBersih = gajiPokok + blending + totalBonus - totalPotongan;
+    const gajiBersih = Math.max(0, gajiPokok + blending + totalBonus - totalPotongan);
 
     return {
       hariEfektif,
@@ -565,6 +579,7 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
         karyawanId: selectedSalary.karyawanId,
         bonusItems: detail.bonusItems.filter((item) => item.judul.trim()),
         potonganItems: detail.potonganItems.filter((item) => item.judul.trim()),
+        sisaPiutang: detail.sisaPiutang,
       });
 
       setInputDoneBySalaryId((prev) => ({ ...prev, [selectedSalary.id]: true }));
@@ -611,6 +626,7 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
         tunjangan: calc.tunjanganItems.map((item) => ({ label: item.judul, nominal: item.nominal })),
         bonusItems: detail.bonusItems.map((item) => ({ label: item.judul, nominal: item.nominal })),
         potonganItems: detail.potonganItems.map((item) => ({ label: item.judul, nominal: item.nominal })),
+        sisaPiutang: detail.sisaPiutang,
       };
     });
 
@@ -775,6 +791,7 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
         attendanceFor={attendanceFor}
         calculatedRow={calculatedRow}
         updateItem={updateItem}
+        updateSisaPiutang={updateSisaPiutang}
         phase2ReadOnly={phase2ReadOnly}
         canPhase2Action={canPhase2Action}
         submitting={submitting}

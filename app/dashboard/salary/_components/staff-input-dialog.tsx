@@ -44,6 +44,7 @@ type StaffInputDialogProps = {
     key: "judul" | "nominal",
     value: string
   ) => void;
+  updateSisaPiutang: (salaryId: string, value: number | null) => void;
   phase2ReadOnly: boolean;
   canPhase2Action: boolean;
   submitting: boolean;
@@ -61,6 +62,7 @@ export function StaffInputDialog(props: StaffInputDialogProps) {
     attendanceFor,
     calculatedRow,
     updateItem,
+    updateSisaPiutang,
     phase2ReadOnly,
     canPhase2Action,
     submitting,
@@ -171,6 +173,7 @@ export function StaffInputDialog(props: StaffInputDialogProps) {
                           type="number"
                           min={0}
                           value={item.nominal}
+                          onWheel={(e) => e.currentTarget.blur()}
                           onChange={(e) =>
                             updateItem(
                               selectedSalary.id,
@@ -213,6 +216,7 @@ export function StaffInputDialog(props: StaffInputDialogProps) {
                           type="number"
                           min={0}
                           value={item.nominal}
+                          onWheel={(e) => e.currentTarget.blur()}
                           onChange={(e) =>
                             updateItem(
                               selectedSalary.id,
@@ -228,6 +232,27 @@ export function StaffInputDialog(props: StaffInputDialogProps) {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+
+            <div className="rounded-md border p-3">
+              <p className="mb-2 text-sm font-medium">Sisa Piutang (Informasional)</p>
+              <Input
+                disabled={phase2ReadOnly}
+                type="number"
+                min={0}
+                placeholder="Masukkan sisa piutang (kosongkan jika tidak ada)"
+                onWheel={(e) => e.currentTarget.blur()}
+                value={
+                  inputsBySalaryId[selectedSalary.id]?.sisaPiutang === undefined ||
+                  inputsBySalaryId[selectedSalary.id]?.sisaPiutang === null
+                    ? ""
+                    : inputsBySalaryId[selectedSalary.id].sisaPiutang
+                }
+                onChange={(e) => {
+                  const val = e.target.value === "" ? null : Number(e.target.value);
+                  updateSisaPiutang(selectedSalary.id, val);
+                }}
+              />
             </div>
 
             <div className="rounded-md border p-3 text-sm">
@@ -261,6 +286,16 @@ export function StaffInputDialog(props: StaffInputDialogProps) {
                     {formatCurrency(calculatedRow(selectedSalary).gajiBersih)}
                   </span>
                 </div>
+                {inputsBySalaryId[selectedSalary.id]?.sisaPiutang !== undefined &&
+                  inputsBySalaryId[selectedSalary.id]?.sisaPiutang !== null &&
+                  inputsBySalaryId[selectedSalary.id]?.sisaPiutang! > 0 && (
+                    <div className="flex justify-between border-t pt-2 text-muted-foreground">
+                      <span>Sisa Piutang</span>
+                      <span>
+                        {formatCurrency(inputsBySalaryId[selectedSalary.id].sisaPiutang!)}
+                      </span>
+                    </div>
+                  )}
               </div>
             </div>
           </div>

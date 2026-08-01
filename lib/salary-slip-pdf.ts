@@ -22,6 +22,7 @@ export type SalarySlipPayload = {
   tunjangan?: SlipItem[];
   bonusItems: SlipItem[];
   potonganItems: SlipItem[];
+  sisaPiutang?: number | null;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -45,7 +46,7 @@ function calculateSummary(payload: SalarySlipPayload) {
   );
   const totalPendapatan =
     Number(payload.gajiPokok || 0) + totalTunjangan + totalBonus;
-  const gajiBersih = totalPendapatan - totalPotongan;
+  const gajiBersih = Math.max(0, totalPendapatan - totalPotongan);
 
   return {
     totalTunjangan,
@@ -272,7 +273,11 @@ function calculateStaffSlipHeight(payload: SalarySlipPayload): number {
   const totalRow = 1; // TOTAL
   const bottomPadding = 4.0;
   const computed = baseHeight + (bodyRows + potonganRows + totalRow) * S_ROW_GAP + sectionGap + bottomPadding;
-  return Math.max(50.0, computed);
+  let finalHeight = computed;
+  if (payload.sisaPiutang && payload.sisaPiutang > 0) {
+    finalHeight += S_ROW_GAP;
+  }
+  return Math.max(50.0, finalHeight);
 }
 
 // ─── Draw single Staff slip ───────────────────────────────────────────────────
@@ -383,6 +388,10 @@ async function drawSingleSlip(
 
   // Total
   addRow("TOTAL", formatRupiah(gajiBersih), true);
+
+  if (payload.sisaPiutang && payload.sisaPiutang > 0) {
+    addRow("Sisa Piutang", formatRupiah(payload.sisaPiutang), false);
+  }
 }
 
 // ─── Measure slip width from content ─────────────────────────────────────────
@@ -650,6 +659,7 @@ export type NonStaffSlipExportPayload = {
   gajiBersih: number;
   bonusItems: Array<{ judul: string; nominal: number }>;
   potonganItems: Array<{ judul: string; nominal: number }>;
+  sisaPiutang?: number | null;
 };
 
 function formatPeriodRangeLabel(startDate: string, endDate: string): string {
@@ -712,6 +722,10 @@ function calculateNonStaffSlipHeight(payload: NonStaffSlipExportPayload): number
   // Gaji bersih + divider above it
   height += 1.0; // thin divider gap
   height += NS_ROW_GAP;
+
+  if (payload.sisaPiutang && payload.sisaPiutang > 0) {
+    height += NS_ROW_GAP;
+  }
 
   // Bottom padding
   height += 4.0;
@@ -830,6 +844,10 @@ async function drawNonStaffSlip(
   doc.line(leftX, cursorY - 0.5, rightEdge, cursorY - 0.5);
 
   linePair("GAJI BERSIH", formatRupiah(payload.gajiBersih), true);
+
+  if (payload.sisaPiutang && payload.sisaPiutang > 0) {
+    linePair("Sisa Piutang", formatRupiah(payload.sisaPiutang), false);
+  }
 }
 
 // ─── Export: Non-Staff Slip PDF ───────────────────────────────────────────────

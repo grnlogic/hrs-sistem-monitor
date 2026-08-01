@@ -234,6 +234,7 @@ export const salaryAPI = {
     karyawanId: string
     bonusItems: Array<{ id?: string; judul: string; nominal: number }>
     potonganItems: Array<{ id?: string; judul: string; nominal: number; isDefault?: boolean }>
+    sisaPiutang?: number | null
   }) => {
     return apiRequest(`/gaji/${data.gajiId}/bonus-potongan`, {
       method: "PUT",
@@ -348,12 +349,18 @@ export const generateSalaryAPI = {
     }
   },
 
-  generateNonStaffMingguan: async (periodeAwal: string, periodeAkhir: string, divisi?: string[]) => {
+  generateNonStaffMingguan: async (periodeAwal: string, periodeAkhir: string, divisi?: string[], karyawanIds?: string[], upahHarianOverrides?: Record<string, number>) => {
     const formData = new URLSearchParams()
     formData.append('periodeAwal', periodeAwal)
     formData.append('periodeAkhir', periodeAkhir)
     if (divisi && divisi.length > 0) {
       divisi.forEach((d) => formData.append('divisi', d))
+    }
+    if (karyawanIds && karyawanIds.length > 0) {
+      karyawanIds.forEach((id) => formData.append('karyawanId', id))
+    }
+    if (upahHarianOverrides && Object.keys(upahHarianOverrides).length > 0) {
+      formData.append('upahHarianOverrides', JSON.stringify(upahHarianOverrides))
     }
     
     const token = getAuthToken()

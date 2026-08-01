@@ -43,6 +43,10 @@ type NonStaffStep1Props = {
     React.SetStateAction<Record<string, number>>
   >;
   savingHariEfektifByKaryawanId: Record<string, boolean>;
+  selectedKaryawanIds: string[];
+  setSelectedKaryawanIds: React.Dispatch<React.SetStateAction<string[]>>;
+  manualUpahHarian: Record<string, number>;
+  setManualUpahHarian: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   canEditSalary: boolean;
   submitting: boolean;
   handleShowData: () => void;
@@ -63,6 +67,10 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
     manualHariEfektif,
     setManualHariEfektif,
     savingHariEfektifByKaryawanId,
+    selectedKaryawanIds,
+    setSelectedKaryawanIds,
+    manualUpahHarian,
+    setManualUpahHarian,
     canEditSalary,
     submitting,
     handleShowData,
@@ -163,6 +171,21 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[50px] text-center">
+                  <Checkbox
+                    checked={
+                      effectiveReviewRows.length > 0 &&
+                      selectedKaryawanIds.length === effectiveReviewRows.length
+                    }
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedKaryawanIds(effectiveReviewRows.map((r) => r.karyawanId));
+                      } else {
+                        setSelectedKaryawanIds([]);
+                      }
+                    }}
+                  />
+                </TableHead>
                 <TableHead>Nama</TableHead>
                 <TableHead>Divisi</TableHead>
                 <TableHead>Hari Hadir</TableHead>
@@ -176,7 +199,7 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
             <TableBody>
               {effectiveReviewRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8}>Belum ada data review.</TableCell>
+                  <TableCell colSpan={9}>Belum ada data review.</TableCell>
                 </TableRow>
               ) : (
                 effectiveReviewRows.map((row) => {
@@ -185,6 +208,20 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
                   const gajiPokok = Math.round(value * row.upahHarian);
                   return (
                     <TableRow key={row.karyawanId}>
+                      <TableCell className="text-center">
+                        <Checkbox
+                          checked={selectedKaryawanIds.includes(row.karyawanId)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedKaryawanIds((prev) => [...prev, row.karyawanId]);
+                            } else {
+                              setSelectedKaryawanIds((prev) =>
+                                prev.filter((id) => id !== row.karyawanId)
+                              );
+                            }
+                          }}
+                        />
+                      </TableCell>
                       <TableCell>{row.nama}</TableCell>
                       <TableCell>{row.divisi}</TableCell>
                       <TableCell>{row.hariHadir}</TableCell>
@@ -198,6 +235,7 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
                               min={0}
                               step="0.5"
                               value={value}
+                              onWheel={(e) => e.currentTarget.blur()}
                               disabled={Boolean(
                                 savingHariEfektifByKaryawanId[row.karyawanId]
                               )}
@@ -225,7 +263,25 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
                         )}
                       </TableCell>
                       <TableCell>
-                        {formatCurrency(row.upahHarian)}
+                        {canEditSalary ? (
+                          <Input
+                            type="number"
+                            min={0}
+                            value={row.upahHarian}
+                            onWheel={(e) => e.currentTarget.blur()}
+                            onChange={(event) =>
+                              setManualUpahHarian((prev) => ({
+                                ...prev,
+                                [row.karyawanId]: toNumber(
+                                  event.target.value
+                                ),
+                              }))
+                            }
+                            className="h-8 w-28"
+                          />
+                        ) : (
+                          formatCurrency(row.upahHarian)
+                        )}
                       </TableCell>
                       <TableCell>{formatCurrency(gajiPokok)}</TableCell>
                     </TableRow>

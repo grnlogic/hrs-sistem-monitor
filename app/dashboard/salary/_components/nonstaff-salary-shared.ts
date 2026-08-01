@@ -71,6 +71,7 @@ export type GajiPeriodIndex = Record<
 export type InputState = {
   bonusItems: SalaryItem[];
   potonganItems: SalaryItem[];
+  sisaPiutang?: number | null;
 };
 
 export type RekapPopupState = {
