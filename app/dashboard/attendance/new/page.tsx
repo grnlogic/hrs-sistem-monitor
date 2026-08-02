@@ -49,7 +49,7 @@ type AbsensiDraft = {
   status: AbsensiStatus;
   lembur: boolean;
   keterangan: string;
-  lokasi: "PJP" | "SP" | "PRIMA";
+  lokasi: "" | "PJP" | "SP" | "PRIMA";
 };
 
 type SaveToast = {
@@ -127,7 +127,9 @@ export default function NewAttendancePage() {
         status: "HADIR",
         lembur: false,
         keterangan: "",
-        lokasi: emp.lokasiDefault,
+        // Lokasi sengaja dikosongkan — WAJIB dipilih manual oleh admin
+        // (lokasi aktual saat input, bukan lokasi tugas/lokasiDefault).
+        lokasi: "",
       };
     });
     return initialMap;
@@ -354,6 +356,17 @@ export default function NewAttendancePage() {
       return;
     }
 
+    const missingLokasi = displayedEmployees.filter(
+      (emp) => !absensiMap[emp.id]?.lokasi
+    );
+    if (missingLokasi.length > 0) {
+      const first = missingLokasi[0];
+      const message = `Lokasi absensi wajib dipilih (${missingLokasi.length} karyawan belum diisi, mis. ${first.namaLengkap})`;
+      setError(message);
+      showSaveToast("error", message);
+      return;
+    }
+
     setIsLoading(true);
     setError("");
     setSaveToast(null);
@@ -391,7 +404,7 @@ export default function NewAttendancePage() {
           karyawanId: emp.id,
           status: submitStatus,
           isLembur: Boolean(absensiMap[emp.id]?.lembur),
-          lokasi: absensiMap[emp.id]?.lokasi || emp.lokasiDefault,
+          lokasi: (absensiMap[emp.id]?.lokasi || "") as "PJP" | "SP" | "PRIMA",
           keterangan: draftKeterangan || undefined,
         };
       });
@@ -664,7 +677,7 @@ export default function NewAttendancePage() {
                         status: "HADIR" as AbsensiStatus,
                         lembur: false,
                         keterangan: "",
-                        lokasi: employee.lokasiDefault,
+                        lokasi: "",
                       };
 
                       return (
@@ -706,7 +719,7 @@ export default function NewAttendancePage() {
                               }
                             >
                               <SelectTrigger>
-                                <SelectValue />
+                                <SelectValue placeholder="Pilih lokasi" />
                               </SelectTrigger>
                               <SelectContent>
                                 {LOKASI_OPTIONS.map((lokasi) => (

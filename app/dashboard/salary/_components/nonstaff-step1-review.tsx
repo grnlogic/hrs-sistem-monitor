@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/form/button";
 import { Input } from "@/components/ui/form/input";
 import { Checkbox } from "@/components/ui/form/checkbox";
+import { CompanySwitcher } from "@/components/layout/company-switcher";
 import { employeeAPI } from "@/lib/api/karyawan";
 import {
   Table,
@@ -24,6 +25,7 @@ import { formatCurrency } from "@/lib/utils";
 import { Search, ArrowRight } from "lucide-react";
 import {
   type AttendanceSummary,
+  formatLokasiBreakdown,
   toNumber,
 } from "./nonstaff-salary-shared";
 
@@ -103,6 +105,10 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div>
+            <label className="mb-1 block text-sm">Perusahaan</label>
+            <CompanySwitcher className="h-10 w-full" />
+          </div>
           <div>
             <label className="mb-1 block text-sm">Dari tanggal</label>
             <Input
@@ -188,6 +194,7 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
                 </TableHead>
                 <TableHead>Nama</TableHead>
                 <TableHead>Divisi</TableHead>
+                <TableHead>Lokasi Kerja</TableHead>
                 <TableHead>Hari Hadir</TableHead>
                 <TableHead>Setengah Hari</TableHead>
                 <TableHead>Lembur</TableHead>
@@ -199,7 +206,7 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
             <TableBody>
               {effectiveReviewRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9}>Belum ada data review.</TableCell>
+                  <TableCell colSpan={10}>Belum ada data review.</TableCell>
                 </TableRow>
               ) : (
                 effectiveReviewRows.map((row) => {
@@ -224,6 +231,11 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
                       </TableCell>
                       <TableCell>{row.nama}</TableCell>
                       <TableCell>{row.divisi}</TableCell>
+                      <TableCell>
+                        <span className="text-xs text-muted-foreground">
+                          {formatLokasiBreakdown(row.lokasiBreakdown)}
+                        </span>
+                      </TableCell>
                       <TableCell>{row.hariHadir}</TableCell>
                       <TableCell>{row.setengahHari}</TableCell>
                       <TableCell>{row.lembur}</TableCell>

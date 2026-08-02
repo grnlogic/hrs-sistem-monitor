@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useCompany } from "@/components/providers/company-provider";
 import { Button } from "@/components/ui/form/button";
 import { Input } from "@/components/ui/form/input";
 import {
@@ -96,6 +97,7 @@ export default function EmployeesPage() {
   const [pendingUnlockAction, setPendingUnlockAction] = useState<
     "preview" | "export"
   >("preview");
+  const { company } = useCompany();
 
   useEffect(() => {
     fetchEmployees();
@@ -107,7 +109,8 @@ export default function EmployeesPage() {
     if (isUnlockedCookie && isUnlockedCookie.split("=")[1] === "true") {
       setIsSensitiveUnlocked(true);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [company]);
 
   const handleDeactivateEmployee = async (employee: Employee) => {
     setIsDeactivating(true);

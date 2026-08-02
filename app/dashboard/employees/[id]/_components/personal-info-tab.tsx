@@ -10,9 +10,10 @@ import {
 interface PersonalInfoTabProps {
   employee: any;
   leaveInfo: any;
+  totalPiutangAktif: number;
 }
 
-export function PersonalInfoTab({ employee, leaveInfo }: PersonalInfoTabProps) {
+export function PersonalInfoTab({ employee, leaveInfo, totalPiutangAktif }: PersonalInfoTabProps) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -40,6 +41,16 @@ export function PersonalInfoTab({ employee, leaveInfo }: PersonalInfoTabProps) {
                 Gaji Pokok
               </label>
               <p className="text-zinc-900">{employee.salary}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-zinc-500">
+                Total Piutang Aktif
+              </label>
+              <p className="text-zinc-900 font-semibold text-rose-600">
+                {totalPiutangAktif > 0
+                  ? `Rp ${totalPiutangAktif.toLocaleString("id-ID")}`
+                  : "Tidak Ada Piutang Aktif"}
+              </p>
             </div>
           </CardContent>
         </Card>

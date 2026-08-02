@@ -4,6 +4,7 @@
  */
 
 import { type LokasiCode } from "@/lib/api";
+import { LOKASI_PT } from "@/lib/constants/perusahaan";
 
 export type Step = 1 | 2 | 3;
 
@@ -31,6 +32,17 @@ export type LokasiBreakdownItem = {
   lembur: number;
   hariEfektif: number;
 };
+
+/** Format breakdown lokasi kerja → "3 hari CPD, 1 hari Jelat". Kosong → "-". */
+export function formatLokasiBreakdown(
+  items: LokasiBreakdownItem[] | undefined | null
+): string {
+  if (!items || items.length === 0) return "-";
+  const parts = items
+    .filter((b) => b.hariHadir > 0)
+    .map((b) => `${b.hariHadir} hari ${LOKASI_PT[b.lokasi] ?? b.lokasi}`);
+  return parts.length > 0 ? parts.join(", ") : "-";
+}
 
 export type AttendanceSummary = {
   karyawanId: string;
@@ -72,6 +84,21 @@ export type InputState = {
   bonusItems: SalaryItem[];
   potonganItems: SalaryItem[];
   sisaPiutang?: number | null;
+  pakaiUangPribadi?: boolean;
+  /** Default true: cicilan piutang dipotong minggu ini. Uncheck = skip minggu ini. */
+  bayarMingguIni?: boolean;
+  /** Nominal cicilan minggu ini (bisa di-override; null = pakai jumlahCicilan). */
+  nominalCicilan?: number | null;
+  piutangInfo?: {
+    id: string;
+    saldoAwal: number;
+    jumlahCicilan: number;
+    sisaSaldo: number;
+    aktif: boolean;
+  } | null;
+  /** Data tidak sehat: karyawan punya >1 piutang aktif (rekap akan ditolak BE). */
+  piutangKonflik?: boolean;
+  piutangAktifCount?: number;
 };
 
 export type RekapPopupState = {
@@ -85,6 +112,8 @@ export type CalculatedSnapshot = {
   totalBonus: number;
   totalPotongan: number;
   gajiBersih: number;
+  /** Nilai take-home sebelum dibulatkan ke kelipatan 100 (untuk badge). */
+  gajiBersihSebelumBulat: number;
 };
 
 /* ---------- Constants ---------- */
@@ -103,5 +132,7 @@ export function buildDefaultInputState(): InputState {
   return {
     bonusItems: DEFAULT_BONUS.map((item) => ({ ...item })),
     potonganItems: DEFAULT_POTONGAN.map((item) => ({ ...item })),
+    bayarMingguIni: true,
+    nominalCicilan: null,
   };
 }

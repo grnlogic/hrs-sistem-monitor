@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { AuthSessionProvider } from "@/components/providers/session-provider"
+import { CompanyProvider } from "@/components/providers/company-provider"
 import { SessionTokenSync } from "@/components/auth/session-token-sync"
 import { NAMA_PT } from "@/lib/constants/perusahaan"
 
@@ -22,8 +23,10 @@ export default function RootLayout({
     <html lang="id">
       <body className={inter.className}>
         <AuthSessionProvider>
-          <SessionTokenSync />
-          {children}
+          <CompanyProvider>
+            <SessionTokenSync />
+            {children}
+          </CompanyProvider>
         </AuthSessionProvider>
       </body>
     </html>

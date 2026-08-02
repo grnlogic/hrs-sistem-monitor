@@ -22,11 +22,14 @@ import {
   type EstimatedRow,
   type CalculatedRow,
   fixedBonusTemplate,
+  AUTO_BONUS_JUDUL,
+  AUTO_BONUS_NOMINAL,
   fixedPotonganTemplate,
   monthOptions,
   toNumber,
   buildDefaultInputState,
 } from "./salary-stepper-shared";
+import { calcGajiBersih } from "@/lib/salary-utils";
 
 // Extracted step / dialog components
 import { StaffStep1Generate } from "./staff-step1-generate";
@@ -111,7 +114,6 @@ function hasFirstWeekDayInRange(startDate: string, endDate: string) {
 
 export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
   const { data: session, status } = useSession();
-  const role = session?.user?.role || "HRD";
 
   useEffect(() => {
     if (status === "authenticated" && session?.accessToken) {
@@ -183,10 +185,10 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedSalaryId, setSelectedSalaryId] = useState("");
 
-  const canGenerate = role === "HRD";
-  const canPhase2Action = role === "AKUNTANSI";
-  const canPhase3Action = role === "AKUNTANSI";
-  const phase2ReadOnly = role === "HRD";
+  const canGenerate = true;
+  const canPhase2Action = true;
+  const canPhase3Action = true;
+  const phase2ReadOnly = false;
 
   const selectedSalary = useMemo(
     () => generatedRows.find((row) => row.id === selectedSalaryId),
@@ -366,12 +368,10 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
       const allDone = mapped.length > 0 && mapped.every((row) => inputDoneBySalaryId[row.id]);
       if (allDone) {
         setWorkflowStatus("INPUT_DONE");
-        if (role === "AKUNTANSI") setActiveStep(3);
+        setActiveStep(3);
       } else {
         setWorkflowStatus("GENERATED");
-        if (role === "AKUNTANSI") {
-          setActiveStep(2);
-        }
+        setActiveStep(2);
       }
     } catch (err) {
       setError("Gagal memuat data generate gaji.");
@@ -391,7 +391,7 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
       loadGeneratedRows();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, session?.accessToken, pageType, periodDependency, role, inputDoneBySalaryId]);
+  }, [status, session?.accessToken, pageType, periodDependency, inputDoneBySalaryId]);
 
   async function handleGenerate(selectedDivisions?: string[]) {
     setSubmitting(true);
@@ -399,10 +399,6 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
     setMessage("");
 
     try {
-      if (!canGenerate) {
-        throw new Error("Hanya role HRD yang bisa generate.");
-      }
-
       if (pageType === "staff") {
         await generateSalaryAPI.generateStaffBulanan(monthPeriod, selectedDivisions);
       } else {
@@ -455,15 +451,23 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
           }))
         : [];
 
-      const normalizedBonus = fixedBonusTemplate.map((base) => {
-        const existing = bonusItemsFromApi.find((item) => item.judul.toLowerCase() === base.judul.toLowerCase());
-        return existing ? { ...base, id: existing.id, nominal: existing.nominal } : { ...base };
-      });
+      const templateBonusNames = fixedBonusTemplate.map((base) => base.judul.toLowerCase());
+      const normalizedBonus = [
+        ...fixedBonusTemplate.map((base) => {
+          const existing = bonusItemsFromApi.find((item) => item.judul.toLowerCase() === base.judul.toLowerCase());
+          return existing ? { ...base, id: existing.id, nominal: existing.nominal } : { ...base };
+        }),
+        ...bonusItemsFromApi.filter((item) => !templateBonusNames.includes(item.judul.toLowerCase())),
+      ];
 
-      const normalizedPotongan = fixedPotonganTemplate.map((base) => {
-        const existing = potonganItemsFromApi.find((item) => item.judul.toLowerCase() === base.judul.toLowerCase());
-        return existing ? { ...base, id: existing.id, nominal: existing.nominal } : { ...base };
-      });
+      const templatePotonganNames = fixedPotonganTemplate.map((base) => base.judul.toLowerCase());
+      const normalizedPotongan = [
+        ...fixedPotonganTemplate.map((base) => {
+          const existing = potonganItemsFromApi.find((item) => item.judul.toLowerCase() === base.judul.toLowerCase());
+          return existing ? { ...base, id: existing.id, nominal: existing.nominal } : { ...base };
+        }),
+        ...potonganItemsFromApi.filter((item) => !templatePotonganNames.includes(item.judul.toLowerCase())),
+      ];
 
       setInputsBySalaryId((prev) => ({
         ...prev,
@@ -515,6 +519,54 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
     });
   }
 
+  function addItem(salaryId: string, kind: "bonusItems" | "potonganItems") {
+    setInputsBySalaryId((prev) => {
+      const current = prev[salaryId] || buildDefaultInputState();
+      return {
+        ...prev,
+        [salaryId]: {
+          ...current,
+          [kind]: [...current[kind], { judul: "", nominal: 0 }],
+        },
+      };
+    });
+  }
+
+  function deleteItem(salaryId: string, kind: "bonusItems" | "potonganItems", index: number) {
+    setInputsBySalaryId((prev) => {
+      const current = prev[salaryId] || buildDefaultInputState();
+      const list = current[kind].filter((_, i) => i !== index);
+      return {
+        ...prev,
+        [salaryId]: {
+          ...current,
+          [kind]: list,
+        },
+      };
+    });
+  }
+
+  /** Tambah 1 baris bonus "kikiping" (10.000) bila belum ada; idempotent. */
+  function addKikipingItem(salaryId: string) {
+    setInputsBySalaryId((prev) => {
+      const current = prev[salaryId] || buildDefaultInputState();
+      const exists = current.bonusItems.some(
+        (item) => item.judul.toLowerCase() === AUTO_BONUS_JUDUL
+      );
+      if (exists) return prev;
+      return {
+        ...prev,
+        [salaryId]: {
+          ...current,
+          bonusItems: [
+            ...current.bonusItems,
+            { judul: AUTO_BONUS_JUDUL, nominal: AUTO_BONUS_NOMINAL },
+          ],
+        },
+      };
+    });
+  }
+
   function updateSisaPiutang(salaryId: string, value: number | null) {
     setInputsBySalaryId((prev) => {
       const current = prev[salaryId] || buildDefaultInputState();
@@ -534,7 +586,10 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
     const totalPotongan = inputState.potonganItems.reduce((sum, item) => sum + toNumber(item.nominal), 0);
 
     if (pageType === "staff") {
-      const gajiBersih = Math.max(0, row.gajiPokok + totalBonus - totalPotongan);
+      const { gajiBersih, gajiBersihSebelumBulat } = calcGajiBersih(
+        row.gajiPokok + totalBonus,
+        totalPotongan
+      );
       return {
         hariEfektif: undefined as number | undefined,
         upahHarian: undefined as number | undefined,
@@ -543,6 +598,7 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
         totalBonus,
         totalPotongan,
         gajiBersih,
+        gajiBersihSebelumBulat,
       };
     }
 
@@ -553,7 +609,10 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
     const gajiPokok = Math.round(hariEfektif * upahHarian);
     const blending = (employee?.departemen || "").toLowerCase().includes("blending") ? summary.hadir * 3000 : 0;
     const tunjanganItems: SalaryItem[] = blending > 0 ? [{ judul: "Tunjangan Blending", nominal: blending }] : [];
-    const gajiBersih = Math.max(0, gajiPokok + blending + totalBonus - totalPotongan);
+    const { gajiBersih, gajiBersihSebelumBulat } = calcGajiBersih(
+      gajiPokok + blending + totalBonus,
+      totalPotongan
+    );
 
     return {
       hariEfektif,
@@ -563,6 +622,7 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
       totalBonus,
       totalPotongan,
       gajiBersih,
+      gajiBersihSebelumBulat,
     };
   }
 
@@ -665,10 +725,10 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
   const allInputDone = generatedRows.length > 0 && generatedRows.every((row) => inputDoneBySalaryId[row.id]);
 
   useEffect(() => {
-    if (workflowStatus === "INPUT_DONE" && role === "AKUNTANSI") {
+    if (workflowStatus === "INPUT_DONE") {
       setActiveStep(3);
     }
-  }, [workflowStatus, role]);
+  }, [workflowStatus]);
 
   if (status === "loading") {
     return <div className="p-6 text-sm">Memuat sesi...</div>;
@@ -749,7 +809,6 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
           attendanceFor={attendanceFor}
           setAttendanceOverrides={setAttendanceOverrides}
           workflowStatus={workflowStatus}
-          role={role}
           canGenerate={canGenerate}
           submitting={submitting}
           handleGenerate={handleGenerate}
@@ -791,6 +850,9 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
         attendanceFor={attendanceFor}
         calculatedRow={calculatedRow}
         updateItem={updateItem}
+        addItem={addItem}
+        deleteItem={deleteItem}
+        addKikipingItem={addKikipingItem}
         updateSisaPiutang={updateSisaPiutang}
         phase2ReadOnly={phase2ReadOnly}
         canPhase2Action={canPhase2Action}

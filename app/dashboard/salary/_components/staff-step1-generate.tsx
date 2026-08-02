@@ -4,6 +4,7 @@ import * as React from "react";
 import { Input } from "@/components/ui/form/input";
 import { Button } from "@/components/ui/form/button";
 import { Checkbox } from "@/components/ui/form/checkbox";
+import { CompanySwitcher } from "@/components/layout/company-switcher";
 import { employeeAPI } from "@/lib/api/karyawan";
 import {
   Table,
@@ -43,7 +44,6 @@ type StaffStep1Props = {
     React.SetStateAction<Record<string, AttendanceSummary>>
   >;
   workflowStatus: WorkflowStatus;
-  role: string;
   canGenerate: boolean;
   submitting: boolean;
   handleGenerate: (selectedDivisions?: string[]) => void;
@@ -67,7 +67,6 @@ export function StaffStep1Generate(props: StaffStep1Props) {
     attendanceFor,
     setAttendanceOverrides,
     workflowStatus,
-    role,
     canGenerate,
     submitting,
     handleGenerate,
@@ -101,6 +100,12 @@ export function StaffStep1Generate(props: StaffStep1Props) {
     <section className="rounded-lg border bg-card p-4">
       <h2 className="text-base font-semibold">Fase 1. Generate</h2>
       <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div>
+          <label className="mb-1 block text-sm text-foreground">
+            Perusahaan
+          </label>
+          <CompanySwitcher className="h-10 w-full" />
+        </div>
         {pageType === "staff" ? (
           <>
             <div>
@@ -242,8 +247,7 @@ export function StaffStep1Generate(props: StaffStep1Props) {
                   (item) => item.id === row.karyawanId
                 );
                 const summary = attendanceFor(row.karyawanId);
-                const canEdit =
-                  role === "HRD" && workflowStatus === "DRAFT";
+                const canEdit = workflowStatus === "DRAFT";
 
                 return (
                   <TableRow key={row.karyawanId}>

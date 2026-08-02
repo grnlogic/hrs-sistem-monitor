@@ -49,6 +49,39 @@ export const removeAuthToken = () => {
   }
 }
 
+// ─── Company-switcher (filter perusahaan: "" = Semua, atau PJP/SP/PRIMA) ───
+export const COMPANY_FILTER_KEY = "hrd-company-filter"
+
+export type CompanyFilter = "" | "PJP" | "SP" | "PRIMA"
+
+export const getCompanyFilter = (): CompanyFilter => {
+  if (typeof window === "undefined") return ""
+  const value = window.localStorage.getItem(COMPANY_FILTER_KEY)
+  return value === "PJP" || value === "SP" || value === "PRIMA" ? value : ""
+}
+
+export const setCompanyFilter = (value: CompanyFilter) => {
+  if (typeof window === "undefined") return
+  if (value === "PJP" || value === "SP" || value === "PRIMA") {
+    window.localStorage.setItem(COMPANY_FILTER_KEY, value)
+  } else {
+    window.localStorage.removeItem(COMPANY_FILTER_KEY)
+  }
+}
+
+/** Query string untuk filter lokasi ("" saat "Semua Perusahaan"). */
+export const getCompanyFilterQuery = (): string => {
+  const lokasi = getCompanyFilter()
+  return lokasi ? `lokasi=${lokasi}` : ""
+}
+
+/** Sisipkan ?lokasi= ke endpoint bila filter aktif; aman bila endpoint sudah punya query. */
+export const appendCompanyFilter = (endpoint: string): string => {
+  const query = getCompanyFilterQuery()
+  if (!query) return endpoint
+  return `${endpoint}${endpoint.includes("?") ? "&" : "?"}${query}`
+}
+
 // API request helper
 export const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
   const token = getAuthToken()
@@ -66,7 +99,7 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}) =>
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
 
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response = await fetch(appendCompanyFilter(`${API_BASE_URL}${endpoint}`), {
       ...config,
       signal: controller.signal,
     })

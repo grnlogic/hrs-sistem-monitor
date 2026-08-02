@@ -115,7 +115,17 @@ export function NonStaffStep2BonusPotongan(props: NonStaffStep2Props) {
                         {formatCurrency(calc.totalPotongan)}
                       </TableCell>
                       <TableCell>
-                        {formatCurrency(calc.gajiBersih)}
+                        <div className="flex items-center gap-2">
+                          {formatCurrency(calc.gajiBersih)}
+                          {calc.gajiBersih !== calc.gajiBersihSebelumBulat && (
+                            <Badge
+                              variant="outline"
+                              className="whitespace-nowrap text-[10px] font-normal text-muted-foreground"
+                            >
+                              dibulatkan dari {formatCurrency(calc.gajiBersihSebelumBulat)}
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {bonusDetails.length === 0 ? (

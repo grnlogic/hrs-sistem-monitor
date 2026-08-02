@@ -1,4 +1,4 @@
-import { apiRequest, API_BASE_URL, API_TIMEOUT, getAuthToken } from "./core"
+import { apiRequest, API_BASE_URL, API_TIMEOUT, getAuthToken, appendCompanyFilter } from "./core"
 
 // Helper for requests with custom content-type or plain text responses
 const fetchWithConfig = async (url: string, options: RequestInit = {}) => {
@@ -235,6 +235,9 @@ export const salaryAPI = {
     bonusItems: Array<{ id?: string; judul: string; nominal: number }>
     potonganItems: Array<{ id?: string; judul: string; nominal: number; isDefault?: boolean }>
     sisaPiutang?: number | null
+    pakaiUangPribadi?: boolean
+    bayarMingguIni?: boolean
+    nominalCicilan?: number | null
   }) => {
     return apiRequest(`/gaji/${data.gajiId}/bonus-potongan`, {
       method: "PUT",
@@ -256,6 +259,42 @@ export const salaryAPI = {
       updated: number
       deleted?: number
     }>
+  },
+
+  saveNonStaffRekap: async (data: {
+    periodeAwal: string;
+    periodeAkhir: string;
+    lokasi: string;
+    diketahuiOleh: string;
+    dibuatOleh: string;
+    catatan?: string;
+    gajiIds: string[];
+    piutangPlans?: Array<{
+      gajiId: string;
+      bayarMingguIni?: boolean;
+      nominalCicilan?: number | null;
+      pakaiUangPribadi?: boolean;
+    }>;
+  }) => {
+    return apiRequest(`/gaji/rekap-nonstaff`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }) as Promise<{
+      rekap: any;
+      successCount: number;
+      skippedNoAbsensiCount: number;
+      totalPinjamanDipotong?: number;
+      pinjamanSkipped?: number;
+    }>;
+  },
+
+  getNonStaffRekap: async (params: {
+    periodeAwal: string;
+    periodeAkhir: string;
+    lokasi: string;
+  }) => {
+    const q = new URLSearchParams(params).toString();
+    return apiRequest(`/gaji/rekap-nonstaff?${q}`);
   },
 }
 
@@ -322,7 +361,7 @@ export const generateSalaryAPI = {
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
 
     try {
-        const response = await fetch(`${API_BASE_URL}/gaji/generate-staff-bulanan`, {
+        const response = await fetch(appendCompanyFilter(`${API_BASE_URL}/gaji/generate-staff-bulanan`), {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -368,7 +407,7 @@ export const generateSalaryAPI = {
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/gaji/generate-nonstaff-mingguan`, {
+      const response = await fetch(appendCompanyFilter(`${API_BASE_URL}/gaji/generate-nonstaff-mingguan`), {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",

@@ -1,4 +1,5 @@
 import { NAMA_PT } from "@/lib/constants/perusahaan";
+import { calcGajiBersih } from "@/lib/salary-utils";
 
 type SlipItem = {
   label: string;
@@ -46,7 +47,10 @@ function calculateSummary(payload: SalarySlipPayload) {
   );
   const totalPendapatan =
     Number(payload.gajiPokok || 0) + totalTunjangan + totalBonus;
-  const gajiBersih = Math.max(0, totalPendapatan - totalPotongan);
+  const { gajiBersih, gajiBersihSebelumBulat } = calcGajiBersih(
+    totalPendapatan,
+    totalPotongan
+  );
 
   return {
     totalTunjangan,
@@ -54,6 +58,7 @@ function calculateSummary(payload: SalarySlipPayload) {
     totalPotongan,
     totalPendapatan,
     gajiBersih,
+    gajiBersihSebelumBulat,
   };
 }
 
@@ -290,7 +295,7 @@ async function drawSingleSlip(
   slipWidth: number,
   slipHeight: number
 ) {
-  const { totalBonus, gajiBersih } = calculateSummary(payload);
+  const { totalBonus, gajiBersih, gajiBersihSebelumBulat } = calculateSummary(payload);
   const profile = companyProfileByLokasi(payload.location);
 
   const pinjaman       = getNominalByLabel(payload.potonganItems, "Pinjaman");
@@ -388,6 +393,20 @@ async function drawSingleSlip(
 
   // Total
   addRow("TOTAL", formatRupiah(gajiBersih), true);
+
+  if (gajiBersihSebelumBulat !== gajiBersih) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.0);
+    doc.setTextColor(130, 130, 130);
+    doc.text(
+      `(dibulatkan dari ${formatRupiah(gajiBersihSebelumBulat)})`,
+      rightX,
+      rowY,
+      { align: "right" }
+    );
+    rowY += S_ROW_GAP;
+    doc.setTextColor(20, 20, 20);
+  }
 
   if (payload.sisaPiutang && payload.sisaPiutang > 0) {
     addRow("Sisa Piutang", formatRupiah(payload.sisaPiutang), false);
@@ -942,7 +961,15 @@ export async function exportNonStaffRekapPdf(
     bonusItems: Array<{ judul: string; nominal: number }>;
     potonganItems: Array<{ judul: string; nominal: number }>;
   }>,
-  meta: { location: LokasiCode | string; periodLabel: string },
+  meta: {
+    location: LokasiCode | string;
+    periodLabel: string;
+    bonusColumns: string[];
+    potonganColumns: string[];
+    diketahuiOleh: string;
+    dibuatOleh: string;
+    catatan?: string;
+  },
   fileName: string
 ) {
   const jsPDF     = await loadJsPdfCtor();
@@ -960,38 +987,94 @@ export async function exportNonStaffRekapPdf(
   doc.text(`Periode: ${meta.periodLabel}`, 14, 19);
   doc.text(`Lokasi: ${normalizeLokasi(meta.location)}`, 14, 24);
 
+  // Headers setup
+  const headers = [
+    "Nama",
+    "Divisi",
+    "Hari Efektif",
+    "Upah Harian",
+    "Gaji Pokok",
+    ...meta.bonusColumns.map((col) => `${col} (Bonus)`),
+    ...meta.potonganColumns.map((col) => `${col} (Potongan)`),
+    "Gaji Bersih",
+  ];
+
+  // Body rows mapping
+  const bodyRows = rows.map((row) => {
+    const inputBonus = safeItems(row.bonusItems);
+    const inputPotongan = safeItems(row.potonganItems);
+
+    const bonusCells = meta.bonusColumns.map((col) => {
+      const item = inputBonus.find((b) => b.judul.trim() === col);
+      const val = item ? Number(item.nominal) : 0;
+      return val > 0 ? formatRupiah(val) : "-";
+    });
+
+    const potonganCells = meta.potonganColumns.map((col) => {
+      const item = inputPotongan.find((p) => p.judul.trim() === col);
+      const val = item ? Number(item.nominal) : 0;
+      return val > 0 ? formatRupiah(val) : "-";
+    });
+
+    return [
+      row.nama,
+      row.divisi,
+      String(row.hariEfektif),
+      formatRupiah(row.upahHarian),
+      formatRupiah(row.gajiPokok),
+      ...bonusCells,
+      ...potonganCells,
+      formatRupiah(row.gajiBersih),
+    ];
+  });
+
+  // Calculate totals
+  let totalHariEfektif = 0;
+  let totalUpahHarian = 0;
+  let totalGajiPokok = 0;
+  const totalBonusCols = new Array(meta.bonusColumns.length).fill(0);
+  const totalPotonganCols = new Array(meta.potonganColumns.length).fill(0);
+  let totalGajiBersih = 0;
+
+  rows.forEach((row) => {
+    totalHariEfektif += row.hariEfektif;
+    totalUpahHarian += row.upahHarian;
+    totalGajiPokok += row.gajiPokok;
+    totalGajiBersih += row.gajiBersih;
+
+    const inputBonus = safeItems(row.bonusItems);
+    const inputPotongan = safeItems(row.potonganItems);
+
+    meta.bonusColumns.forEach((col, idx) => {
+      const item = inputBonus.find((b) => b.judul.trim() === col);
+      totalBonusCols[idx] += item ? Number(item.nominal) : 0;
+    });
+
+    meta.potonganColumns.forEach((col, idx) => {
+      const item = inputPotongan.find((p) => p.judul.trim() === col);
+      totalPotonganCols[idx] += item ? Number(item.nominal) : 0;
+    });
+  });
+
+  const footRow = [
+    "Total",
+    "",
+    String(totalHariEfektif),
+    formatRupiah(totalUpahHarian),
+    formatRupiah(totalGajiPokok),
+    ...totalBonusCols.map((val) => val > 0 ? formatRupiah(val) : "-"),
+    ...totalPotonganCols.map((val) => val > 0 ? formatRupiah(val) : "-"),
+    formatRupiah(totalGajiBersih),
+  ];
+
   autoTable(doc, {
     startY: 28,
-    head: [[
-      "Nama",
-      "Divisi",
-      "Hari Efektif",
-      "Upah Harian",
-      "Gaji Pokok",
-      "Bonus (Rincian)",
-      "Potongan (Rincian)",
-      "Gaji Bersih",
-    ]],
-    body: rows.map((row) => {
-      const bonusDetail    = safeItems(row.bonusItems)
-        .map((i) => `${i.judul}: ${formatRupiah(i.nominal)}`)
-        .join("; ");
-      const potonganDetail = safeItems(row.potonganItems)
-        .map((i) => `${i.judul}: ${formatRupiah(i.nominal)}`)
-        .join("; ");
-      return [
-        row.nama,
-        row.divisi,
-        String(row.hariEfektif),
-        formatRupiah(row.upahHarian),
-        formatRupiah(row.gajiPokok),
-        bonusDetail || "-",
-        potonganDetail || "-",
-        formatRupiah(row.gajiBersih),
-      ];
-    }),
-    styles:     { fontSize: 7.4, cellPadding: 1.4, valign: "top" },
-    headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0] },
+    head: [headers],
+    body: bodyRows,
+    foot: [footRow],
+    styles:     { fontSize: 7.0, cellPadding: 1.2, valign: "top", overflow: "linebreak" },
+    headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: "bold" },
+    footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: "bold" },
     theme: "grid",
   });
 
@@ -1002,7 +1085,7 @@ export async function exportNonStaffRekapPdf(
 
   const summaryStartY = (doc as any).lastAutoTable.finalY + 8;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFontSize(9.5);
   doc.text("Summary Total per Divisi", 14, summaryStartY);
 
   autoTable(doc, {
@@ -1012,11 +1095,50 @@ export async function exportNonStaffRekapPdf(
       divisi,
       formatRupiah(total),
     ]),
-    styles:     { fontSize: 8.2, cellPadding: 1.8 },
+    styles:     { fontSize: 8.0, cellPadding: 1.5 },
     headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0] },
     theme: "grid",
     tableWidth: 120,
   });
+
+  const finalY = (doc as any).lastAutoTable.finalY;
+
+  // Add notes block if present
+  let noteHeight = 0;
+  if (meta.catatan) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.text("Catatan:", 14, finalY + 8);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    const splitNotes = doc.splitTextToSize(`"${meta.catatan}"`, 260);
+    doc.text(splitNotes, 14, finalY + 12);
+    noteHeight = splitNotes.length * 4.2 + 8;
+  }
+
+  // Draw signatures side-by-side
+  const signY = finalY + 10 + noteHeight;
+
+  // Prevent page spill
+  if (signY > 185) {
+    doc.addPage();
+    const nextY = 20;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.text("Dibuat oleh,", 40, nextY);
+    doc.text(meta.dibuatOleh, 40, nextY + 20);
+
+    doc.text("Diketahui oleh,", 200, nextY);
+    doc.text(meta.diketahuiOleh, 200, nextY + 20);
+  } else {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.text("Dibuat oleh,", 40, signY);
+    doc.text(meta.dibuatOleh, 40, signY + 20);
+
+    doc.text("Diketahui oleh,", 200, signY);
+    doc.text(meta.diketahuiOleh, 200, signY + 20);
+  }
 
   doc.save(fileName);
 }

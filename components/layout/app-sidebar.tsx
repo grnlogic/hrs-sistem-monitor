@@ -117,6 +117,12 @@ const gajiMenuItems: MenuItem[] = [
     icon: DollarSign,
     description: "Proses & Rekap Non-Staff",
   },
+  {
+    title: "Piutang Karyawan",
+    url: "/dashboard/salary/loans",
+    icon: Banknote,
+    description: "Kelola Piutang & Pinjaman",
+  },
 ];
 
 const settingsMenuItems: MenuItem[] = [

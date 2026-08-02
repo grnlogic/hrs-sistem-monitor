@@ -1,7 +1,9 @@
 "use client";
 
+import * as React from "react";
 import { Input } from "@/components/ui/form/input";
 import { Button } from "@/components/ui/form/button";
+import { CreatableCombobox } from "@/components/ui/form/creatable-combobox";
 import {
   Dialog,
   DialogContent,
@@ -19,13 +21,15 @@ import {
   TableRow,
 } from "@/components/ui/display/table";
 import { formatCurrency } from "@/lib/utils";
-import { Save } from "lucide-react";
+import { Plus, Trash2, Save } from "lucide-react";
+import { useMasterGajiItems } from "./master-gaji-items";
 import {
   type PageType,
   type SalaryRow,
   type AttendanceSummary,
   type CalculatedRow,
   type SalaryInputState,
+  AUTO_BONUS_JUDUL,
 } from "./salary-stepper-shared";
 
 type StaffInputDialogProps = {
@@ -44,6 +48,13 @@ type StaffInputDialogProps = {
     key: "judul" | "nominal",
     value: string
   ) => void;
+  addItem: (salaryId: string, kind: "bonusItems" | "potonganItems") => void;
+  deleteItem: (
+    salaryId: string,
+    kind: "bonusItems" | "potonganItems",
+    index: number
+  ) => void;
+  addKikipingItem: (salaryId: string) => void;
   updateSisaPiutang: (salaryId: string, value: number | null) => void;
   phase2ReadOnly: boolean;
   canPhase2Action: boolean;
@@ -62,12 +73,48 @@ export function StaffInputDialog(props: StaffInputDialogProps) {
     attendanceFor,
     calculatedRow,
     updateItem,
+    addItem,
+    deleteItem,
+    addKikipingItem,
     updateSisaPiutang,
     phase2ReadOnly,
     canPhase2Action,
     submitting,
     saveInputSalary,
   } = props;
+
+  const { bonusOptions, potonganOptions, load, ensureItemSaved } = useMasterGajiItems();
+
+  React.useEffect(() => {
+    if (dialogOpen) load();
+  }, [dialogOpen, load]);
+
+  // Auto-fill bonus "kikiping" (10.000): tambahkan 1 baris bila karyawan ini
+  // belum punya baris kikiping di periode ini. Idempotent — buka-tutup dialog
+  // berkali-kali tetap hanya 1 baris (cek by nama). Baris bisa diedit/dihapus.
+  React.useEffect(() => {
+    if (!dialogOpen || !selectedSalary) return;
+    const salaryId = selectedSalary.id;
+    const bonusList = inputsBySalaryId[salaryId]?.bonusItems || [];
+    const hasKikiping = bonusList.some(
+      (item) => item.judul.toLowerCase() === AUTO_BONUS_JUDUL
+    );
+    if (!hasKikiping) {
+      addKikipingItem(salaryId);
+      void ensureItemSaved("BONUS", AUTO_BONUS_JUDUL);
+    }
+  }, [dialogOpen, selectedSalary, inputsBySalaryId, addKikipingItem, ensureItemSaved]);
+
+  const handleSave = () => {
+    const state = selectedSalary ? inputsBySalaryId[selectedSalary.id] : undefined;
+    const persist = state
+      ? [
+          ...state.bonusItems.map((item) => ensureItemSaved("BONUS", item.judul)),
+          ...state.potonganItems.map((item) => ensureItemSaved("POTONGAN", item.judul)),
+        ]
+      : [];
+    void Promise.all(persist).finally(saveInputSalary);
+  };
 
   return (
     <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -155,17 +202,30 @@ export function StaffInputDialog(props: StaffInputDialogProps) {
                   <TableRow>
                     <TableHead>Komponen</TableHead>
                     <TableHead>Nominal</TableHead>
+                    <TableHead>Hapus</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {(
                     inputsBySalaryId[selectedSalary.id]?.bonusItems || []
                   ).map((item, index) => (
-                    <TableRow key={`bonus-${index}`}>
+                    <TableRow key={`bonus-${selectedSalary.id}-${index}`}>
                       <TableCell>
-                        <p className="font-medium text-foreground">
-                          {item.judul}
-                        </p>
+                        <CreatableCombobox
+                          options={bonusOptions}
+                          value={item.judul}
+                          disabled={phase2ReadOnly}
+                          placeholder="Pilih atau ketik nama bonus..."
+                          onChange={(judul) =>
+                            updateItem(
+                              selectedSalary.id,
+                              "bonusItems",
+                              index,
+                              "judul",
+                              judul
+                            )
+                          }
+                        />
                       </TableCell>
                       <TableCell>
                         <Input
@@ -185,10 +245,32 @@ export function StaffInputDialog(props: StaffInputDialogProps) {
                           }
                         />
                       </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          disabled={phase2ReadOnly}
+                          onClick={() =>
+                            deleteItem(selectedSalary.id, "bonusItems", index)
+                          }
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={phase2ReadOnly}
+                onClick={() => addItem(selectedSalary.id, "bonusItems")}
+                className="mt-2 gap-1 text-primary border-primary/20 hover:bg-primary/5"
+              >
+                <Plus className="w-3.5 h-3.5" /> Tambah Bonus
+              </Button>
             </div>
 
             <div className="rounded-md border p-3">
@@ -198,17 +280,30 @@ export function StaffInputDialog(props: StaffInputDialogProps) {
                   <TableRow>
                     <TableHead>Komponen</TableHead>
                     <TableHead>Nominal</TableHead>
+                    <TableHead>Hapus</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {(
                     inputsBySalaryId[selectedSalary.id]?.potonganItems || []
                   ).map((item, index) => (
-                    <TableRow key={`potongan-${index}`}>
+                    <TableRow key={`potongan-${selectedSalary.id}-${index}`}>
                       <TableCell>
-                        <p className="font-medium text-foreground">
-                          {item.judul}
-                        </p>
+                        <CreatableCombobox
+                          options={potonganOptions}
+                          value={item.judul}
+                          disabled={phase2ReadOnly}
+                          placeholder="Pilih atau ketik nama potongan..."
+                          onChange={(judul) =>
+                            updateItem(
+                              selectedSalary.id,
+                              "potonganItems",
+                              index,
+                              "judul",
+                              judul
+                            )
+                          }
+                        />
                       </TableCell>
                       <TableCell>
                         <Input
@@ -228,10 +323,32 @@ export function StaffInputDialog(props: StaffInputDialogProps) {
                           }
                         />
                       </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          disabled={phase2ReadOnly}
+                          onClick={() =>
+                            deleteItem(selectedSalary.id, "potonganItems", index)
+                          }
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={phase2ReadOnly}
+                onClick={() => addItem(selectedSalary.id, "potonganItems")}
+                className="mt-2 gap-1 text-primary border-primary/20 hover:bg-primary/5"
+              >
+                <Plus className="w-3.5 h-3.5" /> Tambah Potongan
+              </Button>
             </div>
 
             <div className="rounded-md border p-3">
@@ -246,7 +363,7 @@ export function StaffInputDialog(props: StaffInputDialogProps) {
                   inputsBySalaryId[selectedSalary.id]?.sisaPiutang === undefined ||
                   inputsBySalaryId[selectedSalary.id]?.sisaPiutang === null
                     ? ""
-                    : inputsBySalaryId[selectedSalary.id].sisaPiutang
+                    : inputsBySalaryId[selectedSalary.id].sisaPiutang ?? ""
                 }
                 onChange={(e) => {
                   const val = e.target.value === "" ? null : Number(e.target.value);
@@ -306,7 +423,7 @@ export function StaffInputDialog(props: StaffInputDialogProps) {
             Batal
           </Button>
           <Button
-            onClick={saveInputSalary}
+            onClick={handleSave}
             disabled={!canPhase2Action || submitting}
             className="gap-2 w-full sm:w-auto"
           >

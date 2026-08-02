@@ -18,6 +18,7 @@ import { LogOut, User, Settings } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { removeAuthToken } from "@/lib/api";
+import { CompanySwitcher } from "@/components/layout/company-switcher";
 
 export function Header() {
   const { data: session } = useSession();
@@ -46,6 +47,8 @@ export function Header() {
             Employee Monitoring System
           </h2>
         </div>
+
+        <CompanySwitcher />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

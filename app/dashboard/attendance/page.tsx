@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useCompany } from "@/components/providers/company-provider";
 import { Button } from "@/components/ui/form/button";
 import { Input } from "@/components/ui/form/input";
 import {
@@ -114,6 +115,7 @@ const getDatesInRange = (startStr: string, endStr: string): string[] => {
 };
 
 export default function AttendancePage() {
+  const { company } = useCompany();
   const [attendanceData, setAttendanceData] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [filteredData, setFilteredData] = useState<any[]>([]);
@@ -138,7 +140,8 @@ export default function AttendancePage() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [company]);
 
   useEffect(() => {
     filterData();
@@ -370,7 +373,7 @@ export default function AttendancePage() {
       hadir: existingRecord ? existingRecord.hadir : false,
       isLembur: existingRecord ? Boolean(existingRecord.isLembur) : false,
       notes: existingRecord ? (existingRecord.notes || existingRecord.keterangan || "") : "",
-      lokasi: existingRecord ? (existingRecord.lokasi || "PJP") : (item.employee.lokasiDefault || "PJP"),
+      lokasi: existingRecord ? (existingRecord.lokasi || "") : "",
       allEmployeeRecords: item.records
     });
     setShowEditModal(true);
@@ -391,12 +394,17 @@ export default function AttendancePage() {
       hadir: existingRecord ? existingRecord.hadir : false,
       isLembur: existingRecord ? Boolean(existingRecord.isLembur) : false,
       notes: existingRecord ? (existingRecord.notes || existingRecord.keterangan || "") : "",
-      lokasi: existingRecord ? (existingRecord.lokasi || "PJP") : (editingItem.employee.lokasiDefault || "PJP"),
+      lokasi: existingRecord ? (existingRecord.lokasi || "") : "",
     });
   };
 
   const handleSaveEdit = async () => {
     if (!editingItem) return;
+
+    if (!editingItem.lokasi) {
+      setError("Lokasi absensi wajib dipilih sebelum menyimpan");
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -1059,7 +1067,7 @@ export default function AttendancePage() {
                         onValueChange={(value) => setEditingItem({ ...editingItem, lokasi: value })}
                       >
                         <SelectTrigger className="w-full">
-                          <SelectValue />
+                          <SelectValue placeholder="Pilih lokasi" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="PJP">🏢 PJP</SelectItem>
@@ -1103,6 +1111,10 @@ export default function AttendancePage() {
                 )}
               </div>
             </div>
+
+            {error && (
+              <p className="mt-4 text-sm text-red-600">{error}</p>
+            )}
 
             <div className="flex gap-2 justify-end mt-6 border-t pt-4">
               <Button

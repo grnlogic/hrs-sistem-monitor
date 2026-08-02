@@ -158,11 +158,6 @@ function parseNominal(value: unknown): number {
   return raw ? Number(raw) : 0;
 }
 
-function toPlainNominal(value: unknown): string {
-  const parsed = parseNominal(value);
-  return String(parsed);
-}
-
 export function buildPlaceholderContext(data: PKBData, options?: { division?: string; logoDataUrl?: string }): PlaceholderContext {
   const { clause2, role } = getClause2AndRole(data);
   const catatan =
@@ -191,7 +186,7 @@ export function buildPlaceholderContext(data: PKBData, options?: { division?: st
     PIHAK_2_TTD: data.pihak2TandaTangan || data.pihak2Nama || "",
     DIVISI: divisionLabel(options?.division || data.pihak2Jabatan),
     TIPE_UPAH_LABEL: tipeUpahLabel(data.tipeUpah),
-    NOMINAL_UPAH: toPlainNominal(data.nominalUpah || 0),
+    NOMINAL_UPAH: data.nominalUpah ? `Rp. ${formatCurrency(data.nominalUpah)}` : "-",
     BONUS_NOMINAL: data.bonusNominal ? `Rp. ${formatCurrency(data.bonusNominal)}` : "-",
     CATATAN_PEMBAYARAN: catatan,
     BPJS: bpjs,
