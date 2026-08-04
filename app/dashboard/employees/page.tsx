@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useCompany } from "@/components/providers/company-provider";
+import { CompanySwitcher } from "@/components/layout/company-switcher";
+import type { CompanyFilter } from "@/lib/api/core";
 import { Button } from "@/components/ui/form/button";
 import { Input } from "@/components/ui/form/input";
 import {
@@ -97,7 +98,7 @@ export default function EmployeesPage() {
   const [pendingUnlockAction, setPendingUnlockAction] = useState<
     "preview" | "export"
   >("preview");
-  const { company } = useCompany();
+  const [company, setCompany] = useState<CompanyFilter>("");
 
   useEffect(() => {
     fetchEmployees();
@@ -189,7 +190,7 @@ export default function EmployeesPage() {
   const fetchEmployees = async () => {
     try {
       setIsLoading(true);
-      const data = await employeeAPI.getAll();
+      const data = await employeeAPI.getAll(company);
       // Mapping data dari API ke struktur yang diharapkan frontend
       const mapped = data.map((emp: any) => ({
         id: emp.id,
@@ -628,6 +629,7 @@ export default function EmployeesPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <CompanySwitcher value={company} onChange={setCompany} />
           <Button
             variant={isSensitiveUnlocked ? "secondary" : "outline"}
             onClick={handlePreviewAllClick}

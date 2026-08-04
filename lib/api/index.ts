@@ -5,6 +5,7 @@
 export { API_BASE_URL, API_TIMEOUT, API_RETRY_ATTEMPTS, API_ORIGIN, resolveMediaUrl, setAuthToken, getAuthToken, removeAuthToken, apiRequest } from "./core"
 
 // Types
+export type { CompanyFilter } from "./core"
 export type { GaleriTipeMedia, GaleriItem, SystemRole, LokasiCode, SystemUser } from "./types"
 
 // Domain APIs

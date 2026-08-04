@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/display/table";
+import { Badge } from "@/components/ui/display/badge";
 import { getStatusBadge, formatIzinSakitTanggal } from "./utils";
 
 interface AttendanceTabProps {
@@ -48,7 +49,18 @@ export function AttendanceTab({ attendanceHistory }: AttendanceTabProps) {
               attendanceHistory.map((absen, idx) => (
                 <TableRow key={idx}>
                   <TableCell className="font-medium">
-                    {formatIzinSakitTanggal(absen.tanggal)}
+                    <div className="flex flex-col gap-1 items-start">
+                      <span>{formatIzinSakitTanggal(absen.tanggal)}</span>
+                      {absen.statusPembayaran === "Dibayar" ? (
+                        <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100/50 text-[10px] px-1.5 py-0.5 font-semibold leading-none rounded-md">
+                          Sudah Dibayar
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100/50 text-[10px] px-1.5 py-0.5 font-semibold leading-none rounded-md">
+                          Belum Dibayar
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>{absen.jamMasuk || "-"}</TableCell>
                   <TableCell>{absen.jamPulang || "-"}</TableCell>

@@ -1,4 +1,4 @@
-import { apiRequest, API_BASE_URL, API_TIMEOUT, getAuthToken } from "./core"
+import { apiRequest, API_BASE_URL, API_TIMEOUT, getAuthToken, type CompanyFilter } from "./core"
 
 // Helper for requests that need to handle plain text responses
 const fetchWithTextFallback = async (url: string, options: RequestInit) => {
@@ -39,8 +39,8 @@ const fetchWithTextFallback = async (url: string, options: RequestInit) => {
 }
 
 export const employeeAPI = {
-  getAll: async () => {
-    return apiRequest("/karyawan")
+  getAll: async (company: CompanyFilter = "") => {
+    return apiRequest("/karyawan", {}, company)
   },
 
   getById: (id: string) => apiRequest(`/karyawan/${id}/detail`),
@@ -99,10 +99,10 @@ export const employeeAPI = {
     })
   },
 
-  getDivisiList: async (kategori?: string) => {
+  getDivisiList: async (kategori?: string, company: CompanyFilter = "") => {
     const params = new URLSearchParams();
     if (kategori) params.append("kategori", kategori);
-    return apiRequest(`/karyawan/divisi-list?${params.toString()}`);
+    return apiRequest(`/karyawan/divisi-list?${params.toString()}`, {}, company);
   },
 
   checkRelatedData: async (id: string) => {

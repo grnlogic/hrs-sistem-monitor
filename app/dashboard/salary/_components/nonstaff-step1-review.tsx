@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/form/button";
 import { Input } from "@/components/ui/form/input";
 import { Checkbox } from "@/components/ui/form/checkbox";
 import { CompanySwitcher } from "@/components/layout/company-switcher";
+import type { CompanyFilter } from "@/lib/api/core";
 import { employeeAPI } from "@/lib/api/karyawan";
 import {
   Table,
@@ -54,6 +55,8 @@ type NonStaffStep1Props = {
   handleShowData: () => void;
   handleHariEfektifBlur: (row: AttendanceSummary) => void;
   handleConfirmAndContinue: () => void;
+  company: CompanyFilter;
+  onCompanyChange: (value: CompanyFilter) => void;
 };
 
 export function NonStaffStep1Review(props: NonStaffStep1Props) {
@@ -78,6 +81,8 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
     handleShowData,
     handleHariEfektifBlur,
     handleConfirmAndContinue,
+    company,
+    onCompanyChange,
   } = props;
 
   const [availableDivisions, setAvailableDivisions] = React.useState<string[]>([]);
@@ -87,7 +92,7 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
     async function fetchDivisions() {
       try {
         setLoadingDivisions(true);
-        const data = await employeeAPI.getDivisiList("nonstaff");
+        const data = await employeeAPI.getDivisiList("nonstaff", company);
         setAvailableDivisions(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Gagal mengambil daftar divisi:", err);
@@ -96,7 +101,7 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
       }
     }
     fetchDivisions();
-  }, []);
+  }, [company]);
 
   return (
     <Card>
@@ -107,7 +112,10 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <div>
             <label className="mb-1 block text-sm">Perusahaan</label>
-            <CompanySwitcher className="h-10 w-full" />
+            <CompanySwitcher value={company} onChange={onCompanyChange} className="h-10 w-full" allowAll={false} />
+            {!company && (
+              <p className="mt-1 text-xs text-muted-foreground">Pilih perusahaan dulu</p>
+            )}
           </div>
           <div>
             <label className="mb-1 block text-sm">Dari tanggal</label>
@@ -128,7 +136,7 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
           <div className="flex items-end">
             <Button
               onClick={handleShowData}
-              disabled={loading}
+              disabled={loading || !company}
               className="w-full md:w-auto gap-2"
             >
               {loading ? (

@@ -16,6 +16,7 @@ import {
   salaryAPI,
   setAuthToken,
   type LokasiCode,
+  type CompanyFilter,
 } from "@/lib/api";
 import {
   exportNonStaffRekapPdf,
@@ -115,7 +116,8 @@ function buildAttendanceSummary(
   employees: EmployeeRow[],
   attendanceRows: any[],
   startDate: string,
-  endDate: string
+  endDate: string,
+  companyFilter: CompanyFilter
 ): AttendanceSummary[] {
   const start = new Date(startDate);
   const end = new Date(endDate);
@@ -152,6 +154,11 @@ function buildAttendanceSummary(
 
     const summary = byEmployee.get(karyawanId)!;
     const rowLokasi = normalizeLokasi(row.lokasi || row.location) || summary.lokasiSlip || "PJP";
+    // Scope: HANYA record absensi yang lokasinya cocok dengan company terpilih
+    // (selaras dengan BE generate-nonstaff-mingguan yang filter lokasi di record absensi).
+    if (companyFilter && rowLokasi !== companyFilter) {
+      continue;
+    }
     const status = String(row.status || "").toUpperCase();
     const breakdownKey = `${karyawanId}|${rowLokasi}`;
     const currentBreakdown = breakdownByEmployeeLokasi.get(breakdownKey) || {
@@ -210,29 +217,33 @@ function buildAttendanceSummary(
     breakdownByEmployeeLokasi.set(breakdownKey, currentBreakdown);
   }
 
-  return Array.from(byEmployee.values()).map((summary) => {
-    const lokasiBreakdown = Array.from(breakdownByEmployeeLokasi.entries())
-      .filter(([key]) => key.startsWith(`${summary.karyawanId}|`))
-      .map(([, value]) => value)
-      .sort((a, b) => b.hariEfektif - a.hariEfektif);
+  return Array.from(byEmployee.values())
+    // Exclude karyawan tanpa hari kerja sama sekali di company terpilih
+    // (selaras dgn BE generate yang meng-exclude 0-hari dari output).
+    .filter((summary) => summary.hariEfektif > 0)
+    .map((summary) => {
+      const lokasiBreakdown = Array.from(breakdownByEmployeeLokasi.entries())
+        .filter(([key]) => key.startsWith(`${summary.karyawanId}|`))
+        .map(([, value]) => value)
+        .sort((a, b) => b.hariEfektif - a.hariEfektif);
 
-    return {
-      ...summary,
-      lokasiBreakdown,
-    };
-  });
+      return {
+        ...summary,
+        lokasiBreakdown,
+      };
+    });
 }
 
 /* ---------- Main component ---------- */
 
 export function NonStaffSalaryWorkflow() {
   const { data: session, status } = useSession();
-  const userLokasi = normalizeLokasi(session?.user?.lokasi) || "PJP";
 
   const now = new Date();
   const [startDate, setStartDate] = useState(normalizeDate(new Date(now.getFullYear(), now.getMonth(), 1)));
   const [endDate, setEndDate] = useState(normalizeDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
   const [selectedDivisions, setSelectedDivisions] = useState<string[]>([]);
+  const [company, setCompany] = useState<CompanyFilter>("");
 
   const [step, setStep] = useState<Step>(1);
   const [loading, setLoading] = useState(false);
@@ -285,7 +296,7 @@ export function NonStaffSalaryWorkflow() {
           const res = await salaryAPI.getNonStaffRekap({
             periodeAwal: toApiDate(startDate),
             periodeAkhir: toApiDate(endDate),
-            lokasi: userLokasi || "",
+            lokasi: company,
           });
           if (res) {
             setSignatures({
@@ -304,7 +315,7 @@ export function NonStaffSalaryWorkflow() {
       };
       loadSavedRekap();
     }
-  }, [step, signatureSubmitted, startDate, endDate, userLokasi]);
+  }, [step, signatureSubmitted, startDate, endDate, company]);
 
   // Reset seleksi checkbox karyawan + filter divisi SETIAP kali admin berpindah
   // step (maju ke step berikutnya MAUPUN kembali ke step sebelumnya). State ini
@@ -383,7 +394,7 @@ export function NonStaffSalaryWorkflow() {
   }
 
   async function updateStatusForSnapshotRows(rows: SnapshotRow[]) {
-    const latestGaji = await salaryAPI.getGajiByDateRange(startDate, endDate);
+    const latestGaji = await salaryAPI.getGajiByDateRange(startDate, endDate, undefined, undefined, company);
     const latestRows = Array.isArray(latestGaji) ? latestGaji : [];
     const selectedStart = toApiDate(startDate);
     const selectedEnd = toApiDate(endDate);
@@ -559,9 +570,12 @@ export function NonStaffSalaryWorkflow() {
     try {
       setLoading(true);
       const [employeeRes, attendanceRes, gajiRes] = await Promise.all([
+        // Karyawan TIDAK lagi di-scope lokasiDefault (selaras dgn BE generate yang
+        // memfilter di record absensi, bukan di karyawan). Exclude 0-hari dilakukan
+        // di buildAttendanceSummary.
         employeeAPI.getAll(),
-        attendanceAPI.getAll(),
-        salaryAPI.getGajiByDateRange(startDate, endDate),
+        attendanceAPI.getAll(company),
+        salaryAPI.getGajiByDateRange(startDate, endDate, undefined, undefined, company),
       ]);
 
       const employees: EmployeeRow[] = (Array.isArray(employeeRes) ? employeeRes : [])
@@ -582,7 +596,8 @@ export function NonStaffSalaryWorkflow() {
         employees,
         Array.isArray(attendanceRes) ? attendanceRes : [],
         startDate,
-        endDate
+        endDate,
+        company
       );
 
       const gajiByKaryawanId: Record<string, string> = {};
@@ -678,11 +693,12 @@ export function NonStaffSalaryWorkflow() {
         endDate,
         selectedDivisions,
         selectedKaryawanIds,
-        manualUpahHarian
+        manualUpahHarian,
+        company
       );
       showToast("success", resText);
 
-      const generated = await salaryAPI.getGajiByDateRange(startDate, endDate);
+      const generated = await salaryAPI.getGajiByDateRange(startDate, endDate, undefined, undefined, company);
       const generatedRows = Array.isArray(generated) ? generated : [];
       const selectedStart = toApiDate(startDate);
       const selectedEnd = toApiDate(endDate);
@@ -1086,7 +1102,7 @@ export function NonStaffSalaryWorkflow() {
 
         if (breakdown.length <= 1 || row.hariEfektif <= 0) {
           payload.push({
-            companyLocation: row.lokasiSlip || userLokasi,
+            companyLocation: row.lokasiSlip || company,
             periodStart: startDate,
             periodEnd: endDate,
             nama: row.nama,
@@ -1195,7 +1211,7 @@ export function NonStaffSalaryWorkflow() {
       await exportNonStaffRekapPdf(
         rows,
         {
-          location: userLokasi,
+          location: company,
           periodLabel: formatPeriod(startDate, endDate),
           bonusColumns: Array.from(activeBonusCols),
           potonganColumns: Array.from(activePotonganCols),
@@ -1209,7 +1225,7 @@ export function NonStaffSalaryWorkflow() {
       const result = await salaryAPI.saveNonStaffRekap({
         periodeAwal: toApiDate(startDate),
         periodeAkhir: toApiDate(endDate),
-        lokasi: userLokasi,
+        lokasi: company,
         diketahuiOleh: signatures.diketahuiOleh,
         dibuatOleh: signatures.dibuatOleh,
         catatan: signatures.catatan,
@@ -1253,7 +1269,7 @@ export function NonStaffSalaryWorkflow() {
       const result = await salaryAPI.saveNonStaffRekap({
         periodeAwal: toApiDate(startDate),
         periodeAkhir: toApiDate(endDate),
-        lokasi: userLokasi,
+        lokasi: company,
         diketahuiOleh: signatures.diketahuiOleh,
         dibuatOleh: signatures.dibuatOleh,
         catatan: signatures.catatan,
@@ -1432,6 +1448,8 @@ export function NonStaffSalaryWorkflow() {
           savingHariEfektifByKaryawanId={savingHariEfektifByKaryawanId}
           canEditSalary={canEditSalary}
           submitting={submitting}
+          company={company}
+          onCompanyChange={setCompany}
           handleShowData={handleShowData}
           handleHariEfektifBlur={handleHariEfektifBlur}
           handleConfirmAndContinue={handleConfirmAndContinue}

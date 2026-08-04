@@ -1,10 +1,10 @@
-import { apiRequest } from "./core"
+import { apiRequest, type CompanyFilter } from "./core"
 import type { LokasiCode } from "./types"
 
 export const attendanceAPI = {
-  getAll: async () => {
+  getAll: async (company: CompanyFilter = "") => {
     try {
-      const allAttendanceData = await apiRequest("/absensi")
+      const allAttendanceData = await apiRequest("/absensi", {}, company)
       
       return (allAttendanceData || []).map((attendance: any) => ({
         id: attendance.id,

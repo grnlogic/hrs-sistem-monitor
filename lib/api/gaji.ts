@@ -1,4 +1,4 @@
-import { apiRequest, API_BASE_URL, API_TIMEOUT, getAuthToken, appendCompanyFilter } from "./core"
+import { apiRequest, API_BASE_URL, API_TIMEOUT, getAuthToken, appendCompanyFilter, type CompanyFilter } from "./core"
 
 // Helper for requests with custom content-type or plain text responses
 const fetchWithConfig = async (url: string, options: RequestInit = {}) => {
@@ -95,7 +95,7 @@ export const salaryAPI = {
     return apiRequest(`/gaji/department?departemen=${encodeURIComponent(departemen)}`)
   },
 
-  getGajiByDateRange: async (tanggalMulai: string, tanggalAkhir: string, karyawanId?: string, departemen?: string) => {
+  getGajiByDateRange: async (tanggalMulai: string, tanggalAkhir: string, karyawanId?: string, departemen?: string, company: CompanyFilter = "") => {
     const params = new URLSearchParams()
     params.append('tanggalMulai', tanggalMulai)
     params.append('tanggalAkhir', tanggalAkhir)
@@ -103,7 +103,7 @@ export const salaryAPI = {
     if (karyawanId) params.append('karyawanId', karyawanId)
     if (departemen) params.append('departemen', departemen)
     
-    return apiRequest(`/gaji/filter?${params.toString()}`)
+    return apiRequest(`/gaji/filter?${params.toString()}`, {}, company)
   },
 
   updateStatusPembayaran: async (data: { gajiId: string, statusPembayaran: string }) => {
@@ -349,7 +349,7 @@ export const getGajiByDateRangeDetailed = async (startDate: string, endDate: str
 
 // Generate Salary API
 export const generateSalaryAPI = {
-  generateStaffBulanan: async (periode: string, divisi?: string[]) => {
+  generateStaffBulanan: async (periode: string, divisi?: string[], company: CompanyFilter = "") => {
     const formData = new URLSearchParams()
     formData.append('periode', periode)
     if (divisi && divisi.length > 0) {
@@ -361,7 +361,7 @@ export const generateSalaryAPI = {
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
 
     try {
-        const response = await fetch(appendCompanyFilter(`${API_BASE_URL}/gaji/generate-staff-bulanan`), {
+        const response = await fetch(appendCompanyFilter(`${API_BASE_URL}/gaji/generate-staff-bulanan`, company), {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -388,7 +388,7 @@ export const generateSalaryAPI = {
     }
   },
 
-  generateNonStaffMingguan: async (periodeAwal: string, periodeAkhir: string, divisi?: string[], karyawanIds?: string[], upahHarianOverrides?: Record<string, number>) => {
+  generateNonStaffMingguan: async (periodeAwal: string, periodeAkhir: string, divisi?: string[], karyawanIds?: string[], upahHarianOverrides?: Record<string, number>, company: CompanyFilter = "") => {
     const formData = new URLSearchParams()
     formData.append('periodeAwal', periodeAwal)
     formData.append('periodeAkhir', periodeAkhir)
@@ -407,7 +407,7 @@ export const generateSalaryAPI = {
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
 
     try {
-      const response = await fetch(appendCompanyFilter(`${API_BASE_URL}/gaji/generate-nonstaff-mingguan`), {
+      const response = await fetch(appendCompanyFilter(`${API_BASE_URL}/gaji/generate-nonstaff-mingguan`, company), {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",

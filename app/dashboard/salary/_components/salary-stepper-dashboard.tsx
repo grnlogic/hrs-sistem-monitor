@@ -6,7 +6,7 @@ import {
   CheckCircle2,
   ArrowRight,
 } from "lucide-react";
-import { attendanceAPI, employeeAPI, generateSalaryAPI, salaryAPI, setAuthToken } from "@/lib/api";
+import { attendanceAPI, employeeAPI, generateSalaryAPI, salaryAPI, setAuthToken, type CompanyFilter } from "@/lib/api";
 import { exportSalaryRecapPdf, exportSalarySlipsPdf, type SalarySlipPayload } from "@/lib/salary-slip-pdf";
 
 // Shared types and utilities
@@ -132,6 +132,7 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [nonStaffStartDate, setNonStaffStartDate] = useState(firstDayCurrentMonth);
   const [nonStaffEndDate, setNonStaffEndDate] = useState(lastDayCurrentMonth);
+  const [company, setCompany] = useState<CompanyFilter>("");
   const monthPeriod = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
   const periodRange = useMemo(() => {
     if (pageType === "nonstaff") {
@@ -269,7 +270,7 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
     setError("");
 
     try {
-      const employeeRes = await employeeAPI.getAll();
+      const employeeRes = await employeeAPI.getAll(company);
       const mappedEmployees: EmployeeRow[] = (Array.isArray(employeeRes) ? employeeRes : [])
         .map((row: any) => ({
           id: String(row.id),
@@ -287,7 +288,7 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
       setEmployees(mappedEmployees);
 
       if (pageType === "nonstaff") {
-        const attendanceRes = await attendanceAPI.getAll();
+        const attendanceRes = await attendanceAPI.getAll(company);
         const start = new Date(periodRange.startDate);
         const end = new Date(periodRange.endDate);
         const summary: Record<string, AttendanceSummary> = {};
@@ -400,7 +401,7 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
 
     try {
       if (pageType === "staff") {
-        await generateSalaryAPI.generateStaffBulanan(monthPeriod, selectedDivisions);
+        await generateSalaryAPI.generateStaffBulanan(monthPeriod, selectedDivisions, company);
       } else {
         if (!nonStaffStartDate || !nonStaffEndDate) {
           throw new Error("Tanggal mulai dan tanggal akhir wajib diisi.");
@@ -410,7 +411,7 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
           throw new Error("Tanggal akhir tidak boleh lebih kecil dari tanggal mulai.");
         }
 
-        await generateSalaryAPI.generateNonStaffMingguan(periodRange.startDate, periodRange.endDate);
+        await generateSalaryAPI.generateNonStaffMingguan(periodRange.startDate, periodRange.endDate, undefined, undefined, undefined, company);
       }
 
       setWorkflowStatus("GENERATED");
@@ -812,6 +813,8 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
           canGenerate={canGenerate}
           submitting={submitting}
           handleGenerate={handleGenerate}
+          company={company}
+          onCompanyChange={setCompany}
         />
       )}
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useCompany } from "@/components/providers/company-provider";
+import { CompanySwitcher } from "@/components/layout/company-switcher";
+import type { CompanyFilter } from "@/lib/api/core";
 import { Button } from "@/components/ui/form/button";
 import { Input } from "@/components/ui/form/input";
 import {
@@ -115,7 +116,7 @@ const getDatesInRange = (startStr: string, endStr: string): string[] => {
 };
 
 export default function AttendancePage() {
-  const { company } = useCompany();
+  const [company, setCompany] = useState<CompanyFilter>("");
   const [attendanceData, setAttendanceData] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [filteredData, setFilteredData] = useState<any[]>([]);
@@ -160,8 +161,8 @@ export default function AttendancePage() {
       setIsLoading(true);
       // Fetch employees and attendance in parallel (single request each)
       const [employeesResponse, allAttendance] = await Promise.all([
-        employeeAPI.getAll(),
-        attendanceAPI.getAll(),
+        employeeAPI.getAll(company),
+        attendanceAPI.getAll(company),
       ]);
       const mappedEmployees = employeesResponse.map((emp: any) => ({
         ...emp,
@@ -629,6 +630,7 @@ export default function AttendancePage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          <CompanySwitcher value={company} onChange={setCompany} />
           <Button variant="outline" onClick={handleExportDailyReportPDF} className="flex-1 sm:flex-initial text-xs sm:text-sm">
             <Download className="w-4 h-4 mr-2 shrink-0" />
             Export PDF

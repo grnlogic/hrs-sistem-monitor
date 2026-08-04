@@ -1,13 +1,13 @@
-import { apiRequest } from "./core";
+import { apiRequest, type CompanyFilter } from "./core";
 
 export const piutangAPI = {
-  getAll: async (aktif?: boolean) => {
+  getAll: async (aktif?: boolean, company: CompanyFilter = "") => {
     const params = new URLSearchParams();
     if (aktif !== undefined) {
       params.append("aktif", String(aktif));
     }
     const query = params.toString();
-    return apiRequest(`/piutang${query ? `?${query}` : ""}`);
+    return apiRequest(`/piutang${query ? `?${query}` : ""}`, {}, company);
   },
 
   create: async (data: { karyawanId: string; saldoAwal: number; jumlahCicilan: number }) => {

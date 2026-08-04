@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/overlay/dropdown-menu";
 import { NAMA_PT_LENGKAP } from "@/lib/constants/perusahaan";
 import type { CompanyFilter } from "@/lib/api/core";
-import { useCompany } from "@/components/providers/company-provider";
 
 const OPTIONS: Array<{ value: CompanyFilter; label: string }> = [
   { value: "", label: "Semua Perusahaan" },
@@ -29,12 +28,31 @@ const SHORT_LABEL: Record<string, string> = {
   PRIMA: "PRIMA",
 };
 
+type CompanySwitcherProps = {
+  value: CompanyFilter;
+  onChange: (value: CompanyFilter) => void;
+  className?: string;
+  /** false = opsi "Semua Perusahaan" disembunyikan; value "" tampil sebagai "Pilih Perusahaan" (wajib pilih). */
+  allowAll?: boolean;
+};
+
 /**
- * Dropdown "Perusahaan Aktif" (company-switcher) — global, bisa dipakai di
- * header maupun inline di toolbar halaman. Membaca/menulis context yang sama.
+ * Dropdown "Perusahaan Aktif" (company-switcher) — komponen CONTROLLED.
+ * State dimiliki halaman pemakainya (per-halaman, tidak global/persist).
+ * allowAll={false} dipakai flow yang mewajibkan perusahaan spesifik (Gaji Non-Staff).
  */
-export function CompanySwitcher({ className }: { className?: string }) {
-  const { company, setCompany } = useCompany();
+export function CompanySwitcher({
+  value: company,
+  onChange: setCompany,
+  className,
+  allowAll = true,
+}: CompanySwitcherProps) {
+  const options = allowAll ? OPTIONS : OPTIONS.filter((opt) => opt.value !== "");
+  const displayLabel = company
+    ? SHORT_LABEL[company]
+    : allowAll
+      ? "Semua Perusahaan"
+      : "Pilih Perusahaan";
 
   return (
     <DropdownMenu>
@@ -46,13 +64,13 @@ export function CompanySwitcher({ className }: { className?: string }) {
           title="Filter data berdasarkan perusahaan"
         >
           <Building2 className="h-4 w-4" />
-          {SHORT_LABEL[company]}
+          {displayLabel}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-64" align="end">
         <DropdownMenuLabel>Perusahaan Aktif</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {OPTIONS.map((opt) => (
+        {options.map((opt) => (
           <DropdownMenuItem
             key={opt.value || "all"}
             onClick={() => setCompany(opt.value)}

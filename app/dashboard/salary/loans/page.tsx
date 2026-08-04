@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useCompany } from "@/components/providers/company-provider";
+import { CompanySwitcher } from "@/components/layout/company-switcher";
+import type { CompanyFilter } from "@/lib/api/core";
 import { Button } from "@/components/ui/form/button";
 import { Input } from "@/components/ui/form/input";
 import { Checkbox } from "@/components/ui/form/checkbox";
@@ -88,7 +89,7 @@ type PiutangCicilan = {
 };
 
 export default function LoansPage() {
-  const { company } = useCompany();
+  const [company, setCompany] = useState<CompanyFilter>("");
 
   const [loans, setLoans] = useState<Piutang[]>([]);
   const [employees, setEmployees] = useState<Karyawan[]>([]);
@@ -123,7 +124,7 @@ export default function LoansPage() {
     try {
       setLoading(true);
       setErrorMsg("");
-      const res = await piutangAPI.getAll();
+      const res = await piutangAPI.getAll(undefined, company);
       setLoans(res || []);
       // If we had a selected loan, update its data as well
       if (selectedLoan) {
@@ -145,7 +146,7 @@ export default function LoansPage() {
 
   const fetchEmployees = async () => {
     try {
-      const res = await employeeAPI.getAll();
+      const res = await employeeAPI.getAll(company);
       // Filter only non-staff active employees
       const filtered = (res || []).filter((emp: Karyawan) => {
         const dept = String(emp.departemen || "").toLowerCase();
@@ -298,6 +299,7 @@ export default function LoansPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
+          <CompanySwitcher value={company} onChange={setCompany} />
           <Button
             variant="outline"
             size="icon"

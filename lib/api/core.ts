@@ -49,41 +49,32 @@ export const removeAuthToken = () => {
   }
 }
 
-// ─── Company-switcher (filter perusahaan: "" = Semua, atau PJP/SP/PRIMA) ───
-export const COMPANY_FILTER_KEY = "hrd-company-filter"
-
+// ─── Company filter (per-halaman: "" = Semua, atau PJP/SP/PRIMA) ───
+// Nilai TIDAK lagi disimpan global (localStorage/context). Caller wajib
+// mengirimkan nilai filter-nya secara eksplisit per pemanggilan API.
 export type CompanyFilter = "" | "PJP" | "SP" | "PRIMA"
 
-export const getCompanyFilter = (): CompanyFilter => {
-  if (typeof window === "undefined") return ""
-  const value = window.localStorage.getItem(COMPANY_FILTER_KEY)
-  return value === "PJP" || value === "SP" || value === "PRIMA" ? value : ""
-}
+const VALID_COMPANIES: ReadonlySet<string> = new Set(["PJP", "SP", "PRIMA"])
 
-export const setCompanyFilter = (value: CompanyFilter) => {
-  if (typeof window === "undefined") return
-  if (value === "PJP" || value === "SP" || value === "PRIMA") {
-    window.localStorage.setItem(COMPANY_FILTER_KEY, value)
-  } else {
-    window.localStorage.removeItem(COMPANY_FILTER_KEY)
-  }
-}
+/** Normalisasi nilai company dari caller; nilai tidak valid → "". */
+export const getCompanyFilter = (company: string): CompanyFilter =>
+  VALID_COMPANIES.has(company) ? (company as CompanyFilter) : ""
 
 /** Query string untuk filter lokasi ("" saat "Semua Perusahaan"). */
-export const getCompanyFilterQuery = (): string => {
-  const lokasi = getCompanyFilter()
+export const getCompanyFilterQuery = (company: CompanyFilter): string => {
+  const lokasi = getCompanyFilter(company)
   return lokasi ? `lokasi=${lokasi}` : ""
 }
 
-/** Sisipkan ?lokasi= ke endpoint bila filter aktif; aman bila endpoint sudah punya query. */
-export const appendCompanyFilter = (endpoint: string): string => {
-  const query = getCompanyFilterQuery()
+/** Sisipkan ?lokasi= ke endpoint bila company aktif; aman bila endpoint sudah punya query. */
+export const appendCompanyFilter = (endpoint: string, company: CompanyFilter = ""): string => {
+  const query = getCompanyFilterQuery(company)
   if (!query) return endpoint
   return `${endpoint}${endpoint.includes("?") ? "&" : "?"}${query}`
 }
 
 // API request helper
-export const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
+export const apiRequest = async (endpoint: string, options: RequestInit = {}, company: CompanyFilter = "") => {
   const token = getAuthToken()
 
   const config: RequestInit = {
@@ -99,7 +90,7 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}) =>
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT)
 
   try {
-    const response = await fetch(appendCompanyFilter(`${API_BASE_URL}${endpoint}`), {
+    const response = await fetch(appendCompanyFilter(`${API_BASE_URL}${endpoint}`, company), {
       ...config,
       signal: controller.signal,
     })

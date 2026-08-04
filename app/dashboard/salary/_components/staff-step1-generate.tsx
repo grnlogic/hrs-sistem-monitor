@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/form/input";
 import { Button } from "@/components/ui/form/button";
 import { Checkbox } from "@/components/ui/form/checkbox";
 import { CompanySwitcher } from "@/components/layout/company-switcher";
+import type { CompanyFilter } from "@/lib/api/core";
 import { employeeAPI } from "@/lib/api/karyawan";
 import {
   Table,
@@ -47,6 +48,8 @@ type StaffStep1Props = {
   canGenerate: boolean;
   submitting: boolean;
   handleGenerate: (selectedDivisions?: string[]) => void;
+  company: CompanyFilter;
+  onCompanyChange: (value: CompanyFilter) => void;
 };
 
 export function StaffStep1Generate(props: StaffStep1Props) {
@@ -70,6 +73,8 @@ export function StaffStep1Generate(props: StaffStep1Props) {
     canGenerate,
     submitting,
     handleGenerate,
+    company,
+    onCompanyChange,
   } = props;
 
   const [availableDivisions, setAvailableDivisions] = React.useState<string[]>([]);
@@ -80,7 +85,7 @@ export function StaffStep1Generate(props: StaffStep1Props) {
     async function fetchDivisions() {
       try {
         setLoadingDivisions(true);
-        const data = await employeeAPI.getDivisiList(pageType);
+        const data = await employeeAPI.getDivisiList(pageType, company);
         setAvailableDivisions(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Gagal mengambil daftar divisi:", err);
@@ -89,7 +94,7 @@ export function StaffStep1Generate(props: StaffStep1Props) {
       }
     }
     fetchDivisions();
-  }, [pageType]);
+  }, [pageType, company]);
 
   const filteredRows = React.useMemo(() => {
     if (selectedDivisions.length === 0) return estimatedRows;
@@ -104,7 +109,7 @@ export function StaffStep1Generate(props: StaffStep1Props) {
           <label className="mb-1 block text-sm text-foreground">
             Perusahaan
           </label>
-          <CompanySwitcher className="h-10 w-full" />
+          <CompanySwitcher value={company} onChange={onCompanyChange} className="h-10 w-full" />
         </div>
         {pageType === "staff" ? (
           <>
