@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/form/button";
 import { Input } from "@/components/ui/form/input";
@@ -42,6 +42,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { employeeAPI } from "@/lib/api";
+import { divisiAPI, MasterDivisiItem } from "@/lib/api/divisi";
 import { printPKBPDF } from "@/lib/utils";
 import type { PKBData, TipeUpahPKB } from "@/lib/pkb-template";
 import { getDefaultPKBData } from "@/lib/pkb-template";
@@ -66,7 +67,7 @@ const roleOptions = [
   { label: "Manager", value: "Manager" },
 ];
 
-const ALL_DEPARTMENTS = [
+const DEFAULT_DEPARTMENTS = [
   { label: "Blending", value: "BLENDING" },
   { label: "Packing", value: "PACKING" },
   { label: "Sales", value: "SALES" },
@@ -184,6 +185,21 @@ export default function NewEmployeePage() {
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [docUploaded, setDocUploaded] = useState(false);
   const [showOptional, setShowOptional] = useState(false);
+  const [departmentOptions, setDepartmentOptions] = useState<{ label: string; value: string }[]>(DEFAULT_DEPARTMENTS);
+
+  useEffect(() => {
+    divisiAPI.getAll().then((list: MasterDivisiItem[]) => {
+      if (list && list.length > 0) {
+        const mapped = list.map((d: MasterDivisiItem) => ({
+          label: d.nama.charAt(0).toUpperCase() + d.nama.slice(1).toLowerCase(),
+          value: d.nama.toUpperCase(),
+        }));
+        setDepartmentOptions(mapped);
+      }
+    }).catch(() => {
+      // fallback to DEFAULT_DEPARTMENTS if error
+    });
+  }, []);
 
   // Photo state
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -561,7 +577,7 @@ export default function NewEmployeePage() {
                   <Select value={formData.departemen} onValueChange={(v) => updateField("departemen", v)}>
                     <SelectTrigger><SelectValue placeholder="Pilih divisi" /></SelectTrigger>
                     <SelectContent>
-                      {ALL_DEPARTMENTS.map((d) => (
+                      {departmentOptions.map((d) => (
                         <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
                       ))}
                     </SelectContent>

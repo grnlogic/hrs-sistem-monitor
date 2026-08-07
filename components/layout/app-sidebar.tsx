@@ -18,6 +18,7 @@ import {
   Settings,
   ImageIcon,
   Archive,
+  Building2,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
@@ -126,6 +127,12 @@ const gajiMenuItems: MenuItem[] = [
 ];
 
 const settingsMenuItems: MenuItem[] = [
+  {
+    title: "Master Divisi",
+    url: "/dashboard/settings/divisi",
+    icon: Building2,
+    description: "Kelola divisi & departemen",
+  },
   {
     title: "Manajemen User",
     url: "/dashboard/settings/users",

@@ -35,6 +35,7 @@ import ReactCrop, {
   makeAspectCrop,
 } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
+import { divisiAPI, MasterDivisiItem } from "@/lib/api/divisi";
 
 const statusOptions = [
   { label: "Tetap", value: "TETAP" },
@@ -78,7 +79,7 @@ const roleOptions = [
   { label: "Manager", value: "Manager" },
 ];
 
-const departmentOptions = [
+const defaultDepartmentOptions = [
   { label: "Blending", value: "BLENDING" },
   { label: "Packing", value: "PACKING" },
   { label: "Sales", value: "SALES" },
@@ -163,6 +164,20 @@ export default function EditEmployeePage() {
   const [currentFotoUrl, setCurrentFotoUrl] = useState<string | null>(null);
   const [selectedDepartment, setSelectedDepartment] = useState("");
   const [salaryInput, setSalaryInput] = useState("");
+  const [departmentOptions, setDepartmentOptions] = useState<{ label: string; value: string }[]>(defaultDepartmentOptions);
+
+  useEffect(() => {
+    divisiAPI.getAll().then((list: MasterDivisiItem[]) => {
+      if (list && list.length > 0) {
+        setDepartmentOptions(
+          list.map((d: MasterDivisiItem) => ({
+            label: d.nama.charAt(0).toUpperCase() + d.nama.slice(1).toLowerCase(),
+            value: d.nama.toUpperCase(),
+          }))
+        );
+      }
+    }).catch(() => {});
+  }, []);
 
   // Load employee data on component mount
   useEffect(() => {
