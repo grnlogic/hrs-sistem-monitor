@@ -6,6 +6,7 @@
 import { type LokasiCode } from "@/lib/api";
 import { LOKASI_PT, NAMA_PT } from "@/lib/constants/perusahaan";
 import { Badge } from "@/components/ui/display/badge";
+import { AUTO_BONUS_JUDUL, AUTO_BONUS_NOMINAL } from "./salary-stepper-shared";
 
 export type Step = 1 | 2 | 3;
 
@@ -104,6 +105,8 @@ export type InputState = {
   /** Data tidak sehat: karyawan punya >1 piutang aktif (rekap akan ditolak BE). */
   piutangKonflik?: boolean;
   piutangAktifCount?: number;
+  /** Flag penanda jika bonus sudah pernah disimpan oleh user */
+  isBonusSaved?: boolean;
 };
 
 export type RekapPopupState = {
@@ -123,7 +126,9 @@ export type CalculatedSnapshot = {
 
 /* ---------- Constants ---------- */
 
-export const DEFAULT_BONUS: SalaryItem[] = [{ judul: "Bonus", nominal: 0 }];
+export const DEFAULT_BONUS: SalaryItem[] = [
+  { judul: AUTO_BONUS_JUDUL, nominal: AUTO_BONUS_NOMINAL },
+];
 export const DEFAULT_POTONGAN: SalaryItem[] = [];
 
 /* ---------- Utilities ---------- */

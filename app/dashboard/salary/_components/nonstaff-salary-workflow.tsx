@@ -1083,7 +1083,10 @@ export function NonStaffSalaryWorkflow() {
 
       setInputsBySalaryId((prev) => ({
         ...prev,
-        [salaryId]: finalState,
+        [salaryId]: {
+          ...finalState,
+          isBonusSaved: true,
+        },
       }));
 
       setDoneBySalaryId((prev) => ({ ...prev, [salaryId]: true }));

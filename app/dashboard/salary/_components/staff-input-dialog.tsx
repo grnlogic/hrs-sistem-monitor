@@ -89,21 +89,7 @@ export function StaffInputDialog(props: StaffInputDialogProps) {
     if (dialogOpen) load();
   }, [dialogOpen, load]);
 
-  // Auto-fill bonus "kikiping" (10.000): tambahkan 1 baris bila karyawan ini
-  // belum punya baris kikiping di periode ini. Idempotent — buka-tutup dialog
-  // berkali-kali tetap hanya 1 baris (cek by nama). Baris bisa diedit/dihapus.
-  React.useEffect(() => {
-    if (!dialogOpen || !selectedSalary) return;
-    const salaryId = selectedSalary.id;
-    const bonusList = inputsBySalaryId[salaryId]?.bonusItems || [];
-    const hasKikiping = bonusList.some(
-      (item) => item.judul.toLowerCase() === AUTO_BONUS_JUDUL
-    );
-    if (!hasKikiping) {
-      addKikipingItem(salaryId);
-      void ensureItemSaved("BONUS", AUTO_BONUS_JUDUL);
-    }
-  }, [dialogOpen, selectedSalary, inputsBySalaryId, addKikipingItem, ensureItemSaved]);
+
 
   const handleSave = () => {
     const state = selectedSalary ? inputsBySalaryId[selectedSalary.id] : undefined;

@@ -87,7 +87,20 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
   React.useEffect(() => {
     if (dialogOpen && selectedSnapshot) {
       const parentState = inputsBySalaryId[selectedSnapshot.gajiId] || buildDefaultInputState();
-      setDraftState(JSON.parse(JSON.stringify(parentState)));
+      const draft: InputState = JSON.parse(JSON.stringify(parentState));
+
+      // Auto-fill bonus "kikiping" (10.000) for initial/unsaved draft
+      if (
+        !draft.isBonusSaved &&
+        (draft.bonusItems.length === 0 ||
+          (draft.bonusItems.length === 1 &&
+            (draft.bonusItems[0].judul === "Bonus" || draft.bonusItems[0].judul === "" || !draft.bonusItems[0].judul) &&
+            Number(draft.bonusItems[0].nominal) === 0))
+      ) {
+        draft.bonusItems = [{ judul: AUTO_BONUS_JUDUL, nominal: AUTO_BONUS_NOMINAL }];
+      }
+
+      setDraftState(draft);
     }
   }, [dialogOpen, selectedSnapshot, inputsBySalaryId]);
 
@@ -95,26 +108,7 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
     if (dialogOpen) load();
   }, [dialogOpen, load]);
 
-  // Auto-fill bonus "kikiping" (10.000) inside draftState if not present
-  React.useEffect(() => {
-    if (!dialogOpen || !selectedSnapshot) return;
-    setDraftState((prev) => {
-      const hasKikiping = prev.bonusItems.some(
-        (item) => item.judul.toLowerCase() === AUTO_BONUS_JUDUL
-      );
-      if (!hasKikiping) {
-        void ensureItemSaved("BONUS", AUTO_BONUS_JUDUL);
-        return {
-          ...prev,
-          bonusItems: [
-            ...prev.bonusItems,
-            { judul: AUTO_BONUS_JUDUL, nominal: AUTO_BONUS_NOMINAL },
-          ],
-        };
-      }
-      return prev;
-    });
-  }, [dialogOpen, selectedSnapshot, ensureItemSaved]);
+
 
   const piutangInfo = draftState.piutangInfo;
   const piutangKonflik = Boolean(draftState.piutangKonflik);
