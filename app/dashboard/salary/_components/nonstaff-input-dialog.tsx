@@ -27,8 +27,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/display/table";
+import { Badge } from "@/components/ui/display/badge";
 import { formatCurrency } from "@/lib/utils";
-import { Plus, Trash2, Save } from "lucide-react";
+import { roundUpToHundred, calcGajiBersih } from "@/lib/salary-utils";
+import { Plus, Trash2, Save, RotateCcw } from "lucide-react";
 import { useMasterGajiItems } from "./master-gaji-items";
 import {
   type SnapshotRow,
@@ -36,8 +38,9 @@ import {
   type CalculatedSnapshot,
   buildDefaultInputState,
   toNumber,
+  CompanyBadge,
 } from "./nonstaff-salary-shared";
-import { AUTO_BONUS_JUDUL } from "./salary-stepper-shared";
+import { AUTO_BONUS_JUDUL, AUTO_BONUS_NOMINAL } from "./salary-stepper-shared";
 
 type NonStaffInputDialogProps = {
   dialogOpen: boolean;
@@ -47,27 +50,8 @@ type NonStaffInputDialogProps = {
   endDate: string;
   inputsBySalaryId: Record<string, InputState>;
   canEditSalary: boolean;
-  calculatedForSnapshot: (row: SnapshotRow) => CalculatedSnapshot;
-  updateItem: (
-    salaryId: string,
-    key: "bonusItems" | "potonganItems",
-    index: number,
-    field: "judul" | "nominal",
-    value: string
-  ) => void;
-  addItem: (salaryId: string, key: "bonusItems" | "potonganItems") => void;
-  deleteItem: (
-    salaryId: string,
-    key: "bonusItems" | "potonganItems",
-    index: number
-  ) => void;
-  addKikipingItem: (salaryId: string) => void;
-  updatePakaiUangPribadi: (salaryId: string, value: boolean) => void;
-  updateBayarMingguIni: (salaryId: string, value: boolean) => void;
-  updateNominalCicilan: (salaryId: string, value: number | null) => void;
-  upsertPinjamanItem: (salaryId: string, nominal: number, present: boolean) => void;
   submitting: boolean;
-  saveInputSalary: () => void;
+  saveInputSalary: (salaryId: string, finalState: InputState) => void;
 };
 
 function formatPeriod(startDate: string, endDate: string): string {
@@ -91,91 +75,166 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
     endDate,
     inputsBySalaryId,
     canEditSalary,
-    calculatedForSnapshot,
-    updateItem,
-    addItem,
-    deleteItem,
-    addKikipingItem,
-    updatePakaiUangPribadi,
-    updateBayarMingguIni,
-    updateNominalCicilan,
-    upsertPinjamanItem,
     submitting,
     saveInputSalary,
   } = props;
 
   const { bonusOptions, potonganOptions, load, ensureItemSaved } = useMasterGajiItems();
 
-  const currentInputState = selectedSnapshot ? inputsBySalaryId[selectedSnapshot.gajiId] : undefined;
-  const piutangInfo = currentInputState?.piutangInfo;
-  // Data tidak sehat: >1 piutang aktif — kontrol dikunci, rekap ditolak BE.
-  const piutangKonflik = Boolean(currentInputState?.piutangKonflik);
-  const piutangAktifCount = Number(currentInputState?.piutangAktifCount || 0);
-  const pakaiUangPribadi = currentInputState?.pakaiUangPribadi || false;
-  // Kontrol cicilan piutang: bayar minggu ini (default) + nominal override
-  // (default = cicilan/minggu, di-clamp ke sisa saldo).
-  const bayarMingguIni = currentInputState?.bayarMingguIni !== false;
-  const sisaSaldoPiutang = Number(piutangInfo?.sisaSaldo || 0);
-  const nominalCicilanDefault = Number(piutangInfo?.jumlahCicilan || 0);
-  const nominalOverride = currentInputState?.nominalCicilan ?? nominalCicilanDefault;
-  const nominalCicilanEfektif = Math.min(
-    Math.max(0, nominalOverride),
-    Math.max(0, sisaSaldoPiutang)
-  );
+  // Local draft state — isolates edits so changes only persist when user clicks "Simpan Perubahan"
+  const [draftState, setDraftState] = React.useState<InputState>(buildDefaultInputState());
 
-  // Sinkronkan item potongan "Pinjaman" dengan kontrol panel piutang:
-  // override → nilai item ikut berubah (tabel & preview slip live konsisten),
-  // skip → item dihapus. Idempotent — tidak memicu loop karena nilai stabil.
   React.useEffect(() => {
-    if (!selectedSnapshot || !piutangInfo) return;
-    upsertPinjamanItem(
-      selectedSnapshot.gajiId,
-      nominalCicilanEfektif,
-      bayarMingguIni && nominalCicilanEfektif > 0
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSnapshot?.gajiId, piutangInfo?.id, bayarMingguIni, nominalCicilanEfektif]);
+    if (dialogOpen && selectedSnapshot) {
+      const parentState = inputsBySalaryId[selectedSnapshot.gajiId] || buildDefaultInputState();
+      setDraftState(JSON.parse(JSON.stringify(parentState)));
+    }
+  }, [dialogOpen, selectedSnapshot, inputsBySalaryId]);
 
   React.useEffect(() => {
     if (dialogOpen) load();
   }, [dialogOpen, load]);
 
-  // Auto-fill bonus "kikiping" (10.000): tambahkan 1 baris bila karyawan ini
-  // belum punya baris kikiping di periode ini. Idempotent — buka-tutup dialog
-  // berkali-kali tetap hanya 1 baris (cek by nama). Baris bisa diedit/dihapus.
+  // Auto-fill bonus "kikiping" (10.000) inside draftState if not present
   React.useEffect(() => {
     if (!dialogOpen || !selectedSnapshot) return;
-    const salaryId = selectedSnapshot.gajiId;
-    const bonusList = inputsBySalaryId[salaryId]?.bonusItems || [];
-    const hasKikiping = bonusList.some(
-      (item) => item.judul.toLowerCase() === AUTO_BONUS_JUDUL
-    );
-    if (!hasKikiping) {
-      addKikipingItem(salaryId);
-      void ensureItemSaved("BONUS", AUTO_BONUS_JUDUL);
+    setDraftState((prev) => {
+      const hasKikiping = prev.bonusItems.some(
+        (item) => item.judul.toLowerCase() === AUTO_BONUS_JUDUL
+      );
+      if (!hasKikiping) {
+        void ensureItemSaved("BONUS", AUTO_BONUS_JUDUL);
+        return {
+          ...prev,
+          bonusItems: [
+            ...prev.bonusItems,
+            { judul: AUTO_BONUS_JUDUL, nominal: AUTO_BONUS_NOMINAL },
+          ],
+        };
+      }
+      return prev;
+    });
+  }, [dialogOpen, selectedSnapshot, ensureItemSaved]);
+
+  const piutangInfo = draftState.piutangInfo;
+  const piutangKonflik = Boolean(draftState.piutangKonflik);
+  const piutangAktifCount = Number(draftState.piutangAktifCount || 0);
+  const pakaiUangPribadi = draftState.pakaiUangPribadi || false;
+  const bayarMingguIni = draftState.bayarMingguIni !== false;
+  const sisaSaldoPiutang = Number(piutangInfo?.sisaSaldo || 0);
+  const nominalCicilanDefault = Number(piutangInfo?.jumlahCicilan || 0);
+  const nominalOverride = draftState.nominalCicilan ?? nominalCicilanDefault;
+  const nominalCicilanEfektif = Math.min(
+    Math.max(0, nominalOverride),
+    Math.max(0, sisaSaldoPiutang)
+  );
+
+  // Sync Pinjaman item inside draftState
+  React.useEffect(() => {
+    if (!selectedSnapshot || !piutangInfo) return;
+    setDraftState((prev) => {
+      const idx = prev.potonganItems.findIndex(
+        (i) => i.judul.toLowerCase() === "pinjaman"
+      );
+      const present = bayarMingguIni && nominalCicilanEfektif > 0;
+      let list = [...prev.potonganItems];
+      if (!present) {
+        if (idx >= 0) list = list.filter((_, k) => k !== idx);
+      } else if (idx >= 0) {
+        if (list[idx].nominal === nominalCicilanEfektif) return prev;
+        list[idx] = { ...list[idx], nominal: nominalCicilanEfektif };
+      } else {
+        list = [...list, { judul: "Pinjaman", nominal: nominalCicilanEfektif }];
+      }
+      return { ...prev, potonganItems: list };
+    });
+  }, [selectedSnapshot, piutangInfo, bayarMingguIni, nominalCicilanEfektif]);
+
+  // Handlers for draftState
+  const updateDraftItem = (
+    key: "bonusItems" | "potonganItems",
+    index: number,
+    field: "judul" | "nominal",
+    value: string
+  ) => {
+    setDraftState((prev) => {
+      const list = [...prev[key]];
+      const updated = { ...list[index] };
+      if (field === "judul") {
+        updated.judul = value;
+      } else {
+        updated.nominal = toNumber(value);
+      }
+      list[index] = updated;
+      return { ...prev, [key]: list };
+    });
+  };
+
+  const addDraftItem = (key: "bonusItems" | "potonganItems") => {
+    setDraftState((prev) => ({
+      ...prev,
+      [key]: [...prev[key], { judul: "", nominal: 0 }],
+    }));
+  };
+
+  const deleteDraftItem = (key: "bonusItems" | "potonganItems", index: number) => {
+    setDraftState((prev) => {
+      const target = prev[key][index];
+      if (target?.isDefault) return prev;
+      return {
+        ...prev,
+        [key]: prev[key].filter((_, i) => i !== index),
+      };
+    });
+  };
+
+  const handleResetBonus = () => {
+    setDraftState((prev) => ({
+      ...prev,
+      bonusItems: [{ judul: "Bonus", nominal: 0 }],
+    }));
+  };
+
+  const calcLive = React.useMemo(() => {
+    if (!selectedSnapshot) {
+      return { totalBonus: 0, totalPotongan: 0, gajiBersih: 0, gajiBersihSebelumBulat: 0 };
     }
-  }, [dialogOpen, selectedSnapshot, inputsBySalaryId, addKikipingItem, ensureItemSaved]);
+    const totalBonus = draftState.bonusItems.reduce((sum, item) => sum + toNumber(item.nominal), 0);
+    const totalPotongan = draftState.potonganItems.reduce((sum, item) => sum + toNumber(item.nominal), 0);
+    const { gajiBersih, gajiBersihSebelumBulat } = calcGajiBersih(
+      selectedSnapshot.gajiPokok + totalBonus,
+      totalPotongan,
+      draftState.manualGajiBersih
+    );
+    return {
+      totalBonus,
+      totalPotongan,
+      gajiBersih,
+      gajiBersihSebelumBulat,
+    };
+  }, [selectedSnapshot, draftState]);
 
   const handleSave = () => {
-    const state = selectedSnapshot
-      ? inputsBySalaryId[selectedSnapshot.gajiId]
-      : undefined;
-    const persist = state
-      ? [
-          ...state.bonusItems.map((item) => ensureItemSaved("BONUS", item.judul)),
-          ...state.potonganItems.map((item) => ensureItemSaved("POTONGAN", item.judul)),
-        ]
-      : [];
-    void Promise.all(persist).finally(saveInputSalary);
+    if (!selectedSnapshot) return;
+    const persist = [
+      ...draftState.bonusItems.map((item) => ensureItemSaved("BONUS", item.judul)),
+      ...draftState.potonganItems.map((item) => ensureItemSaved("POTONGAN", item.judul)),
+    ];
+    void Promise.all(persist).finally(() => {
+      saveInputSalary(selectedSnapshot.gajiId, draftState);
+    });
   };
 
   return (
     <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>
-            {selectedSnapshot?.nama} - {selectedSnapshot?.divisi} -{" "}
-            {formatPeriod(startDate, endDate)}
+          <DialogTitle className="flex items-center gap-2">
+            <span>{selectedSnapshot?.nama}</span>
+            <CompanyBadge lokasi={selectedSnapshot?.lokasiDefault} />
+            <span className="text-muted-foreground font-normal">
+              - {selectedSnapshot?.divisi} - {formatPeriod(startDate, endDate)}
+            </span>
           </DialogTitle>
           <DialogDescription>
             Input bonus dan potongan untuk karyawan ini.
@@ -231,8 +290,18 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
             </Card>
 
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                 <CardTitle className="text-base">Bonus</CardTitle>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!canEditSalary}
+                  className="h-8 text-xs gap-1.5 text-zinc-700 border-zinc-300 hover:bg-zinc-100"
+                  onClick={handleResetBonus}
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> Reset Bonus
+                </Button>
               </CardHeader>
               <CardContent className="space-y-2">
                 <Table>
@@ -240,14 +309,11 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                     <TableRow>
                       <TableHead>Judul Bonus</TableHead>
                       <TableHead>Nominal</TableHead>
-                      <TableHead>Hapus</TableHead>
+                      <TableHead className="w-[140px]">Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(
-                      inputsBySalaryId[selectedSnapshot.gajiId]
-                        ?.bonusItems || []
-                    ).map((item, index) => (
+                    {draftState.bonusItems.map((item, index) => (
                       <TableRow key={`bonus-${selectedSnapshot.gajiId}-${index}`}>
                         <TableCell>
                           <CreatableCombobox
@@ -256,13 +322,7 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                             disabled={!canEditSalary}
                             placeholder="Pilih atau ketik nama bonus..."
                             onChange={(judul) =>
-                              updateItem(
-                                selectedSnapshot.gajiId,
-                                "bonusItems",
-                                index,
-                                "judul",
-                                judul
-                              )
+                              updateDraftItem("bonusItems", index, "judul", judul)
                             }
                           />
                         </TableCell>
@@ -279,48 +339,60 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                             }
                             disabled={!canEditSalary}
                             onChange={(event) =>
-                              updateItem(
-                                selectedSnapshot.gajiId,
-                                "bonusItems",
-                                index,
-                                "nominal",
-                                event.target.value
-                              )
+                              updateDraftItem("bonusItems", index, "nominal", event.target.value)
                             }
                           />
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            disabled={!canEditSalary}
-                            onClick={() =>
-                              deleteItem(
-                                selectedSnapshot.gajiId,
-                                "bonusItems",
-                                index
-                              )
-                            }
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              title="Reset nominal bonus ini ke 0"
+                              className="h-8 text-xs text-zinc-600 hover:text-amber-700 hover:bg-amber-50 gap-1 px-2"
+                              disabled={!canEditSalary}
+                              onClick={() => updateDraftItem("bonusItems", index, "nominal", "0")}
+                            >
+                              <RotateCcw className="w-3 h-3" /> Reset
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              disabled={!canEditSalary}
+                              onClick={() => deleteDraftItem("bonusItems", index)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!canEditSalary}
-                  onClick={() =>
-                    addItem(selectedSnapshot.gajiId, "bonusItems")
-                  }
-                  className="mt-2 gap-1 text-primary border-primary/20 hover:bg-primary/5"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Tambah Bonus
-                </Button>
+                <div className="flex items-center justify-between mt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!canEditSalary}
+                    onClick={() => addDraftItem("bonusItems")}
+                    className="gap-1 text-primary border-primary/20 hover:bg-primary/5"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Tambah Bonus
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!canEditSalary}
+                    className="h-8 text-xs gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                    onClick={handleResetBonus}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> Reset Semua Bonus
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 
@@ -334,16 +406,11 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                     <TableRow>
                       <TableHead>Judul Potongan</TableHead>
                       <TableHead>Nominal</TableHead>
-                      <TableHead>Hapus</TableHead>
+                      <TableHead className="w-[80px]">Hapus</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(
-                      inputsBySalaryId[selectedSnapshot.gajiId]
-                        ?.potonganItems || []
-                    )
-                      // Saat skip minggu ini: baris Pinjaman disembunyikan dari
-                      // tabel (panel piutang yang mengatur), slip juga tanpa Pinjaman.
+                    {draftState.potonganItems
                       .filter(
                         (item) =>
                           !(piutangInfo && !bayarMingguIni && item.judul.toLowerCase() === "pinjaman")
@@ -353,79 +420,60 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                           piutangInfo && item.judul.toLowerCase() === "pinjaman"
                         );
                         return (
-                      <TableRow key={`potongan-${selectedSnapshot.gajiId}-${index}`}>
-                        <TableCell>
-                          <CreatableCombobox
-                            options={potonganOptions}
-                            value={item.judul}
-                            disabled={!canEditSalary || isPinjamanTerkelola || piutangKonflik}
-                            placeholder="Pilih atau ketik nama potongan..."
-                            onChange={(judul) =>
-                              updateItem(
-                                selectedSnapshot.gajiId,
-                                "potonganItems",
-                                index,
-                                "judul",
-                                judul
-                              )
-                            }
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type={isPinjamanTerkelola ? "text" : "number"}
-                            min={0}
-                            placeholder="0"
-                            onWheel={(e) => e.currentTarget.blur()}
-                            value={
-                              isPinjamanTerkelola
-                                ? nominalCicilanEfektif > 0
-                                  ? nominalCicilanEfektif.toLocaleString("id-ID")
-                                  : ""
-                                : toNumber(item.nominal) === 0
-                                  ? ""
-                                  : item.nominal
-                            }
-                            disabled={!canEditSalary || isPinjamanTerkelola || piutangKonflik}
-                            onChange={(event) =>
-                              updateItem(
-                                selectedSnapshot.gajiId,
-                                "potonganItems",
-                                index,
-                                "nominal",
-                                event.target.value
-                              )
-                            }
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            disabled={item.isDefault || isPinjamanTerkelola || piutangKonflik}
-                            onClick={() =>
-                              deleteItem(
-                                selectedSnapshot.gajiId,
-                                "potonganItems",
-                                index
-                              )
-                            }
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                      );
+                          <TableRow key={`potongan-${selectedSnapshot.gajiId}-${index}`}>
+                            <TableCell>
+                              <CreatableCombobox
+                                options={potonganOptions}
+                                value={item.judul}
+                                disabled={!canEditSalary || isPinjamanTerkelola || piutangKonflik}
+                                placeholder="Pilih atau ketik nama potongan..."
+                                onChange={(judul) =>
+                                  updateDraftItem("potonganItems", index, "judul", judul)
+                                }
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type={isPinjamanTerkelola ? "text" : "number"}
+                                min={0}
+                                placeholder="0"
+                                onWheel={(e) => e.currentTarget.blur()}
+                                value={
+                                  isPinjamanTerkelola
+                                    ? nominalCicilanEfektif > 0
+                                      ? nominalCicilanEfektif.toLocaleString("id-ID")
+                                      : ""
+                                    : toNumber(item.nominal) === 0
+                                      ? ""
+                                      : item.nominal
+                                }
+                                disabled={!canEditSalary || isPinjamanTerkelola || piutangKonflik}
+                                onChange={(event) =>
+                                  updateDraftItem("potonganItems", index, "nominal", event.target.value)
+                                }
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                disabled={item.isDefault || isPinjamanTerkelola || piutangKonflik}
+                                onClick={() => deleteDraftItem("potonganItems", index)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
                       })}
                   </TableBody>
                 </Table>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() =>
-                    addItem(selectedSnapshot.gajiId, "potonganItems")
-                  }
+                  disabled={!canEditSalary}
+                  onClick={() => addDraftItem("potonganItems")}
                   className="mt-2 gap-1 text-primary border-primary/20 hover:bg-primary/5"
                 >
                   <Plus className="w-3.5 h-3.5" /> Tambah Potongan
@@ -474,7 +522,11 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                           disabled={!canEditSalary || piutangKonflik}
                           checked={bayarMingguIni}
                           onCheckedChange={(checked) =>
-                            updateBayarMingguIni(selectedSnapshot.gajiId, Boolean(checked))
+                            setDraftState((prev) => ({
+                              ...prev,
+                              bayarMingguIni: Boolean(checked),
+                              nominalCicilan: Boolean(checked) ? prev.nominalCicilan : null,
+                            }))
                           }
                         />
                         <div className="grid gap-0.5 leading-none">
@@ -514,14 +566,13 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                           onChange={(e) => {
                             const digits = e.target.value.replace(/\D/g, "");
                             if (digits === "") {
-                              updateNominalCicilan(selectedSnapshot.gajiId, null);
+                              setDraftState((prev) => ({ ...prev, nominalCicilan: null }));
                               return;
                             }
-                            // Clamp live ke sisa saldo (pelunasan terakhir).
-                            updateNominalCicilan(
-                              selectedSnapshot.gajiId,
-                              Math.min(Math.max(0, Number(digits)), sisaSaldoPiutang)
-                            );
+                            setDraftState((prev) => ({
+                              ...prev,
+                              nominalCicilan: Math.min(Math.max(0, Number(digits)), sisaSaldoPiutang),
+                            }));
                           }}
                         />
                         <p className="text-[10px] text-zinc-500">
@@ -536,7 +587,10 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                           disabled={!canEditSalary || !bayarMingguIni || piutangKonflik}
                           checked={pakaiUangPribadi}
                           onCheckedChange={(checked) =>
-                            updatePakaiUangPribadi(selectedSnapshot.gajiId, Boolean(checked))
+                            setDraftState((prev) => ({
+                              ...prev,
+                              pakaiUangPribadi: Boolean(checked),
+                            }))
                           }
                         />
                         <div className="grid gap-0.5 leading-none">
@@ -566,6 +620,79 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
             </Card>
 
             <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center justify-between">
+                  <span>Pembulatan Gaji (Take-Home Pay)</span>
+                  {calcLive.gajiBersih !== calcLive.gajiBersihSebelumBulat && (
+                    <Badge variant="outline" className="text-xs font-normal border-amber-300 bg-amber-50 text-amber-900">
+                      dibulatkan dari {formatCurrency(calcLive.gajiBersihSebelumBulat)}
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+                  <div>
+                    <label className="text-xs font-semibold text-zinc-700 block mb-1">
+                      Nominal Pembulatan Gaji
+                    </label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      disabled={!canEditSalary}
+                      placeholder={calcLive.gajiBersihSebelumBulat.toString()}
+                      value={
+                        draftState.manualGajiBersih != null
+                          ? draftState.manualGajiBersih.toLocaleString("id-ID")
+                          : ""
+                      }
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, "");
+                        if (digits === "") {
+                          setDraftState((prev) => ({ ...prev, manualGajiBersih: null }));
+                        } else {
+                          setDraftState((prev) => ({ ...prev, manualGajiBersih: Number(digits) }));
+                        }
+                      }}
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      Gaji sebelum pembulatan: {formatCurrency(calcLive.gajiBersihSebelumBulat)}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={!canEditSalary}
+                      className="text-xs h-9 bg-zinc-50 border-zinc-300 hover:bg-zinc-100"
+                      onClick={() => {
+                        const autoRound = roundUpToHundred(calcLive.gajiBersihSebelumBulat);
+                        setDraftState((prev) => ({ ...prev, manualGajiBersih: autoRound }));
+                      }}
+                    >
+                      Bulatkan ke 100 ({formatCurrency(roundUpToHundred(calcLive.gajiBersihSebelumBulat))})
+                    </Button>
+                    {draftState.manualGajiBersih != null && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={!canEditSalary}
+                        className="text-xs h-9 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => {
+                          setDraftState((prev) => ({ ...prev, manualGajiBersih: null }));
+                        }}
+                      >
+                        Reset
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
               <CardHeader>
                 <CardTitle className="text-base">
                   Preview Slip Live
@@ -581,34 +708,28 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                 <div className="flex justify-between">
                   <span>Total Bonus</span>
                   <span>
-                    {formatCurrency(
-                      calculatedForSnapshot(selectedSnapshot).totalBonus
-                    )}
+                    {formatCurrency(calcLive.totalBonus)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Total Potongan</span>
                   <span>
-                    {formatCurrency(
-                      calculatedForSnapshot(selectedSnapshot).totalPotongan
-                    )}
+                    {formatCurrency(calcLive.totalPotongan)}
                   </span>
                 </div>
                 <div className="flex justify-between border-t pt-2 font-semibold">
                   <span>Gaji Bersih</span>
                   <span>
-                    {formatCurrency(
-                      calculatedForSnapshot(selectedSnapshot).gajiBersih
-                    )}
+                    {formatCurrency(calcLive.gajiBersih)}
                   </span>
                 </div>
-                {inputsBySalaryId[selectedSnapshot.gajiId]?.sisaPiutang !== undefined &&
-                  inputsBySalaryId[selectedSnapshot.gajiId]?.sisaPiutang !== null &&
-                  inputsBySalaryId[selectedSnapshot.gajiId]?.sisaPiutang! > 0 && (
+                {draftState.sisaPiutang !== undefined &&
+                  draftState.sisaPiutang !== null &&
+                  draftState.sisaPiutang > 0 && (
                     <div className="flex justify-between border-t pt-2 text-muted-foreground">
                       <span>Sisa Piutang</span>
                       <span>
-                        {formatCurrency(inputsBySalaryId[selectedSnapshot.gajiId].sisaPiutang!)}
+                        {formatCurrency(draftState.sisaPiutang)}
                       </span>
                     </div>
                   )}

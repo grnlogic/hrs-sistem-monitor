@@ -24,6 +24,7 @@ import {
   type CalculatedSnapshot,
   type InputState,
   toNumber,
+  CompanyBadge,
 } from "./nonstaff-salary-shared";
 
 type NonStaffStep3Props = {
@@ -176,7 +177,12 @@ export function NonStaffStep3Export(props: NonStaffStep3Props) {
 
                     return (
                       <TableRow key={`rekap-${row.gajiId}`} className="hover:bg-zinc-50/50">
-                        <TableCell className="font-medium text-zinc-800">{row.nama}</TableCell>
+                        <TableCell className="font-medium text-zinc-800">
+                          <div className="flex items-center gap-1.5">
+                            <span>{row.nama}</span>
+                            <CompanyBadge lokasi={row.lokasiDefault} />
+                          </div>
+                        </TableCell>
                         <TableCell>{row.divisi}</TableCell>
                         <TableCell className="text-center">{row.hariEfektif}</TableCell>
                         <TableCell className="text-right">{formatCurrency(row.upahHarian)}</TableCell>

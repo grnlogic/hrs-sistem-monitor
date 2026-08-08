@@ -4,7 +4,8 @@
  */
 
 import { type LokasiCode } from "@/lib/api";
-import { LOKASI_PT } from "@/lib/constants/perusahaan";
+import { LOKASI_PT, NAMA_PT } from "@/lib/constants/perusahaan";
+import { Badge } from "@/components/ui/display/badge";
 
 export type Step = 1 | 2 | 3;
 
@@ -49,6 +50,7 @@ export type AttendanceSummary = {
   nama: string;
   divisi: string;
   lokasiSlip: LokasiCode | null;
+  lokasiDefault?: LokasiCode | null;
   lokasiBreakdown: LokasiBreakdownItem[];
   hariHadir: number;
   setengahHari: number;
@@ -63,6 +65,7 @@ export type SnapshotRow = {
   nama: string;
   divisi: string;
   lokasiSlip: LokasiCode | null;
+  lokasiDefault?: LokasiCode | null;
   lokasiBreakdown: LokasiBreakdownItem[];
   periodeAwal: string;
   periodeAkhir: string;
@@ -89,6 +92,8 @@ export type InputState = {
   bayarMingguIni?: boolean;
   /** Nominal cicilan minggu ini (bisa di-override; null = pakai jumlahCicilan). */
   nominalCicilan?: number | null;
+  /** Nominal gaji bersih pembulatan manual (null/undefined = tidak dibulatkan). */
+  manualGajiBersih?: number | null;
   piutangInfo?: {
     id: string;
     saldoAwal: number;
@@ -112,7 +117,7 @@ export type CalculatedSnapshot = {
   totalBonus: number;
   totalPotongan: number;
   gajiBersih: number;
-  /** Nilai take-home sebelum dibulatkan ke kelipatan 100 (untuk badge). */
+  /** Nilai take-home sebelum dibulatkan (untuk badge). */
   gajiBersihSebelumBulat: number;
 };
 
@@ -134,5 +139,8 @@ export function buildDefaultInputState(): InputState {
     potonganItems: DEFAULT_POTONGAN.map((item) => ({ ...item })),
     bayarMingguIni: true,
     nominalCicilan: null,
+    manualGajiBersih: null,
   };
 }
+
+export { CompanyBadge } from "./company-badge";

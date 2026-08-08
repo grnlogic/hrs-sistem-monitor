@@ -20,11 +20,16 @@ export type GajiBersihResult = {
 
 export function calcGajiBersih(
   pendapatan: number,
-  potongan: number
+  potongan: number,
+  manualGajiBersih?: number | null
 ): GajiBersihResult {
   const gajiBersihSebelumBulat = Math.max(0, pendapatan - potongan);
+  const gajiBersih =
+    manualGajiBersih != null
+      ? Math.max(0, manualGajiBersih)
+      : gajiBersihSebelumBulat;
   return {
     gajiBersihSebelumBulat,
-    gajiBersih: roundUpToHundred(gajiBersihSebelumBulat),
+    gajiBersih,
   };
 }

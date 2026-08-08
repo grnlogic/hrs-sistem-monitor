@@ -24,6 +24,7 @@ import {
   type CalculatedSnapshot,
   buildDefaultInputState,
   toNumber,
+  CompanyBadge,
 } from "./nonstaff-salary-shared";
 
 type NonStaffStep2Props = {
@@ -101,7 +102,12 @@ export function NonStaffStep2BonusPotongan(props: NonStaffStep2Props) {
 
                   return (
                     <TableRow key={row.gajiId}>
-                      <TableCell>{row.nama}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium">{row.nama}</span>
+                          <CompanyBadge lokasi={row.lokasiDefault} />
+                        </div>
+                      </TableCell>
                       <TableCell>{row.divisi}</TableCell>
                       <TableCell>{row.hariEfektif}</TableCell>
                       <TableCell>

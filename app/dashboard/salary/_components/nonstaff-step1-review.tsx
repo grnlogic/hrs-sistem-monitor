@@ -28,6 +28,7 @@ import {
   type AttendanceSummary,
   formatLokasiBreakdown,
   toNumber,
+  CompanyBadge,
 } from "./nonstaff-salary-shared";
 
 type NonStaffStep1Props = {
@@ -181,24 +182,71 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
           )}
         </div>
 
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground px-1 mb-2">
+          <span>* Centang checkbox jika hanya ingin memproses karyawan tertentu. Kosongkan untuk memproses semua karyawan.</span>
+          <div className="flex items-center gap-2">
+            {effectiveReviewRows.length > 0 && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs px-2.5 bg-white border-zinc-300 hover:bg-zinc-100"
+                  onClick={() => {
+                    setSelectedKaryawanIds(effectiveReviewRows.map((r) => r.karyawanId));
+                  }}
+                >
+                  Pilih Semua ({effectiveReviewRows.length})
+                </Button>
+                {selectedKaryawanIds.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs px-2 text-zinc-600 hover:text-red-600 hover:bg-red-50"
+                    onClick={() => {
+                      setSelectedKaryawanIds([]);
+                    }}
+                  >
+                    Reset Pilihan
+                  </Button>
+                )}
+              </>
+            )}
+            {selectedKaryawanIds.length > 0 && (
+              <span className="font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                {selectedKaryawanIds.length} / {effectiveReviewRows.length} Terpilih
+              </span>
+            )}
+          </div>
+        </div>
+
         <div className="overflow-x-auto rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[50px] text-center">
-                  <Checkbox
-                    checked={
-                      effectiveReviewRows.length > 0 &&
-                      selectedKaryawanIds.length === effectiveReviewRows.length
-                    }
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setSelectedKaryawanIds(effectiveReviewRows.map((r) => r.karyawanId));
-                      } else {
-                        setSelectedKaryawanIds([]);
+                <TableHead className="w-[120px]">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={
+                        effectiveReviewRows.length > 0 &&
+                        selectedKaryawanIds.length === effectiveReviewRows.length
+                          ? true
+                          : selectedKaryawanIds.length > 0
+                          ? "indeterminate"
+                          : false
                       }
-                    }}
-                  />
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedKaryawanIds(effectiveReviewRows.map((r) => r.karyawanId));
+                        } else {
+                          setSelectedKaryawanIds([]);
+                        }
+                      }}
+                      title="Pilih semua / hapus pilihan"
+                    />
+                    <span className="text-xs font-medium text-zinc-700">Pilih</span>
+                  </div>
                 </TableHead>
                 <TableHead>Nama</TableHead>
                 <TableHead>Divisi</TableHead>
@@ -237,7 +285,12 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
                           }}
                         />
                       </TableCell>
-                      <TableCell>{row.nama}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium">{row.nama}</span>
+                          <CompanyBadge lokasi={row.lokasiDefault} />
+                        </div>
+                      </TableCell>
                       <TableCell>{row.divisi}</TableCell>
                       <TableCell>
                         <span className="text-xs text-muted-foreground">

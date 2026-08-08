@@ -132,6 +132,7 @@ function buildAttendanceSummary(
       nama: employee.namaLengkap,
       divisi: employee.departemen || "-",
       lokasiSlip: employee.lokasiDefault || normalizeLokasi(employee.lokasiKerja),
+      lokasiDefault: employee.lokasiDefault || normalizeLokasi(employee.lokasiKerja),
       lokasiBreakdown: [],
       hariHadir: 0,
       setengahHari: 0,
@@ -356,13 +357,27 @@ export function NonStaffSalaryWorkflow() {
     [snapshotRows, selectedSalaryId]
   );
 
+  const updateManualGajiBersih = useCallback((salaryId: string, value: number | null) => {
+    setInputsBySalaryId((prev) => {
+      const current = prev[salaryId] || buildDefaultInputState();
+      return {
+        ...prev,
+        [salaryId]: {
+          ...current,
+          manualGajiBersih: value,
+        },
+      };
+    });
+  }, []);
+
   function calculatedForSnapshot(row: SnapshotRow): CalculatedSnapshot {
     const input = inputsBySalaryId[row.gajiId] || buildDefaultInputState();
     const totalBonus = input.bonusItems.reduce((sum, item) => sum + toNumber(item.nominal), 0);
     const totalPotongan = input.potonganItems.reduce((sum, item) => sum + toNumber(item.nominal), 0);
     const { gajiBersih, gajiBersihSebelumBulat } = calcGajiBersih(
       row.gajiPokok + totalBonus,
-      totalPotongan
+      totalPotongan,
+      input.manualGajiBersih
     );
     return {
       totalBonus,
@@ -744,7 +759,14 @@ export function NonStaffSalaryWorkflow() {
 
       const missingEmployees: string[] = [];
       let fallbackUsedCount = 0;
-      const normalizedSnapshots: SnapshotRow[] = effectiveReviewRows
+      const targetReviewRows =
+        selectedKaryawanIds.length > 0
+          ? effectiveReviewRows.filter((review) =>
+              selectedKaryawanIds.includes(review.karyawanId)
+            )
+          : effectiveReviewRows;
+
+      const normalizedSnapshots: SnapshotRow[] = targetReviewRows
         .map((review) => {
           const matchedRow = exactRowByKaryawanId[review.karyawanId] || fallbackRowByKaryawanId[review.karyawanId];
 
@@ -765,6 +787,7 @@ export function NonStaffSalaryWorkflow() {
             nama: review.nama,
             divisi: review.divisi,
             lokasiSlip: review.lokasiSlip,
+            lokasiDefault: review.lokasiDefault,
             lokasiBreakdown: review.lokasiBreakdown,
             periodeAwal: matchedRow.periodeAwal,
             periodeAkhir: matchedRow.periodeAkhir,
@@ -872,22 +895,13 @@ export function NonStaffSalaryWorkflow() {
                 : detail?.piutang?.jumlahCicilan != null
                   ? Number(detail.piutang.jumlahCicilan)
                   : null,
-          pakaiUangPribadi:
-            detail?.piutangPlan?.pakaiUangPribadi ?? (detail?.pakaiUangPribadi || false),
           piutangInfo: detail?.piutang || null,
           piutangKonflik: Boolean(detail?.piutangKonflik),
           piutangAktifCount: Number(detail?.piutangAktifCount || 0),
         },
       }));
-
-      if (
-        bonusFromApi.length > 0 ||
-        potonganFromApi.length > 0 ||
-        (detail?.sisaPiutang !== undefined && detail.sisaPiutang !== null) ||
-        detail?.piutang
-      ) {
-        setDoneBySalaryId((prev) => ({ ...prev, [row.gajiId]: true }));
-      }
+      // Note: Status is NOT auto-set to done on dialog open.
+      // Status will only be marked done (Selesai) when user clicks "Simpan Perubahan".
     } catch (detailErr) {
       console.error(detailErr);
       setInputsBySalaryId((prev) => ({
@@ -1047,28 +1061,32 @@ export function NonStaffSalaryWorkflow() {
     });
   }
 
-  async function saveInputSalary() {
-    if (!selectedSnapshot) {
+  async function saveInputSalary(salaryId: string, finalState: InputState) {
+    if (!selectedSnapshot || selectedSnapshot.gajiId !== salaryId) {
       return;
     }
 
     try {
       setSubmitting(true);
       setError("");
-      const inputState = inputsBySalaryId[selectedSnapshot.gajiId] || buildDefaultInputState();
 
       await salaryAPI.saveBonusPotongan({
         gajiId: selectedSnapshot.gajiId,
         karyawanId: selectedSnapshot.karyawanId,
-        bonusItems: inputState.bonusItems.filter((item) => item.judul.trim()),
-        potonganItems: inputState.potonganItems.filter((item) => item.judul.trim()),
-        sisaPiutang: inputState.sisaPiutang,
-        pakaiUangPribadi: inputState.pakaiUangPribadi,
-        bayarMingguIni: inputState.bayarMingguIni !== false,
-        nominalCicilan: inputState.nominalCicilan ?? null,
+        bonusItems: finalState.bonusItems.filter((item) => item.judul.trim()),
+        potonganItems: finalState.potonganItems.filter((item) => item.judul.trim()),
+        sisaPiutang: finalState.sisaPiutang,
+        pakaiUangPribadi: finalState.pakaiUangPribadi,
+        bayarMingguIni: finalState.bayarMingguIni !== false,
+        nominalCicilan: finalState.nominalCicilan ?? null,
       });
 
-      setDoneBySalaryId((prev) => ({ ...prev, [selectedSnapshot.gajiId]: true }));
+      setInputsBySalaryId((prev) => ({
+        ...prev,
+        [salaryId]: finalState,
+      }));
+
+      setDoneBySalaryId((prev) => ({ ...prev, [salaryId]: true }));
       setDialogOpen(false);
       setMessage(`Input ${selectedSnapshot.nama} berhasil disimpan.`);
     } catch (saveErr) {
@@ -1492,15 +1510,6 @@ export function NonStaffSalaryWorkflow() {
         endDate={endDate}
         inputsBySalaryId={inputsBySalaryId}
         canEditSalary={canEditSalary}
-        calculatedForSnapshot={calculatedForSnapshot}
-        updateItem={updateItem}
-        updatePakaiUangPribadi={updatePakaiUangPribadi}
-        updateBayarMingguIni={updateBayarMingguIni}
-        updateNominalCicilan={updateNominalCicilan}
-        upsertPinjamanItem={upsertPinjamanItem}
-        addItem={addItem}
-        deleteItem={deleteItem}
-        addKikipingItem={addKikipingItem}
         submitting={submitting}
         saveInputSalary={saveInputSalary}
       />
