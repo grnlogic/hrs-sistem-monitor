@@ -229,9 +229,14 @@ export const salaryAPI = {
     }>
   },
 
+  getKikipingOlehList: async () => {
+    return apiRequest(`/gaji/kikiping-oleh`) as Promise<string[]>
+  },
+
   saveBonusPotongan: async (data: {
     gajiId: string
     karyawanId: string
+    kikipingOleh?: string | null
     bonusItems: Array<{ id?: string; judul: string; nominal: number }>
     potonganItems: Array<{ id?: string; judul: string; nominal: number; isDefault?: boolean }>
     sisaPiutang?: number | null

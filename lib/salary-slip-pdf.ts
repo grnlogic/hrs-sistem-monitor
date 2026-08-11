@@ -679,6 +679,7 @@ export type NonStaffSlipExportPayload = {
   bonusItems: Array<{ judul: string; nominal: number }>;
   potonganItems: Array<{ judul: string; nominal: number }>;
   sisaPiutang?: number | null;
+  attendanceDetails?: Array<{ divisi: string; hariEfektif: number; upahHarian: number }>;
 };
 
 function formatPeriodRangeLabel(startDate: string, endDate: string): string {
@@ -725,7 +726,10 @@ function calculateNonStaffSlipHeight(payload: NonStaffSlipExportPayload): number
 
   // Attendance: Hari Efektif, Upah Harian
   height += 1.5; // section gap
-  height += 2 * NS_ROW_GAP;
+  const attendanceRowCount = (payload.attendanceDetails && payload.attendanceDetails.length > 0)
+    ? payload.attendanceDetails.length
+    : 2;
+  height += attendanceRowCount * NS_ROW_GAP;
 
   // Pendapatan
   height += NS_SEC_GAP; // section label
@@ -824,8 +828,14 @@ async function drawNonStaffSlip(
 
   // Attendance section
   cursorY += 1.5; // small gap before attendance block
-  linePair("Hari Efektif", String(payload.hariEfektif));
-  linePair("Upah Harian",  formatRupiah(payload.upahHarian));
+  if (payload.attendanceDetails && payload.attendanceDetails.length > 0) {
+    for (const det of payload.attendanceDetails) {
+      linePair(`Hari (${det.divisi})`, `${det.hariEfektif} hr @ ${formatRupiah(det.upahHarian)}`);
+    }
+  } else {
+    linePair("Hari Efektif", String(payload.hariEfektif));
+    linePair("Upah Harian",  formatRupiah(payload.upahHarian));
+  }
 
   // Pendapatan
   cursorY += NS_SEC_GAP;

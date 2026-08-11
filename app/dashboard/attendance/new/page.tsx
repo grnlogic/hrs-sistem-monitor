@@ -45,11 +45,15 @@ type EmployeeOption = {
   lokasiDefault: "PJP" | "SP" | "PRIMA";
 };
 
+import { divisiAPI, MasterDivisiItem } from "@/lib/api/divisi";
+
 type AbsensiDraft = {
   status: AbsensiStatus;
   lembur: boolean;
   keterangan: string;
   lokasi: "" | "PJP" | "SP" | "PRIMA";
+  divisiKerja?: string;
+  divisiKerjaKedua?: string;
 };
 
 type SaveToast = {
@@ -106,6 +110,7 @@ export default function NewAttendancePage() {
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(true);
   const [error, setError] = useState("");
   const [saveToast, setSaveToast] = useState<SaveToast>(null);
+  const [masterDivisiList, setMasterDivisiList] = useState<MasterDivisiItem[]>([]);
   const [submitStats, setSubmitStats] = useState<{
     successCount: number;
     failCount: number;
@@ -118,6 +123,7 @@ export default function NewAttendancePage() {
 
   useEffect(() => {
     fetchEmployees();
+    divisiAPI.getAll().then((list) => setMasterDivisiList(list)).catch(() => {});
   }, []);
 
   const buildInitialAbsensiMap = (employeeList: EmployeeOption[]) => {
@@ -127,9 +133,9 @@ export default function NewAttendancePage() {
         status: "HADIR",
         lembur: false,
         keterangan: "",
-        // Lokasi sengaja dikosongkan — WAJIB dipilih manual oleh admin
-        // (lokasi aktual saat input, bukan lokasi tugas/lokasiDefault).
         lokasi: "",
+        divisiKerja: "",
+        divisiKerjaKedua: "",
       };
     });
     return initialMap;
@@ -405,6 +411,8 @@ export default function NewAttendancePage() {
           status: submitStatus,
           isLembur: Boolean(absensiMap[emp.id]?.lembur),
           lokasi: (absensiMap[emp.id]?.lokasi || "") as "PJP" | "SP" | "PRIMA",
+          divisiKerja: absensiMap[emp.id]?.divisiKerja || null,
+          divisiKerjaKedua: absensiMap[emp.id]?.divisiKerjaKedua || null,
           keterangan: draftKeterangan || undefined,
         };
       });
@@ -650,24 +658,26 @@ export default function NewAttendancePage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-72">Karyawan</TableHead>
-                    <TableHead className="w-40">Status</TableHead>
-                    <TableHead className="w-36">Lokasi</TableHead>
-                    <TableHead className="w-24">Lembur</TableHead>
-                    <TableHead className="w-28">Hari Efektif</TableHead>
+                    <TableHead className="w-56">Karyawan</TableHead>
+                    <TableHead className="w-36">Status</TableHead>
+                    <TableHead className="w-32">Lokasi</TableHead>
+                    <TableHead className="w-40">Divisi Kerja</TableHead>
+                    <TableHead className="w-40">Split 50/50 Divisi 2</TableHead>
+                    <TableHead className="w-20">Lembur</TableHead>
+                    <TableHead className="w-24">Hari Efektif</TableHead>
                     <TableHead>Keterangan</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {!showFilteredEmployees ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-zinc-500">
+                      <TableCell colSpan={8} className="text-center py-6 text-zinc-500">
                         Gunakan filter lalu klik Terapkan Filter untuk menampilkan daftar.
                       </TableCell>
                     </TableRow>
                   ) : displayedEmployees.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-zinc-500">
+                      <TableCell colSpan={8} className="text-center py-6 text-zinc-500">
                         Tidak ada karyawan sesuai filter.
                       </TableCell>
                     </TableRow>
@@ -678,6 +688,8 @@ export default function NewAttendancePage() {
                         lembur: false,
                         keterangan: "",
                         lokasi: "",
+                        divisiKerja: "",
+                        divisiKerjaKedua: "",
                       };
 
                       return (
@@ -725,6 +737,50 @@ export default function NewAttendancePage() {
                                 {LOKASI_OPTIONS.map((lokasi) => (
                                   <SelectItem key={lokasi.value} value={lokasi.value}>
                                     {lokasi.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={rowData.divisiKerja || "__DEFAULT__"}
+                              onValueChange={(value) =>
+                                updateAbsensi(employee.id, {
+                                  divisiKerja: value === "__DEFAULT__" ? "" : value,
+                                })
+                              }
+                            >
+                              <SelectTrigger className="text-xs">
+                                <SelectValue placeholder="Default" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__DEFAULT__">(Default: {employee.departemen})</SelectItem>
+                                {masterDivisiList.map((div) => (
+                                  <SelectItem key={div.id} value={div.nama}>
+                                    {div.nama} {div.gajiPerHari ? `(Rp ${div.gajiPerHari.toLocaleString("id-ID")})` : ""}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={rowData.divisiKerjaKedua || "__NONE__"}
+                              onValueChange={(value) =>
+                                updateAbsensi(employee.id, {
+                                  divisiKerjaKedua: value === "__NONE__" ? "" : value,
+                                })
+                              }
+                            >
+                              <SelectTrigger className="text-xs">
+                                <SelectValue placeholder="Tidak split" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__NONE__">(Tidak Split)</SelectItem>
+                                {masterDivisiList.map((div) => (
+                                  <SelectItem key={div.id} value={div.nama}>
+                                    {div.nama} {div.gajiPerHari ? `(Rp ${div.gajiPerHari.toLocaleString("id-ID")})` : ""}
                                   </SelectItem>
                                 ))}
                               </SelectContent>

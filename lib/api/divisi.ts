@@ -1,11 +1,12 @@
 import { apiRequest } from "./core";
 
 export interface MasterDivisiItem {
-  id: number;
+  id: string;
   nama: string;
   kategori: "staff" | "nonstaff";
+  gajiPerHari?: number | null;
   keterangan?: string;
-  jumlahKaryawan: number;
+  jumlahKaryawan?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -16,21 +17,21 @@ export const divisiAPI = {
     return apiRequest(endpoint);
   },
 
-  create: async (data: { nama: string; kategori: "staff" | "nonstaff"; keterangan?: string }) => {
+  create: async (data: { nama: string; kategori: "staff" | "nonstaff"; gajiPerHari?: number | null; keterangan?: string }) => {
     return apiRequest("/divisi", {
       method: "POST",
       body: JSON.stringify(data),
     });
   },
 
-  update: async (id: number, data: { nama: string; kategori: "staff" | "nonstaff"; keterangan?: string }) => {
+  update: async (id: number | string, data: { nama: string; kategori: "staff" | "nonstaff"; gajiPerHari?: number | null; keterangan?: string }) => {
     return apiRequest(`/divisi/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     });
   },
 
-  delete: async (id: number) => {
+  delete: async (id: number | string) => {
     return apiRequest(`/divisi/${id}`, {
       method: "DELETE",
     });

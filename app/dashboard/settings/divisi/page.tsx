@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
+import { formatCurrency } from "@/lib/utils";
 import {
   Building2,
   Plus,
@@ -57,10 +58,12 @@ export default function MasterDivisiPage() {
   const [formData, setFormData] = useState<{
     nama: string;
     kategori: "staff" | "nonstaff";
+    gajiPerHari: string;
     keterangan: string;
   }>({
     nama: "",
     kategori: "nonstaff",
+    gajiPerHari: "",
     keterangan: "",
   });
   const [submitting, setSubmitting] = useState(false);
@@ -98,7 +101,7 @@ export default function MasterDivisiPage() {
 
   const handleOpenAdd = () => {
     setEditingItem(null);
-    setFormData({ nama: "", kategori: "nonstaff", keterangan: "" });
+    setFormData({ nama: "", kategori: "nonstaff", gajiPerHari: "", keterangan: "" });
     setErrorMsg("");
     setIsModalOpen(true);
   };
@@ -108,6 +111,7 @@ export default function MasterDivisiPage() {
     setFormData({
       nama: item.nama,
       kategori: item.kategori,
+      gajiPerHari: item.gajiPerHari != null ? String(item.gajiPerHari) : "",
       keterangan: item.keterangan || "",
     });
     setErrorMsg("");
@@ -125,11 +129,18 @@ export default function MasterDivisiPage() {
       setSubmitting(true);
       setErrorMsg("");
 
+      const payload = {
+        nama: formData.nama,
+        kategori: formData.kategori,
+        gajiPerHari: formData.gajiPerHari ? Number(formData.gajiPerHari) : null,
+        keterangan: formData.keterangan,
+      };
+
       if (editingItem) {
-        await divisiAPI.update(editingItem.id, formData);
+        await divisiAPI.update(editingItem.id, payload);
         setSuccessMsg(`Divisi "${formData.nama.toUpperCase()}" berhasil diperbarui`);
       } else {
-        await divisiAPI.create(formData);
+        await divisiAPI.create(payload);
         setSuccessMsg(`Divisi baru "${formData.nama.toUpperCase()}" berhasil ditambahkan`);
       }
 
@@ -317,6 +328,7 @@ export default function MasterDivisiPage() {
                     <th className="px-4 py-3">Nama Divisi</th>
                     <th className="px-4 py-3">Kategori</th>
                     <th className="px-4 py-3">Karyawan Aktif</th>
+                    <th className="px-4 py-3 text-right">Tarif Upah/Hari</th>
                     <th className="px-4 py-3">Keterangan</th>
                     <th className="px-4 py-3 text-right">Aksi</th>
                   </tr>
@@ -343,6 +355,9 @@ export default function MasterDivisiPage() {
                           <Users size={14} className="text-primary/70" />
                           <span className="font-semibold text-foreground">{item.jumlahKaryawan}</span> Karyawan
                         </div>
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium text-foreground">
+                        {item.gajiPerHari ? formatCurrency(item.gajiPerHari) : "-"}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground text-xs max-w-xs truncate">
                         {item.keterangan || "-"}
@@ -461,6 +476,22 @@ export default function MasterDivisiPage() {
               </div>
 
               <div className="space-y-1.5">
+                <Label htmlFor="gajiPerHari" className="text-xs font-semibold">
+                  Tarif Upah Harian (Rp) <span className="text-muted-foreground font-normal">(Opsional)</span>
+                </Label>
+                <Input
+                  id="gajiPerHari"
+                  type="number"
+                  placeholder="Contoh: 65000"
+                  value={formData.gajiPerHari}
+                  onChange={(e) => setFormData({ ...formData, gajiPerHari: e.target.value })}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Tarif standar per hari untuk karyawan yang bekerja pada divisi ini.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
                 <Label htmlFor="keterangan" className="text-xs font-semibold">
                   Keterangan (Opsional)
                 </Label>
@@ -497,7 +528,7 @@ export default function MasterDivisiPage() {
               Hapus Divisi "{deletingItem?.nama}"?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm pt-1">
-              {deletingItem && deletingItem.jumlahKaryawan > 0 ? (
+              {deletingItem && (deletingItem.jumlahKaryawan || 0) > 0 ? (
                 <span className="text-destructive font-medium block bg-destructive/10 p-3 rounded-lg border border-destructive/20 mt-2">
                   Peringatan: Terdapat {deletingItem.jumlahKaryawan} karyawan aktif di divisi ini. Divisi tidak dapat dihapus sebelum seluruh karyawan dipindahkan ke divisi lain.
                 </span>

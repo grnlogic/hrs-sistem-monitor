@@ -375,6 +375,8 @@ export default function AttendancePage() {
       isLembur: existingRecord ? Boolean(existingRecord.isLembur) : false,
       notes: existingRecord ? (existingRecord.notes || existingRecord.keterangan || "") : "",
       lokasi: existingRecord ? (existingRecord.lokasi || "") : "",
+      divisiKerja: existingRecord ? (existingRecord.divisiKerja || "") : "",
+      divisiKerjaKedua: existingRecord ? (existingRecord.divisiKerjaKedua || "") : "",
       allEmployeeRecords: item.records
     });
     setShowEditModal(true);
@@ -396,6 +398,8 @@ export default function AttendancePage() {
       isLembur: existingRecord ? Boolean(existingRecord.isLembur) : false,
       notes: existingRecord ? (existingRecord.notes || existingRecord.keterangan || "") : "",
       lokasi: existingRecord ? (existingRecord.lokasi || "") : "",
+      divisiKerja: existingRecord ? (existingRecord.divisiKerja || "") : "",
+      divisiKerjaKedua: existingRecord ? (existingRecord.divisiKerjaKedua || "") : "",
     });
   };
 
@@ -448,6 +452,8 @@ export default function AttendancePage() {
             isLembur: Boolean(editingItem.isLembur),
             keterangan: submitKeterangan,
             lokasi: editingItem.lokasi,
+            divisiKerja: editingItem.divisiKerja || null,
+            divisiKerjaKedua: editingItem.divisiKerjaKedua || null,
           });
         }
       } else {
@@ -461,6 +467,8 @@ export default function AttendancePage() {
             isLembur: Boolean(editingItem.isLembur),
             keterangan: submitKeterangan,
             lokasi: editingItem.lokasi,
+            divisiKerja: editingItem.divisiKerja || null,
+            divisiKerjaKedua: editingItem.divisiKerjaKedua || null,
           });
         }
       }

@@ -86,6 +86,8 @@ export type GajiPeriodIndex = Record<
 >;
 
 export type InputState = {
+  kikipingOleh?: string | null;
+  autoKikipingAllowed?: boolean;
   bonusItems: SalaryItem[];
   potonganItems: SalaryItem[];
   sisaPiutang?: number | null;
@@ -139,9 +141,11 @@ export function toNumber(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function buildDefaultInputState(): InputState {
+export function buildDefaultInputState(autoKikiping: boolean = true): InputState {
   return {
-    bonusItems: DEFAULT_BONUS.map((item) => ({ ...item })),
+    kikipingOleh: null,
+    autoKikipingAllowed: autoKikiping,
+    bonusItems: autoKikiping ? DEFAULT_BONUS.map((item) => ({ ...item })) : [],
     potonganItems: DEFAULT_POTONGAN.map((item) => ({ ...item })),
     bayarMingguIni: true,
     nominalCicilan: null,

@@ -134,7 +134,7 @@ export function NonStaffStep2BonusPotongan(props: NonStaffStep2Props) {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {bonusDetails.length === 0 ? (
+                        {bonusDetails.length === 0 && !input.kikipingOleh ? (
                           <span className="text-muted-foreground">-</span>
                         ) : (
                           <div className="space-y-1 text-xs">
@@ -148,6 +148,14 @@ export function NonStaffStep2BonusPotongan(props: NonStaffStep2Props) {
                                 </span>
                               </p>
                             ))}
+                            {input.kikipingOleh && (
+                              <p className="mt-1 text-[11px] text-muted-foreground italic border-t pt-1">
+                                Kikiping oleh:{" "}
+                                <span className="font-semibold text-zinc-700 not-italic">
+                                  {input.kikipingOleh}
+                                </span>
+                              </p>
+                            )}
                           </div>
                         )}
                       </TableCell>
