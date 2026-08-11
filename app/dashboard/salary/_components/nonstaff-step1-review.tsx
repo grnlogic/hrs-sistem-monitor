@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
+import { Badge } from "@/components/ui/display/badge";
 import {
   Card,
   CardContent,
@@ -182,6 +183,18 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
           )}
         </div>
 
+        {effectiveReviewRows.some((r) => (r.statusPembayaran || "").toLowerCase() === "dibayar") && (
+          <Alert className="bg-emerald-50/80 border-emerald-200 text-emerald-900">
+            <AlertDescription className="text-xs">
+              <strong>Info Gaji Dibayar:</strong> Terdapat{" "}
+              <strong>
+                {effectiveReviewRows.filter((r) => (r.statusPembayaran || "").toLowerCase() === "dibayar").length}
+              </strong>{" "}
+              karyawan yang gajinya sudah berstatus <strong>"Sudah Dibayar"</strong> untuk periode ini. Karyawan tersebut diberi label di tabel dan tidak akan ditarik ke Fase 2 (Input Bonus & Potongan).
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground px-1 mb-2">
           <span>* Centang checkbox jika hanya ingin memproses karyawan tertentu. Kosongkan untuk memproses semua karyawan.</span>
           <div className="flex items-center gap-2">
@@ -286,9 +299,14 @@ export function NonStaffStep1Review(props: NonStaffStep1Props) {
                         />
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-medium">{row.nama}</span>
                           <CompanyBadge lokasi={row.lokasiDefault} />
+                          {(row.statusPembayaran || "").toLowerCase() === "dibayar" && (
+                            <Badge className="border-emerald-300 bg-emerald-100 text-emerald-800 text-[10px] py-0 px-1.5 font-normal">
+                              Sudah Dibayar
+                            </Badge>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>{row.divisi}</TableCell>

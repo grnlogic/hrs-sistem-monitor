@@ -177,6 +177,13 @@ export function NonStaffStep2BonusPotongan(props: NonStaffStep2Props) {
                             </Badge>
                           </div>
                         )}
+                        {(row.statusPembayaran || "").toLowerCase() === "dibayar" && (
+                          <div>
+                            <Badge className="border-emerald-300 bg-emerald-100 text-emerald-800">
+                              Sudah Dibayar
+                            </Badge>
+                          </div>
+                        )}
                         <div>
                           {doneBySalaryId[row.gajiId] ? (
                             <Badge>Selesai</Badge>
@@ -186,14 +193,26 @@ export function NonStaffStep2BonusPotongan(props: NonStaffStep2Props) {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openInputDialog(row)}
-                          className="gap-2"
-                        >
-                          Input
-                        </Button>
+                        {(row.statusPembayaran || "").toLowerCase() === "dibayar" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled
+                            className="gap-2 opacity-60 cursor-not-allowed"
+                            title="Gaji sudah dibayar, data bonus/potongan tidak dapat diubah"
+                          >
+                            Sudah Dibayar
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openInputDialog(row)}
+                            className="gap-2"
+                          >
+                            Input
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

@@ -58,6 +58,7 @@ export type AttendanceSummary = {
   lembur: number;
   hariEfektif: number;
   upahHarian: number;
+  statusPembayaran?: string;
 };
 
 export type SnapshotRow = {

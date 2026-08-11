@@ -619,6 +619,7 @@ export function NonStaffSalaryWorkflow() {
       const gajiByPeriodIndex: GajiPeriodIndex = {};
       const totalHariEfektifByKaryawanId: Record<string, number> = {};
       const gajiCountByKaryawanId: Record<string, number> = {};
+      const statusPembayaranByKaryawanId: Record<string, string> = {};
 
       (Array.isArray(gajiRes) ? gajiRes : []).forEach((item: any) => {
         const karyawanId = String(item?.karyawan?.id || item?.karyawanId || "");
@@ -632,6 +633,12 @@ export function NonStaffSalaryWorkflow() {
 
         const rowStart = toApiDate(String(item?.periodeAwal || item?.periode_awal || ""));
         const rowEnd = toApiDate(String(item?.periodeAkhir || item?.periode_akhir || ""));
+        const statusPembayaran = item.statusPembayaran || item.status_pembayaran || "";
+
+        if (statusPembayaran && (statusPembayaran.toLowerCase() === "dibayar" || !statusPembayaranByKaryawanId[karyawanId])) {
+          statusPembayaranByKaryawanId[karyawanId] = statusPembayaran;
+        }
+
         if (rowStart && rowEnd) {
           gajiByPeriodIndex[toPeriodKey(karyawanId, rowStart, rowEnd)] = {
             id: String(item.id),
@@ -654,10 +661,14 @@ export function NonStaffSalaryWorkflow() {
       });
 
       const summaryWithSavedValue = summary.map((item) => {
+        const statusPembayaran = statusPembayaranByKaryawanId[item.karyawanId];
         // Jika ada banyak row gaji (model harian), pakai hasil agregasi absensi fase review.
         // Nilai tersimpan hanya dipakai saat benar-benar 1 row per karyawan untuk periode ini.
         if ((gajiCountByKaryawanId[item.karyawanId] || 0) !== 1) {
-          return item;
+          return {
+            ...item,
+            statusPembayaran,
+          };
         }
 
         const savedValue = totalHariEfektifByKaryawanId[item.karyawanId];
@@ -665,9 +676,13 @@ export function NonStaffSalaryWorkflow() {
           return {
             ...item,
             hariEfektif: savedValue,
+            statusPembayaran,
           };
         }
-        return item;
+        return {
+          ...item,
+          statusPembayaran,
+        };
       });
 
       const savedMap: Record<string, number> = {};
@@ -758,6 +773,7 @@ export function NonStaffSalaryWorkflow() {
       });
 
       const missingEmployees: string[] = [];
+      const paidSkippedEmployees: string[] = [];
       let fallbackUsedCount = 0;
       const targetReviewRows =
         selectedKaryawanIds.length > 0
@@ -766,7 +782,19 @@ export function NonStaffSalaryWorkflow() {
             )
           : effectiveReviewRows;
 
-      const normalizedSnapshots: SnapshotRow[] = targetReviewRows
+      const unpaidTargetReviewRows = targetReviewRows.filter((review) => {
+        const isPaidReview = (review.statusPembayaran || "").toLowerCase() === "dibayar";
+        const matchedRow = exactRowByKaryawanId[review.karyawanId] || fallbackRowByKaryawanId[review.karyawanId];
+        const isPaidMatched = (matchedRow?.statusPembayaran || "").toLowerCase() === "dibayar";
+
+        if (isPaidReview || isPaidMatched) {
+          paidSkippedEmployees.push(review.nama);
+          return false;
+        }
+        return true;
+      });
+
+      const normalizedSnapshots: SnapshotRow[] = unpaidTargetReviewRows
         .map((review) => {
           const matchedRow = exactRowByKaryawanId[review.karyawanId] || fallbackRowByKaryawanId[review.karyawanId];
 
@@ -803,7 +831,13 @@ export function NonStaffSalaryWorkflow() {
         .filter((row): row is SnapshotRow => row !== null);
 
       if (normalizedSnapshots.length === 0) {
-        setError("Data gaji periode ini belum tersedia setelah proses generate draft otomatis.");
+        if (paidSkippedEmployees.length > 0) {
+          setError(
+            `Semua (${paidSkippedEmployees.length}) karyawan terpilih gajinya sudah berstatus Dibayar untuk periode ini dan tidak ditarik ke Fase 2.`
+          );
+        } else {
+          setError("Data gaji periode ini belum tersedia setelah proses generate draft otomatis.");
+        }
         return;
       }
 
@@ -816,6 +850,9 @@ export function NonStaffSalaryWorkflow() {
       const normalCount = normalizedSnapshots.length - noAbsensiCount;
 
       let msg = `Snapshot periode tersimpan untuk ${normalCount} karyawan.`;
+      if (paidSkippedEmployees.length > 0) {
+        msg += ` ${paidSkippedEmployees.length} karyawan berstatus Dibayar dilewati (tidak ditarik ke Fase 2).`;
+      }
       if (noAbsensiCount > 0) {
         msg += ` ${noAbsensiCount} karyawan dengan status "Tidak Ada Absensi" terdeteksi (perlu dicek).`;
       }
@@ -1243,21 +1280,7 @@ export function NonStaffSalaryWorkflow() {
         `rekap-gaji-nonstaff-${startDate}_${endDate}.pdf`
       );
 
-      const result = await salaryAPI.saveNonStaffRekap({
-        periodeAwal: toApiDate(startDate),
-        periodeAkhir: toApiDate(endDate),
-        lokasi: company,
-        diketahuiOleh: signatures.diketahuiOleh,
-        dibuatOleh: signatures.dibuatOleh,
-        catatan: signatures.catatan,
-        gajiIds: snapshotRows.map((r) => r.gajiId),
-      });
-
-      let msg = `Export rekap selesai. Berhasil: ${result.successCount}, `;
-      if (result.skippedNoAbsensiCount > 0) {
-        msg += `Tanpa Absensi dilewati: ${result.skippedNoAbsensiCount}, `;
-      }
-      setMessage(msg);
+      setMessage("Export rekap semua selesai.");
     } catch (exportErr) {
       console.error(exportErr);
       setError("Gagal export rekap semua.");
