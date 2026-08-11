@@ -145,6 +145,9 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
     Math.max(0, nominalOverride),
     Math.max(0, sisaSaldoPiutang)
   );
+  const liveSisaPiutang = piutangInfo
+    ? Math.max(0, sisaSaldoPiutang - (bayarMingguIni ? nominalCicilanEfektif : 0))
+    : (draftState.sisaPiutang ?? null);
 
   // Sync Pinjaman item inside draftState
   React.useEffect(() => {
@@ -760,13 +763,13 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                     {formatCurrency(calcLive.gajiBersih)}
                   </span>
                 </div>
-                {draftState.sisaPiutang !== undefined &&
-                  draftState.sisaPiutang !== null &&
-                  draftState.sisaPiutang > 0 && (
+                {liveSisaPiutang !== undefined &&
+                  liveSisaPiutang !== null &&
+                  liveSisaPiutang >= 0 && (
                     <div className="flex justify-between border-t pt-2 text-muted-foreground">
                       <span>Sisa Piutang</span>
                       <span>
-                        {formatCurrency(draftState.sisaPiutang)}
+                        {formatCurrency(liveSisaPiutang)}
                       </span>
                     </div>
                   )}
