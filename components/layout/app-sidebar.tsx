@@ -19,6 +19,7 @@ import {
   ImageIcon,
   Archive,
   Building2,
+  Database,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
@@ -138,6 +139,12 @@ const settingsMenuItems: MenuItem[] = [
     url: "/dashboard/settings/users",
     icon: Settings,
     description: "Kelola akun HRD & Akuntansi",
+  },
+  {
+    title: "Backup & Restore",
+    url: "/dashboard/settings",
+    icon: Database,
+    description: "Export & restore database SQL",
   },
 ];
 

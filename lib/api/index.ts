@@ -19,3 +19,6 @@ export { galleryAPI } from "./galeri"
 export { getAllViolations, addViolation, deleteViolation } from "./pelanggaran"
 export { publicKaryawanAPI, publicAbsensiAPI, publicSetengahHariAPI } from "./public"
 export { piutangAPI } from "./piutang"
+export { databaseAPI } from "./database"
+export type { RestorePreviewData, RestoreExecuteResult } from "./database"
+
