@@ -258,15 +258,15 @@ function companyProfileByLokasi(value: unknown): {
 //  Tujuan: muat 6 kolom × 2 baris = 12 slip per halaman landscape A4.
 //  Setiap slip sangat ramping, font dikecilkan, padding dipersempit.
 //
-const S_PAD        = 5.0;  // mm — padding kiri/kanan dalam slip
-const S_HDR_H      = 11.5; // mm — tinggi area header (background abu)
+const S_PAD = 5.0;  // mm — padding kiri/kanan dalam slip
+const S_HDR_H = 11.5; // mm — tinggi area header (background abu)
 const S_HDR_NAME_Y = 3.8;  // mm dari originY
-const S_HDR_PER_Y  = 7.0;  // mm dari originY
-const S_HDR_LOC_Y  = 9.8;  // mm dari originY
+const S_HDR_PER_Y = 7.0;  // mm dari originY
+const S_HDR_LOC_Y = 9.8;  // mm dari originY
 const S_BODY_START = 16.5; // mm dari originY — baris pertama body
-const S_ROW_GAP    = 4.4;  // mm — jarak antar baris
-const S_SEC_GAP    = 3.5;  // mm — gap setelah label section
-const S_COLON_OFF  = 30;   // mm dari contentX — posisi titik dua ":"
+const S_ROW_GAP = 4.4;  // mm — jarak antar baris
+const S_SEC_GAP = 3.5;  // mm — gap setelah label section
+const S_COLON_OFF = 30;   // mm dari contentX — posisi titik dua ":"
 const S_LOGO_BOX_W = 16;   // mm — lebar kotak logo (contain, tidak stretch)
 const S_LOGO_BOX_H = 7.0;  // mm — tinggi kotak logo
 
@@ -298,15 +298,15 @@ async function drawSingleSlip(
   const { totalBonus, gajiBersih, gajiBersihSebelumBulat } = calculateSummary(payload);
   const profile = companyProfileByLokasi(payload.location);
 
-  const pinjaman       = getNominalByLabel(payload.potonganItems, "Pinjaman");
-  const sumbangan      = getNominalByLabel(payload.potonganItems, "Sumbangan");
-  const bpjs           = getNominalByLabel(payload.potonganItems, "BPJS");
-  const undangan       = getNominalByLabel(payload.potonganItems, "Undangan");
-  const warung         = getNominalByLabel(payload.potonganItems, "Warung");
+  const pinjaman = getNominalByLabel(payload.potonganItems, "Pinjaman");
+  const sumbangan = getNominalByLabel(payload.potonganItems, "Sumbangan");
+  const bpjs = getNominalByLabel(payload.potonganItems, "BPJS");
+  const undangan = getNominalByLabel(payload.potonganItems, "Undangan");
+  const warung = getNominalByLabel(payload.potonganItems, "Warung");
   const jumlahPotongan = pinjaman + sumbangan + bpjs + undangan;
 
   const contentX = originX + S_PAD;
-  const rightX   = originX + slipWidth - S_PAD;
+  const rightX = originX + slipWidth - S_PAD;
 
   // Border
   doc.setDrawColor(180, 186, 198);
@@ -366,10 +366,10 @@ async function drawSingleSlip(
     rowY += S_ROW_GAP;
   };
 
-  addRow("Nama",       truncateText(payload.employeeName, 20));
-  addRow("Absensi",    typeof payload.hariEfektif === "number" ? String(payload.hariEfektif) : "-");
+  addRow("Nama", truncateText(payload.employeeName, 20));
+  addRow("Absensi", typeof payload.hariEfektif === "number" ? String(payload.hariEfektif) : "-");
   addRow("Gaji Pokok", formatRupiah(payload.gajiPokok || 0));
-  addRow("Bonus",      formatRupiah(totalBonus));
+  addRow("Bonus", formatRupiah(totalBonus));
 
   // Section label: Potongan
   doc.setFont("helvetica", "bold");
@@ -379,12 +379,12 @@ async function drawSingleSlip(
   rowY += S_SEC_GAP;
   doc.setTextColor(20, 20, 20);
 
-  addRow("_ Pinjaman",  formatRupiah(pinjaman));
+  addRow("_ Pinjaman", formatRupiah(pinjaman));
   addRow("_ Sumbangan", formatRupiah(sumbangan));
-  addRow("_ BPJS",      formatRupiah(bpjs));
-  addRow("_ Undangan",  formatRupiah(undangan));
-  addRow("Jumlah",      formatRupiah(jumlahPotongan));
-  addRow("_ Warung",    formatRupiah(warung));
+  addRow("_ BPJS", formatRupiah(bpjs));
+  addRow("_ Undangan", formatRupiah(undangan));
+  addRow("Jumlah", formatRupiah(jumlahPotongan));
+  addRow("_ Warung", formatRupiah(warung));
 
   // Garis pemisah
   doc.setDrawColor(180, 188, 200);
@@ -484,7 +484,7 @@ function measureNonStaffSlipWidth(doc: any, payload: NonStaffSlipExportPayload):
     "PENDAPATAN", "POTONGAN",
   ];
   // Also include bonus & potongan item labels
-  const bonusLabels  = safeItems(payload.bonusItems).map((i) => truncateText(i.judul, 18));
+  const bonusLabels = safeItems(payload.bonusItems).map((i) => truncateText(i.judul, 18));
   const potonganLabels = safeItems(payload.potonganItems).map((i) => truncateText(i.judul, 18));
   const allLabels = [...labelCandidates, ...bonusLabels, ...potonganLabels];
 
@@ -541,14 +541,14 @@ export async function exportSalarySlipsPdf(
   fileName: string
 ) {
   const jsPDF = await loadJsPdfCtor();
-  const doc   = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-  const gapX         = 4.0;
-  const gapY         = 4.0;
-  const startX       = 0.5;
-  const startY       = 0.5;
-  const pageWidth    = 210.0;
-  const pageHeight   = 297.0;
+  const gapX = 4.0;
+  const gapY = 4.0;
+  const startX = 0.5;
+  const startY = 0.5;
+  const pageWidth = 210.0;
+  const pageHeight = 297.0;
   const bottomMargin = 0.5;
 
   // ── Compute global slip width from the widest payload ──────────────────────
@@ -626,9 +626,9 @@ export async function exportSalaryRecapPdf(
   title: string,
   fileName: string
 ) {
-  const jsPDF     = await loadJsPdfCtor();
+  const jsPDF = await loadJsPdfCtor();
   const autoTable = await loadAutoTableFn();
-  const doc       = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13);
@@ -655,7 +655,7 @@ export async function exportSalaryRecapPdf(
       formatRupiah(row.gajiBersih),
     ]),
     theme: "grid",
-    styles:     { fontSize: 8, cellPadding: 1.6 },
+    styles: { fontSize: 8, cellPadding: 1.6 },
     headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0] },
   });
 
@@ -705,12 +705,12 @@ function safeItems(
 //  Tujuan: muat 5 kolom × 3 baris = 15 slip per halaman landscape A4
 //  (fleksibel tergantung jumlah baris bonus/potongan).
 //
-const NS_PAD      = 5.0;  // mm
-const NS_LOGO_W   = 16;   // mm — lebar kotak logo (contain)
-const NS_LOGO_H   = 8.0;  // mm — tinggi kotak logo
-const NS_ROW_GAP  = 3.4;  // mm
-const NS_SEC_GAP  = 2.5;  // mm
-const NS_DIV_GAP  = 1.5;  // mm setelah divider
+const NS_PAD = 5.0;  // mm
+const NS_LOGO_W = 16;   // mm — lebar kotak logo (contain)
+const NS_LOGO_H = 8.0;  // mm — tinggi kotak logo
+const NS_ROW_GAP = 3.4;  // mm
+const NS_SEC_GAP = 2.5;  // mm
+const NS_DIV_GAP = 1.5;  // mm setelah divider
 
 function calculateNonStaffSlipHeight(payload: NonStaffSlipExportPayload): number {
   const bonusItems = safeItems(payload.bonusItems);
@@ -766,13 +766,13 @@ async function drawNonStaffSlip(
   width: number,
   height: number
 ) {
-  const profile       = companyProfileByLokasi(payload.companyLocation);
-  const bonusItems    = safeItems(payload.bonusItems);
+  const profile = companyProfileByLokasi(payload.companyLocation);
+  const bonusItems = safeItems(payload.bonusItems);
   const potonganItems = safeItems(payload.potonganItems);
 
-  const leftX    = x + NS_PAD;
+  const leftX = x + NS_PAD;
   // Value column starts at a fixed offset from leftX (compact layout)
-  const valueX   = leftX + 30; // mm — fixed left offset for values (not right-aligned)
+  const valueX = leftX + 30; // mm — fixed left offset for values (not right-aligned)
   const rightEdge = x + width - NS_PAD;
 
   // Border
@@ -822,7 +822,7 @@ async function drawNonStaffSlip(
 
   // Info section
   cursorY += 1.5; // small gap before info block
-  linePair("Nama",   truncateText(payload.nama, 22));
+  linePair("Nama", truncateText(payload.nama, 22));
   linePair("Divisi", truncateText(payload.divisi || "-", 20));
   linePair("Status", "Non-Staff");
 
@@ -834,7 +834,7 @@ async function drawNonStaffSlip(
     }
   } else {
     linePair("Hari Efektif", String(payload.hariEfektif));
-    linePair("Upah Harian",  formatRupiah(payload.upahHarian));
+    linePair("Upah Harian", formatRupiah(payload.upahHarian));
   }
 
   // Pendapatan
@@ -887,14 +887,14 @@ export async function exportNonStaffSlipGabunganPdf(
   fileName: string
 ) {
   const jsPDF = await loadJsPdfCtor();
-  const doc   = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-  const gapX         = 4.0;
-  const gapY         = 4.0;
-  const startX       = 0.5;
-  const startY       = 0.5;
-  const pageWidth    = 210.0;
-  const pageHeight   = 297.0;
+  const gapX = 4.0;
+  const gapY = 4.0;
+  const startX = 0.5;
+  const startY = 0.5;
+  const pageWidth = 210.0;
+  const pageHeight = 297.0;
   const bottomMargin = 0.5;
 
   // ── Compute global slip width from the widest payload ──────────────────────
@@ -982,9 +982,9 @@ export async function exportNonStaffRekapPdf(
   },
   fileName: string
 ) {
-  const jsPDF     = await loadJsPdfCtor();
+  const jsPDF = await loadJsPdfCtor();
   const autoTable = await loadAutoTableFn();
-  const doc       = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
 
   const profile = companyProfileByLokasi(meta.location);
 
@@ -1082,7 +1082,7 @@ export async function exportNonStaffRekapPdf(
     head: [headers],
     body: bodyRows,
     foot: [footRow],
-    styles:     { fontSize: 7.0, cellPadding: 1.2, valign: "top", overflow: "linebreak" },
+    styles: { fontSize: 7.0, cellPadding: 1.2, valign: "top", overflow: "linebreak" },
     headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: "bold" },
     footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: "bold" },
     theme: "grid",
@@ -1105,7 +1105,7 @@ export async function exportNonStaffRekapPdf(
       divisi,
       formatRupiah(total),
     ]),
-    styles:     { fontSize: 8.0, cellPadding: 1.5 },
+    styles: { fontSize: 8.0, cellPadding: 1.5 },
     headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0] },
     theme: "grid",
     tableWidth: 120,

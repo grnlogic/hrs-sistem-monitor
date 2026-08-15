@@ -634,8 +634,11 @@ export function NonStaffSalaryWorkflow() {
         const rowStart = toApiDate(String(item?.periodeAwal || item?.periode_awal || ""));
         const rowEnd = toApiDate(String(item?.periodeAkhir || item?.periode_akhir || ""));
         const statusPembayaran = item.statusPembayaran || item.status_pembayaran || "";
+        const recordLokasi = normalizeLokasi(item.lokasi || item.rekap?.lokasi);
 
-        if (statusPembayaran && (statusPembayaran.toLowerCase() === "dibayar" || !statusPembayaranByKaryawanId[karyawanId])) {
+        // Hanya tandai statusPembayaran jika lokasi record gaji cocok dengan company filter yang aktif
+        const isLocationMatch = !company || recordLokasi === company;
+        if (isLocationMatch && statusPembayaran && (statusPembayaran.toLowerCase() === "dibayar" || !statusPembayaranByKaryawanId[karyawanId])) {
           statusPembayaranByKaryawanId[karyawanId] = statusPembayaran;
         }
 
