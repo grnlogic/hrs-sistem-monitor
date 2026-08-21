@@ -6,7 +6,6 @@ import { salaryAPI } from "@/lib/api/gaji";
 import {
   fixedBonusTemplate,
   fixedPotonganTemplate,
-  AUTO_BONUS_JUDUL,
 } from "./salary-stepper-shared";
 
 export type MasterItemType = "BONUS" | "POTONGAN";
@@ -21,10 +20,7 @@ export type MasterItemOption = {
  * Sumber utama daftar nama tetap dari backend (salaryAPI.getSalaryItems).
  */
 const seedNames: Record<MasterItemType, string[]> = {
-  BONUS: [
-    ...fixedBonusTemplate.map((item) => item.judul).filter(Boolean),
-    AUTO_BONUS_JUDUL,
-  ],
+  BONUS: fixedBonusTemplate.map((item) => item.judul).filter(Boolean),
   POTONGAN: fixedPotonganTemplate.map((item) => item.judul).filter(Boolean),
 };
 

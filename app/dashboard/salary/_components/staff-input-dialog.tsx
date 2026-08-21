@@ -29,7 +29,6 @@ import {
   type AttendanceSummary,
   type CalculatedRow,
   type SalaryInputState,
-  AUTO_BONUS_JUDUL,
 } from "./salary-stepper-shared";
 
 type StaffInputDialogProps = {
@@ -54,7 +53,6 @@ type StaffInputDialogProps = {
     kind: "bonusItems" | "potonganItems",
     index: number
   ) => void;
-  addKikipingItem: (salaryId: string) => void;
   updateSisaPiutang: (salaryId: string, value: number | null) => void;
   phase2ReadOnly: boolean;
   canPhase2Action: boolean;
@@ -75,7 +73,6 @@ export function StaffInputDialog(props: StaffInputDialogProps) {
     updateItem,
     addItem,
     deleteItem,
-    addKikipingItem,
     updateSisaPiutang,
     phase2ReadOnly,
     canPhase2Action,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/form/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/navigation/tabs";
@@ -37,6 +37,7 @@ import { IzinSakitTab } from "./_components/izin-sakit-tab";
 import { LeaveTab } from "./_components/leave-tab";
 import { ViolationsTab } from "./_components/violations-tab";
 import { FilesTab } from "./_components/files-tab";
+import { LoansTab } from "./_components/loans-tab";
 import { EmployeeProfileCard } from "./_components/employee-profile-card";
 import { CropModal } from "./_components/crop-modal";
 import { FilePreviewModal } from "./_components/file-preview-modal";
@@ -262,140 +263,140 @@ export default function EmployeeDetailPage() {
     setShowCrop(true);
   };
 
-  useEffect(() => {
-    const fetchEmployee = async () => {
-      try {
-        setLoading(true);
-        const id =
-          typeof params.id === "string"
-            ? params.id
-            : Array.isArray(params.id)
-            ? params.id[0]
-            : "";
-        const data = await employeeAPI.getById(id);
+  const fetchEmployee = useCallback(async () => {
+    try {
+      setLoading(true);
+      const id =
+        typeof params.id === "string"
+          ? params.id
+          : Array.isArray(params.id)
+          ? params.id[0]
+          : "";
+      const data = await employeeAPI.getById(id);
 
-        // Ambil data utama dari data.karyawan
-        let karyawan = data.karyawan;
-        if (!karyawan || String(karyawan.id) !== String(id)) {
-          throw new Error("Karyawan tidak ditemukan");
-        }
-
-        // Filter data cuti, pelanggaran, absensi, gaji berdasarkan karyawan.id
-        const cuti = (data.cuti || []).filter(
-          (c: any) => String(c.karyawan?.id) === String(id)
-        );
-        const pelanggaran = (data.pelanggaran || []).filter(
-          (p: any) => String(p.karyawan?.id) === String(id)
-        );
-        const absensi = (data.absensi || []).filter(
-          (a: any) => String(a.karyawan?.id) === String(id)
-        );
-        const gaji = (data.gaji || []).filter(
-          (g: any) => String(g.karyawan?.id) === String(id)
-        );
-
-        // Mapping data karyawan
-        const mapped = {
-          id: karyawan.id,
-          name: karyawan.namaLengkap || karyawan.name || "-",
-          nip: karyawan.nik || karyawan.nip || "-",
-          department: karyawan.departemen || karyawan.department || "-",
-          position: karyawan.jabatan || karyawan.position || "-",
-          status:
-            karyawan.statusKaryawan === "AKTIF"
-              ? "Aktif"
-              : karyawan.statusKaryawan === "TIDAK_AKTIF"
-              ? "Tidak Aktif"
-              : karyawan.statusKaryawan === "CUTI"
-              ? "Cuti"
-              : karyawan.statusKaryawan || karyawan.status || "-",
-          joinDate: karyawan.tanggalMasuk || karyawan.joinDate || null,
-          phone: karyawan.noHp || karyawan.phone || "-",
-          email: karyawan.email || "-",
-          address: karyawan.alamat || karyawan.address || "-",
-          birthDate: karyawan.tanggalLahir || karyawan.birthDate || null,
-          // Debug: log foto profil dari database
-          avatar: (() => {
-            console.log("Foto profil dari DB:", karyawan.fotoProfil);
-            if (karyawan.fotoProfil) {
-              const fotoUrl = `${getFotoUrl(
-                karyawan.id.toString()
-              )}?v=${encodeURIComponent(String(karyawan.fotoProfil))}`;
-              console.log("Generated foto URL:", fotoUrl);
-              return fotoUrl;
-            }
-            console.log("Tidak ada foto profil");
-            return null;
-          })(),
-          salary: karyawan.gajiPerHari
-            ? `Rp ${Number(karyawan.gajiPerHari).toLocaleString("id-ID")}`
-            : karyawan.salary || "-",
-          emergencyContact: {
-            name: karyawan.namaKontakDarurat || "-",
-            relation: karyawan.hubunganKontakDarurat || "-",
-            phone: karyawan.noTeleponKontakDarurat || "-",
-          },
-          _rawKaryawan: karyawan,
-        };
-        setEmployee(mapped);
-        setSalaryHistory(
-          (data.gaji || []).filter(
-            (g: any) => String(g.karyawan?.id) === String(id)
-          )
-        );
-        setLoans(data.piutang || []);
-        setAttendanceHistory(absensi);
-
-        try {
-          const izinSakitResponse = await attendanceAPI.getIzinSakitByEmployee(String(id));
-          setIzinSakitHistory(Array.isArray(izinSakitResponse?.data) ? izinSakitResponse.data : []);
-        } catch (err) {
-          console.error("Gagal mengambil riwayat izin/sakit:", err);
-          setIzinSakitHistory([]);
-        }
-
-        setLeaveHistory(
-          cuti.map((c: any) => ({
-            ...c,
-            karyawan: undefined,
-          }))
-        );
-        setViolationHistory(
-          pelanggaran.map((p: any) => ({
-            ...p,
-            karyawan: undefined,
-          }))
-        );
-
-        // Ambil informasi cuti karyawan
-        try {
-          const leaveInfoData = await leaveAPI.getEmployeeLeaveInfo(id);
-          setLeaveInfo(leaveInfoData);
-        } catch (err) {
-          console.error("Gagal mengambil informasi cuti:", err);
-          setLeaveInfo(null);
-        }
-
-        // Ambil daftar file yang sudah di-upload
-        try {
-          setFilesLoading(true);
-          const filesData = await employeeAPI.getFiles(id);
-          setUploadedFiles(filesData.files || []);
-        } catch (err) {
-          console.error("Gagal mengambil daftar file:", err);
-          setUploadedFiles([]);
-        } finally {
-          setFilesLoading(false);
-        }
-      } catch (err) {
-        setError("Gagal memuat data karyawan");
-      } finally {
-        setLoading(false);
+      // Ambil data utama dari data.karyawan
+      let karyawan = data.karyawan;
+      if (!karyawan || String(karyawan.id) !== String(id)) {
+        throw new Error("Karyawan tidak ditemukan");
       }
-    };
-    fetchEmployee();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+      // Filter data cuti, pelanggaran, absensi, gaji berdasarkan karyawan.id
+      const cuti = (data.cuti || []).filter(
+        (c: any) => String(c.karyawan?.id) === String(id)
+      );
+      const pelanggaran = (data.pelanggaran || []).filter(
+        (p: any) => String(p.karyawan?.id) === String(id)
+      );
+      const absensi = (data.absensi || []).filter(
+        (a: any) => String(a.karyawan?.id) === String(id)
+      );
+      const gaji = (data.gaji || []).filter(
+        (g: any) => String(g.karyawan?.id) === String(id)
+      );
+
+      // Mapping data karyawan
+      const mapped = {
+        id: karyawan.id,
+        name: karyawan.namaLengkap || karyawan.name || "-",
+        nip: karyawan.nik || karyawan.nip || "-",
+        department: karyawan.departemen || karyawan.department || "-",
+        position: karyawan.jabatan || karyawan.position || "-",
+        status:
+          karyawan.statusKaryawan === "AKTIF"
+            ? "Aktif"
+            : karyawan.statusKaryawan === "TIDAK_AKTIF"
+            ? "Tidak Aktif"
+            : karyawan.statusKaryawan === "CUTI"
+            ? "Cuti"
+            : karyawan.statusKaryawan || karyawan.status || "-",
+        joinDate: karyawan.tanggalMasuk || karyawan.joinDate || null,
+        phone: karyawan.noHp || karyawan.phone || "-",
+        email: karyawan.email || "-",
+        address: karyawan.alamat || karyawan.address || "-",
+        birthDate: karyawan.tanggalLahir || karyawan.birthDate || null,
+        // Debug: log foto profil dari database
+        avatar: (() => {
+          console.log("Foto profil dari DB:", karyawan.fotoProfil);
+          if (karyawan.fotoProfil) {
+            const fotoUrl = `${getFotoUrl(
+              karyawan.id.toString()
+            )}?v=${encodeURIComponent(String(karyawan.fotoProfil))}`;
+            console.log("Generated foto URL:", fotoUrl);
+            return fotoUrl;
+          }
+          console.log("Tidak ada foto profil");
+          return null;
+        })(),
+        salary: karyawan.gajiPerHari
+          ? `Rp ${Number(karyawan.gajiPerHari).toLocaleString("id-ID")}`
+          : karyawan.salary || "-",
+        emergencyContact: {
+          name: karyawan.namaKontakDarurat || "-",
+          relation: karyawan.hubunganKontakDarurat || "-",
+          phone: karyawan.noTeleponKontakDarurat || "-",
+        },
+        _rawKaryawan: karyawan,
+      };
+      setEmployee(mapped);
+      setSalaryHistory(
+        (data.gaji || []).filter(
+          (g: any) => String(g.karyawan?.id) === String(id)
+        )
+      );
+      setLoans(data.piutang || []);
+      setAttendanceHistory(absensi);
+
+      try {
+        const izinSakitResponse = await attendanceAPI.getIzinSakitByEmployee(String(id));
+        setIzinSakitHistory(Array.isArray(izinSakitResponse?.data) ? izinSakitResponse.data : []);
+      } catch (err) {
+        console.error("Gagal mengambil riwayat izin/sakit:", err);
+        setIzinSakitHistory([]);
+      }
+
+      setLeaveHistory(
+        cuti.map((c: any) => ({
+          ...c,
+          karyawan: undefined,
+        }))
+      );
+      setViolationHistory(
+        pelanggaran.map((p: any) => ({
+          ...p,
+          karyawan: undefined,
+        }))
+      );
+
+      // Ambil informasi cuti karyawan
+      try {
+        const leaveInfoData = await leaveAPI.getEmployeeLeaveInfo(id);
+        setLeaveInfo(leaveInfoData);
+      } catch (err) {
+        console.error("Gagal mengambil informasi cuti:", err);
+        setLeaveInfo(null);
+      }
+
+      // Ambil daftar file yang sudah di-upload
+      try {
+        setFilesLoading(true);
+        const filesData = await employeeAPI.getFiles(id);
+        setUploadedFiles(filesData.files || []);
+      } catch (err) {
+        console.error("Gagal mengambil daftar file:", err);
+        setUploadedFiles([]);
+      } finally {
+        setFilesLoading(false);
+      }
+    } catch (err) {
+      setError("Gagal memuat data karyawan");
+    } finally {
+      setLoading(false);
+    }
   }, [params.id]);
+
+  useEffect(() => {
+    fetchEmployee();
+  }, [fetchEmployee]);
 
   const totalPiutangAktif = useMemo(() => {
     return loans
@@ -768,126 +769,7 @@ export default function EmployeeDetailPage() {
         </TabsContent>
 
         <TabsContent value="loans">
-          <Card className="rounded-2xl border-zinc-100 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-zinc-800 font-bold">Riwayat Piutang &amp; Cicilan</CardTitle>
-              <CardDescription>Daftar riwayat pinjaman serta log pemotongan gaji / pembayaran pribadi.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {loans.length === 0 ? (
-                <div className="text-center py-12 text-zinc-500 bg-zinc-50/50 rounded-2xl border border-dashed">
-                  Karyawan ini tidak memiliki riwayat piutang.
-                </div>
-              ) : (
-                <div className="space-y-8">
-                  {loans.map((loan, idx) => {
-                    const isAktif = loan.aktif;
-                    return (
-                      <div key={`loan-${loan.id}`} className="p-5 rounded-2xl border border-zinc-150 bg-white shadow-sm space-y-4">
-                        <div className="flex items-center justify-between border-b pb-3">
-                          <div>
-                            <h4 className="text-sm font-bold text-zinc-800">
-                              Pinjaman #{loans.length - idx}
-                            </h4>
-                            <p className="text-xs text-muted-foreground">
-                              Dibuat pada: {new Date(loan.createdAt).toLocaleDateString("id-ID", {
-                                day: "numeric",
-                                month: "long",
-                                year: "numeric"
-                              })}
-                            </p>
-                          </div>
-                          <div>
-                            {isAktif ? (
-                              <Badge className="bg-rose-50 border-rose-100 text-rose-700 hover:bg-rose-50 border">Aktif</Badge>
-                            ) : (
-                              <Badge className="bg-zinc-50 border-zinc-200 text-zinc-500 hover:bg-zinc-50 border">Lunas / Non-Aktif</Badge>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm bg-zinc-50/50 p-3.5 rounded-xl border border-zinc-100">
-                          <div>
-                            <p className="text-xs text-muted-foreground font-medium">Saldo Awal</p>
-                            <p className="font-bold text-zinc-800">
-                              Rp {Number(loan.saldoAwal).toLocaleString("id-ID")}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground font-medium">Cicilan per Minggu</p>
-                            <p className="font-bold text-zinc-800">
-                              Rp {Number(loan.jumlahCicilan).toLocaleString("id-ID")}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground font-medium">Sisa Saldo</p>
-                            <p className="font-bold text-rose-600">
-                              Rp {Number(loan.sisaSaldo).toLocaleString("id-ID")}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Installments Table */}
-                        <div className="space-y-2">
-                          <p className="text-xs font-semibold text-zinc-700">Log Riwayat Cicilan</p>
-                          <div className="border border-zinc-100 rounded-xl overflow-hidden">
-                            <Table>
-                              <TableHeader className="bg-zinc-50/70">
-                                <TableRow>
-                                  <TableHead className="text-xs py-2">Tanggal</TableHead>
-                                  <TableHead className="text-xs py-2 text-right">Jumlah Potong/Bayar</TableHead>
-                                  <TableHead className="text-xs py-2 text-center">Metode Pembayaran</TableHead>
-                                  <TableHead className="text-xs py-2 text-right">Sisa Saldo Setelahnya</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {!loan.cicilan || loan.cicilan.length === 0 ? (
-                                  <TableRow>
-                                    <TableCell colSpan={4} className="text-center py-4 text-zinc-400 text-xs">
-                                      Belum ada pembayaran cicilan dicatat.
-                                    </TableCell>
-                                  </TableRow>
-                                ) : (
-                                  loan.cicilan.map((c: any) => (
-                                    <TableRow key={`cicilan-${c.id}`} className="hover:bg-zinc-50/30">
-                                      <TableCell className="text-xs py-2">
-                                        {new Date(c.tanggal || c.createdAt).toLocaleDateString("id-ID", {
-                                          day: "2-digit",
-                                          month: "short",
-                                          year: "numeric",
-                                        })}
-                                      </TableCell>
-                                      <TableCell className="text-xs font-semibold text-zinc-850 text-right py-2">
-                                        Rp {Number(c.jumlahDipotong).toLocaleString("id-ID")}
-                                      </TableCell>
-                                      <TableCell className="text-xs text-center py-2">
-                                        {c.pakaiUangPribadi ? (
-                                          <Badge className="bg-emerald-50 border border-emerald-100 text-emerald-700 hover:bg-emerald-50 px-2 py-0.5 rounded text-[10px] font-semibold">
-                                            Uang Pribadi
-                                          </Badge>
-                                        ) : (
-                                          <Badge className="bg-blue-50 border border-blue-100 text-blue-700 hover:bg-blue-50 px-2 py-0.5 rounded text-[10px] font-semibold">
-                                            Slip Gaji
-                                          </Badge>
-                                        )}
-                                      </TableCell>
-                                      <TableCell className="text-xs font-semibold text-zinc-850 text-right py-2">
-                                        Rp {Number(c.sisaSaldoSetelah).toLocaleString("id-ID")}
-                                      </TableCell>
-                                    </TableRow>
-                                  ))
-                                )}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <LoansTab loans={loans} onRefresh={fetchEmployee} />
         </TabsContent>
 
         <TabsContent value="salary">

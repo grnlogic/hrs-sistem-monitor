@@ -37,9 +37,11 @@ import {
 } from "@/components/ui/display/table";
 import { piutangAPI, employeeAPI } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
+import { EditPiutangDialog, DeletePiutangDialog } from "@/components/piutang";
 import {
   Plus,
   Trash2,
+  Pencil,
   Coins,
   Calendar,
   CreditCard,
@@ -71,6 +73,7 @@ type Piutang = {
   createdAt: string;
   updatedAt: string;
   karyawan?: Karyawan;
+  cicilan?: PiutangCicilan[];
 };
 
 type PiutangCicilan = {
@@ -115,6 +118,10 @@ export default function LoansPage() {
     tanggal: new Date().toISOString().split("T")[0],
   });
   const [submittingPayment, setSubmittingPayment] = useState(false);
+
+  // Edit & Delete Loan Dialog State
+  const [editingLoan, setEditingLoan] = useState<Piutang | null>(null);
+  const [deletingLoan, setDeletingLoan] = useState<Piutang | null>(null);
 
   // UI state for error / success message
   const [errorMsg, setErrorMsg] = useState("");
@@ -486,11 +493,27 @@ export default function LoansPage() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={(e) => handleDeleteLoan(loan.id, e)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingLoan(loan);
+                            }}
+                            title="Edit Piutang"
+                            className="h-8 w-8 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg shrink-0"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingLoan(loan);
+                            }}
+                            title="Hapus Piutang"
                             className="h-8 w-8 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg shrink-0"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -511,7 +534,7 @@ export default function LoansPage() {
           {selectedLoan ? (
             <div className="bg-white rounded-2xl shadow-sm border border-zinc-100 overflow-hidden">
               {/* Header Profile */}
-              <div className="p-5 border-b border-zinc-100 bg-zinc-900 text-white flex justify-between items-center">
+              <div className="p-5 border-b border-zinc-100 bg-zinc-900 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
                   <h3 className="font-bold text-lg">
                     {selectedLoan.karyawan?.namaLengkap}
@@ -520,9 +543,29 @@ export default function LoansPage() {
                     Karyawan Non-Staff • {selectedLoan.karyawan?.departemen}
                   </p>
                 </div>
-                <span className="text-xs font-semibold bg-white/20 px-3 py-1 rounded-full">
-                  {selectedLoan.aktif ? "Aktif" : "Lunas"}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold bg-white/20 px-3 py-1 rounded-full">
+                    {selectedLoan.aktif ? "Aktif" : "Lunas"}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditingLoan(selectedLoan)}
+                    className="h-8 rounded-lg border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white gap-1 text-xs"
+                    title="Edit Piutang"
+                  >
+                    <Pencil className="w-3.5 h-3.5" /> Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDeletingLoan({ ...selectedLoan, cicilan: installments })}
+                    className="h-8 rounded-lg border-rose-400/40 bg-rose-500/20 text-rose-200 hover:bg-rose-500/30 hover:text-white gap-1 text-xs"
+                    title="Hapus Piutang"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Hapus
+                  </Button>
+                </div>
               </div>
 
               <div className="p-5 space-y-6">
@@ -791,6 +834,34 @@ export default function LoansPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Piutang Dialog */}
+      <EditPiutangDialog
+        open={Boolean(editingLoan)}
+        onOpenChange={(open) => !open && setEditingLoan(null)}
+        piutang={editingLoan}
+        onSuccess={() => {
+          setEditingLoan(null);
+          setSuccessMsg("Data piutang berhasil diperbarui");
+          fetchLoans();
+        }}
+      />
+
+      {/* Delete Piutang Dialog */}
+      <DeletePiutangDialog
+        open={Boolean(deletingLoan)}
+        onOpenChange={(open) => !open && setDeletingLoan(null)}
+        piutang={deletingLoan}
+        onSuccess={() => {
+          if (selectedLoan?.id === deletingLoan?.id) {
+            setSelectedLoan(null);
+            setInstallments([]);
+          }
+          setDeletingLoan(null);
+          setSuccessMsg("Data piutang berhasil dihapus");
+          fetchLoans();
+        }}
+      />
     </div>
   );
 }

@@ -99,64 +99,15 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-let jsPdfCtorCache: JsPdfCtor | null = null;
-let autoTableFnCache: AutoTableFn | null = null;
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 async function loadJsPdfCtor(): Promise<JsPdfCtor> {
-  if (jsPdfCtorCache) return jsPdfCtorCache;
-
-  try {
-    const mod = await import("jspdf");
-    const ctor = ((mod as any).default || (mod as any).jsPDF) as JsPdfCtor;
-    if (!ctor) throw new Error("jsPDF constructor tidak ditemukan");
-    jsPdfCtorCache = ctor;
-    return ctor;
-  } catch (error) {
-    if (!isChunkLoadLikeError(error)) {
-      throw error;
-    }
-
-    await sleep(180);
-
-    try {
-      const fallbackMod = await import("jspdf/dist/jspdf.umd.min.js");
-      const ctor = ((fallbackMod as any).jsPDF || (fallbackMod as any).default) as JsPdfCtor;
-      if (!ctor) throw new Error("Fallback jsPDF constructor tidak ditemukan");
-      jsPdfCtorCache = ctor;
-      return ctor;
-    } catch (fallbackError) {
-      const wrapped = new Error(
-        "Gagal memuat modul PDF. Coba refresh halaman, lalu ulangi export slip."
-      );
-      (wrapped as any).cause = fallbackError;
-      throw wrapped;
-    }
-  }
+  return jsPDF as any;
 }
 
 async function loadAutoTableFn(): Promise<AutoTableFn> {
-  if (autoTableFnCache) return autoTableFnCache;
-
-  try {
-    const mod = await import("jspdf-autotable");
-    const fn = ((mod as any).default || mod) as AutoTableFn;
-    if (!fn) throw new Error("autoTable function tidak ditemukan");
-    autoTableFnCache = fn;
-    return fn;
-  } catch (error) {
-    if (!isChunkLoadLikeError(error)) {
-      throw error;
-    }
-
-    await sleep(120);
-    const retryMod = await import("jspdf-autotable");
-    const retryFn = ((retryMod as any).default || retryMod) as AutoTableFn;
-    if (!retryFn) {
-      throw new Error("Gagal memuat autoTable untuk export PDF");
-    }
-    autoTableFnCache = retryFn;
-    return retryFn;
-  }
+  return autoTable as any;
 }
 
 // ─── Logo cache & loader ──────────────────────────────────────────────────────
@@ -693,11 +644,18 @@ function formatPeriodRangeLabel(startDate: string, endDate: string): string {
 }
 
 function safeItems(
-  items: Array<{ judul: string; nominal: number }>
+  items: unknown
 ): Array<{ judul: string; nominal: number }> {
+  if (!Array.isArray(items)) return [];
   return items
-    .filter((item) => item.judul.trim())
-    .map((item) => ({ judul: item.judul.trim(), nominal: Number(item.nominal || 0) }));
+    .map((item: any) => {
+      const rawJudul =
+        item?.judul ?? item?.label ?? item?.nama ?? item?.itemName ?? item?.deskripsi ?? "";
+      const judul = String(rawJudul || "").trim();
+      const nominal = Number(item?.nominal ?? item?.jumlah ?? item?.nilai ?? 0);
+      return { judul, nominal };
+    })
+    .filter((item) => Boolean(item.judul));
 }
 
 // ─── Layout constants — Non-Staff Slip ───────────────────────────────────────
@@ -979,6 +937,8 @@ export async function exportNonStaffRekapPdf(
     diketahuiOleh: string;
     dibuatOleh: string;
     catatan?: string;
+    kikipingOleh?: string;
+    kikipingNominal?: number;
   },
   fileName: string
 ) {
@@ -1005,8 +965,11 @@ export async function exportNonStaffRekapPdf(
     "Upah Harian",
     "Gaji Pokok",
     ...meta.bonusColumns.map((col) => `${col} (Bonus)`),
+    "Total Bonus",
+    "Gaji Bruto",
     ...meta.potonganColumns.map((col) => `${col} (Potongan)`),
-    "Gaji Bersih",
+    "Total Potongan",
+    "Gaji Bersih (Upah Diterima)",
   ];
 
   // Body rows mapping
@@ -1026,6 +989,10 @@ export async function exportNonStaffRekapPdf(
       return val > 0 ? formatRupiah(val) : "-";
     });
 
+    const rowTotalBonus = Number(row.totalBonus || inputBonus.reduce((sum, b) => sum + Number(b.nominal || 0), 0));
+    const rowGajiBruto = Number(row.gajiPokok || 0) + rowTotalBonus;
+    const rowTotalPotongan = Number(row.totalPotongan || inputPotongan.reduce((sum, p) => sum + Number(p.nominal || 0), 0));
+
     return [
       row.nama,
       row.divisi,
@@ -1033,7 +1000,10 @@ export async function exportNonStaffRekapPdf(
       formatRupiah(row.upahHarian),
       formatRupiah(row.gajiPokok),
       ...bonusCells,
+      formatRupiah(rowTotalBonus),
+      formatRupiah(rowGajiBruto),
       ...potonganCells,
+      formatRupiah(rowTotalPotongan),
       formatRupiah(row.gajiBersih),
     ];
   });
@@ -1044,6 +1014,8 @@ export async function exportNonStaffRekapPdf(
   let totalGajiPokok = 0;
   const totalBonusCols = new Array(meta.bonusColumns.length).fill(0);
   const totalPotonganCols = new Array(meta.potonganColumns.length).fill(0);
+  let totalAllBonus = 0;
+  let totalAllPotongan = 0;
   let totalGajiBersih = 0;
 
   rows.forEach((row) => {
@@ -1054,6 +1026,12 @@ export async function exportNonStaffRekapPdf(
 
     const inputBonus = safeItems(row.bonusItems);
     const inputPotongan = safeItems(row.potonganItems);
+
+    const rowBonus = Number(row.totalBonus || inputBonus.reduce((sum, b) => sum + Number(b.nominal || 0), 0));
+    const rowPotongan = Number(row.totalPotongan || inputPotongan.reduce((sum, p) => sum + Number(p.nominal || 0), 0));
+
+    totalAllBonus += rowBonus;
+    totalAllPotongan += rowPotongan;
 
     meta.bonusColumns.forEach((col, idx) => {
       const item = inputBonus.find((b) => b.judul.trim() === col);
@@ -1066,14 +1044,19 @@ export async function exportNonStaffRekapPdf(
     });
   });
 
+  const totalGajiBruto = totalGajiPokok + totalAllBonus;
+
   const footRow = [
-    "Total",
+    "Total Summary",
     "",
     String(totalHariEfektif),
     formatRupiah(totalUpahHarian),
     formatRupiah(totalGajiPokok),
     ...totalBonusCols.map((val) => val > 0 ? formatRupiah(val) : "-"),
+    formatRupiah(totalAllBonus),
+    formatRupiah(totalGajiBruto),
     ...totalPotonganCols.map((val) => val > 0 ? formatRupiah(val) : "-"),
+    formatRupiah(totalAllPotongan),
     formatRupiah(totalGajiBersih),
   ];
 
@@ -1093,13 +1076,47 @@ export async function exportNonStaffRekapPdf(
     byDivision.set(row.divisi, (byDivision.get(row.divisi) || 0) + row.gajiBersih);
   }
 
-  const summaryStartY = (doc as any).lastAutoTable.finalY + 8;
+  // Extract Pinjaman column total if present
+  let pinjamanIdx = meta.potonganColumns.findIndex((c) => c.toLowerCase().includes("pinjaman"));
+  let totalPinjaman = pinjamanIdx !== -1 ? totalPotonganCols[pinjamanIdx] : 0;
+  if (totalPinjaman === 0) {
+    rows.forEach((r) => {
+      const items = safeItems(r.potonganItems);
+      const pItem = items.find((i) => i.judul.toLowerCase().includes("pinjaman"));
+      if (pItem) totalPinjaman += Number(pItem.nominal || 0);
+    });
+  }
+
+  const finSummaryStartY = (doc as any).lastAutoTable.finalY + 6;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.5);
+  doc.setFontSize(9.0);
+  doc.setTextColor(30, 30, 30);
+  doc.text("REKAPAN FINANCIAL & TOTAL SUMMARY", 14, finSummaryStartY);
+
+  autoTable(doc, {
+    startY: finSummaryStartY + 2,
+    head: [["Kategori Summary", "Total Nominal"]],
+    body: [
+      ["JUMLAH GAJI POKOK", formatRupiah(totalGajiPokok)],
+      ["TOTAL SEMUA BONUS", formatRupiah(totalAllBonus)],
+      ["TOTAL GAJI BRUTO (JUMLAH GAJI POKOK + BONUS)", formatRupiah(totalGajiBruto)],
+      ["REKAPAN JUMLAH PINJAMAN (CICILAN)", formatRupiah(totalPinjaman)],
+      ["TOTAL UPAH DITERIMA (GAJI BERSIH)", formatRupiah(totalGajiBersih)],
+    ],
+    styles: { fontSize: 8.0, cellPadding: 1.4 },
+    headStyles: { fillColor: [230, 235, 245], textColor: [0, 0, 0], fontStyle: "bold" },
+    columnStyles: { 0: { fontStyle: "bold", cellWidth: 110 }, 1: { fontStyle: "bold", halign: "right", cellWidth: 50 } },
+    theme: "grid",
+    tableWidth: 160,
+  });
+
+  const summaryStartY = (doc as any).lastAutoTable.finalY + 6;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.0);
   doc.text("Summary Total per Divisi", 14, summaryStartY);
 
   autoTable(doc, {
-    startY: summaryStartY + 3,
+    startY: summaryStartY + 2,
     head: [["Divisi", "Total"]],
     body: Array.from(byDivision.entries()).map(([divisi, total]) => [
       divisi,
@@ -1128,6 +1145,7 @@ export async function exportNonStaffRekapPdf(
 
   // Draw signatures side-by-side
   const signY = finalY + 10 + noteHeight;
+  const hasKikiping = Boolean(meta.kikipingOleh || (meta.kikipingNominal && meta.kikipingNominal > 0));
 
   // Prevent page spill
   if (signY > 185) {
@@ -1135,19 +1153,31 @@ export async function exportNonStaffRekapPdf(
     const nextY = 20;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9.5);
-    doc.text("Dibuat oleh,", 40, nextY);
-    doc.text(meta.dibuatOleh, 40, nextY + 20);
+    doc.text("Dibuat oleh,", 30, nextY);
+    doc.text(meta.dibuatOleh, 30, nextY + 20);
 
-    doc.text("Diketahui oleh,", 200, nextY);
-    doc.text(meta.diketahuiOleh, 200, nextY + 20);
+    if (hasKikiping) {
+      doc.text("Kikiping oleh,", 120, nextY);
+      const kikipingText = `${meta.kikipingOleh || "-"}${meta.kikipingNominal ? ` (${formatRupiah(meta.kikipingNominal)})` : ""}`;
+      doc.text(kikipingText, 120, nextY + 20);
+    }
+
+    doc.text("Diketahui oleh,", 210, nextY);
+    doc.text(meta.diketahuiOleh, 210, nextY + 20);
   } else {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9.5);
-    doc.text("Dibuat oleh,", 40, signY);
-    doc.text(meta.dibuatOleh, 40, signY + 20);
+    doc.text("Dibuat oleh,", 30, signY);
+    doc.text(meta.dibuatOleh, 30, signY + 20);
 
-    doc.text("Diketahui oleh,", 200, signY);
-    doc.text(meta.diketahuiOleh, 200, signY + 20);
+    if (hasKikiping) {
+      doc.text("Kikiping oleh,", 120, signY);
+      const kikipingText = `${meta.kikipingOleh || "-"}${meta.kikipingNominal ? ` (${formatRupiah(meta.kikipingNominal)})` : ""}`;
+      doc.text(kikipingText, 120, signY + 20);
+    }
+
+    doc.text("Diketahui oleh,", 210, signY);
+    doc.text(meta.diketahuiOleh, 210, signY + 20);
   }
 
   doc.save(fileName);

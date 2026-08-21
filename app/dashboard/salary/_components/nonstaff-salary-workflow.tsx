@@ -44,7 +44,6 @@ import {
   toNumber,
   buildDefaultInputState,
 } from "./nonstaff-salary-shared";
-import { AUTO_BONUS_JUDUL, AUTO_BONUS_NOMINAL } from "./salary-stepper-shared";
 import { calcGajiBersih } from "@/lib/salary-utils";
 
 // Extracted step / dialog / popup components
@@ -280,9 +279,13 @@ export function NonStaffSalaryWorkflow() {
     diketahuiOleh: "SELVIE GUSTIARINI",
     dibuatOleh: "SUCI",
     catatan: "",
+    kikipingOleh: "",
+    kikipingNominal: 0,
   });
   const [signatureSubmitted, setSignatureSubmitted] = useState(false);
   const [isSignatureDialogOpen, setIsSignatureDialogOpen] = useState(false);
+  // Daftar nama karyawan yang di-skip ke Fase 2 karena statusnya sudah "Dibayar"
+  const [paidSkippedEmployees, setPaidSkippedEmployees] = useState<string[]>([]);
 
   useEffect(() => {
     if (status === "authenticated" && session?.accessToken) {
@@ -304,6 +307,8 @@ export function NonStaffSalaryWorkflow() {
               diketahuiOleh: res.diketahuiOleh || "SELVIE GUSTIARINI",
               dibuatOleh: res.dibuatOleh || "SUCI",
               catatan: res.catatan || "",
+              kikipingOleh: res.kikipingOleh || "",
+              kikipingNominal: res.kikipingNominal != null ? Number(res.kikipingNominal) : 0,
             });
             setSignatureSubmitted(true);
           } else {
@@ -745,6 +750,23 @@ export function NonStaffSalaryWorkflow() {
         const isNonStaffRow = isNonStaffByLabels(statusKaryawan, departemen);
         if (!karyawanId || !isNonStaffRow) return;
 
+        // BUG FIX: Hanya index row yang lokasinya sesuai company yang sedang diproses.
+        // Tanpa filter ini, record "Dibayar" dari lokasi lain (misal SP) bisa salah
+        // men-exclude karyawan yang seharusnya diproses di lokasi ini (misal PJP).
+        if (company) {
+          const rowLokasi = normalizeLokasi(
+            row.lokasi ||
+            row.karyawan?.lokasiDefault ||
+            row.karyawan?.lokasi_default ||
+            ""
+          );
+          // Rekap terhubung ke lokasi via rekap.lokasi; jika row sudah di-rekap
+          // ambil lokasi rekap. Jika tidak ada info lokasi sama sekali, lewati.
+          const rekapLokasi = normalizeLokasi(row.rekap?.lokasi || "");
+          const effectiveLokasi = rekapLokasi || rowLokasi;
+          if (effectiveLokasi && effectiveLokasi !== company) return;
+        }
+
         const rowStart = toApiDate(String(row.periodeAwal || row.periode_awal || ""));
         const rowEnd = toApiDate(String(row.periodeAkhir || row.periode_akhir || ""));
         const isWithinSelectedRange = rowStart >= selectedStart && rowEnd <= selectedEnd;
@@ -776,7 +798,7 @@ export function NonStaffSalaryWorkflow() {
       });
 
       const missingEmployees: string[] = [];
-      const paidSkippedEmployees: string[] = [];
+      const localPaidSkipped: string[] = [];
       let fallbackUsedCount = 0;
       const targetReviewRows =
         selectedKaryawanIds.length > 0
@@ -791,11 +813,13 @@ export function NonStaffSalaryWorkflow() {
         const isPaidMatched = (matchedRow?.statusPembayaran || "").toLowerCase() === "dibayar";
 
         if (isPaidReview || isPaidMatched) {
-          paidSkippedEmployees.push(review.nama);
+          localPaidSkipped.push(review.nama);
           return false;
         }
         return true;
       });
+      // Simpan ke state agar bisa ditampilkan di Fase 2
+      setPaidSkippedEmployees(localPaidSkipped);
 
       const normalizedSnapshots: SnapshotRow[] = unpaidTargetReviewRows
         .map((review) => {
@@ -834,9 +858,9 @@ export function NonStaffSalaryWorkflow() {
         .filter((row): row is SnapshotRow => row !== null);
 
       if (normalizedSnapshots.length === 0) {
-        if (paidSkippedEmployees.length > 0) {
+        if (localPaidSkipped.length > 0) {
           setError(
-            `Semua (${paidSkippedEmployees.length}) karyawan terpilih gajinya sudah berstatus Dibayar untuk periode ini dan tidak ditarik ke Fase 2.`
+            `Semua (${localPaidSkipped.length}) karyawan terpilih gajinya sudah berstatus Dibayar untuk periode ini dan tidak ditarik ke Fase 2.`
           );
         } else {
           setError("Data gaji periode ini belum tersedia setelah proses generate draft otomatis.");
@@ -860,11 +884,9 @@ export function NonStaffSalaryWorkflow() {
                   nominal: toNumber(item.nominal),
                 }))
               : [];
-            const autoKikipingAllowed = detail?.autoKikipingAllowed !== false;
-
             const normalizedBonus = bonusFromApi.length > 0
               ? bonusFromApi
-              : buildDefaultInputState(autoKikipingAllowed).bonusItems;
+              : buildDefaultInputState().bonusItems;
 
             const potonganFromApi: SalaryItem[] = Array.isArray(detail?.potonganItems)
               ? detail.potonganItems.map((item: any) => ({
@@ -895,8 +917,6 @@ export function NonStaffSalaryWorkflow() {
             setInputsBySalaryId((prev) => ({
               ...prev,
               [row.gajiId]: {
-                kikipingOleh: detail?.kikipingOleh || null,
-                autoKikipingAllowed,
                 bonusItems: normalizedBonus,
                 potonganItems: normalizedPotongan,
                 sisaPiutang: detail?.sisaPiutang !== undefined ? detail.sisaPiutang : null,
@@ -925,8 +945,8 @@ export function NonStaffSalaryWorkflow() {
       const normalCount = normalizedSnapshots.length - noAbsensiCount;
 
       let msg = `Snapshot periode tersimpan untuk ${normalCount} karyawan.`;
-      if (paidSkippedEmployees.length > 0) {
-        msg += ` ${paidSkippedEmployees.length} karyawan berstatus Dibayar dilewati (tidak ditarik ke Fase 2).`;
+      if (localPaidSkipped.length > 0) {
+        msg += ` ${localPaidSkipped.length} karyawan berstatus Dibayar dilewati (tidak ditarik ke Fase 2).`;
       }
       if (noAbsensiCount > 0) {
         msg += ` ${noAbsensiCount} karyawan dengan status "Tidak Ada Absensi" terdeteksi (perlu dicek).`;
@@ -963,8 +983,6 @@ export function NonStaffSalaryWorkflow() {
             nominal: toNumber(item.nominal),
           }))
         : [];
-      const autoKikipingAllowed = detail?.autoKikipingAllowed !== false;
-
       const potonganFromApi: SalaryItem[] = Array.isArray(detail?.potonganItems)
         ? detail.potonganItems.map((item: any) => ({
             id: item.id ? String(item.id) : undefined,
@@ -976,7 +994,7 @@ export function NonStaffSalaryWorkflow() {
 
       const normalizedBonus = bonusFromApi.length > 0
         ? bonusFromApi
-        : buildDefaultInputState(autoKikipingAllowed).bonusItems;
+        : buildDefaultInputState().bonusItems;
       const normalizedPotongan = [...DEFAULT_POTONGAN.map((item) => ({ ...item }))];
 
       for (const potongan of potonganFromApi) {
@@ -998,8 +1016,6 @@ export function NonStaffSalaryWorkflow() {
       setInputsBySalaryId((prev) => ({
         ...prev,
         [row.gajiId]: {
-          kikipingOleh: detail?.kikipingOleh || null,
-          autoKikipingAllowed,
           bonusItems: normalizedBonus,
           potonganItems: normalizedPotongan,
           sisaPiutang: detail?.sisaPiutang !== undefined ? detail.sisaPiutang : null,
@@ -1158,27 +1174,6 @@ export function NonStaffSalaryWorkflow() {
     });
   }
 
-  /** Tambah 1 baris bonus "kikiping" (10.000) bila belum ada; idempotent. */
-  function addKikipingItem(salaryId: string) {
-    setInputsBySalaryId((prev) => {
-      const current = prev[salaryId] || buildDefaultInputState();
-      const exists = current.bonusItems.some(
-        (item) => item.judul.toLowerCase() === AUTO_BONUS_JUDUL
-      );
-      if (exists) return prev;
-      return {
-        ...prev,
-        [salaryId]: {
-          ...current,
-          bonusItems: [
-            ...current.bonusItems,
-            { judul: AUTO_BONUS_JUDUL, nominal: AUTO_BONUS_NOMINAL },
-          ],
-        },
-      };
-    });
-  }
-
   async function saveInputSalary(salaryId: string, finalState: InputState) {
     if (!selectedSnapshot || selectedSnapshot.gajiId !== salaryId) {
       return;
@@ -1191,7 +1186,6 @@ export function NonStaffSalaryWorkflow() {
       await salaryAPI.saveBonusPotongan({
         gajiId: selectedSnapshot.gajiId,
         karyawanId: selectedSnapshot.karyawanId,
-        kikipingOleh: finalState.kikipingOleh,
         bonusItems: finalState.bonusItems.filter((item) => item.judul.trim()),
         potonganItems: finalState.potonganItems.filter((item) => item.judul.trim()),
         sisaPiutang: finalState.sisaPiutang,
@@ -1358,6 +1352,8 @@ export function NonStaffSalaryWorkflow() {
           diketahuiOleh: signatures.diketahuiOleh,
           dibuatOleh: signatures.dibuatOleh,
           catatan: signatures.catatan,
+          kikipingOleh: signatures.kikipingOleh,
+          kikipingNominal: signatures.kikipingNominal,
         },
         `rekap-gaji-nonstaff-${startDate}_${endDate}.pdf`
       );
@@ -1399,6 +1395,8 @@ export function NonStaffSalaryWorkflow() {
         diketahuiOleh: signatures.diketahuiOleh,
         dibuatOleh: signatures.dibuatOleh,
         catatan: signatures.catatan,
+        kikipingOleh: signatures.kikipingOleh,
+        kikipingNominal: signatures.kikipingNominal,
         gajiIds: snapshotRows.map((r) => r.gajiId),
         // Plan cicilan piutang per karyawan (override nominal, skip, uang
         // pribadi) dari dialog Fase 2 — dieksekusi FINAL di endpoint rekap.
@@ -1592,6 +1590,7 @@ export function NonStaffSalaryWorkflow() {
           allDone={allDone}
           setStep={setStep}
           onMarkAllDone={handleMarkAllDone}
+          paidSkippedEmployees={paidSkippedEmployees}
         />
       ) : null}
 
@@ -1627,7 +1626,13 @@ export function NonStaffSalaryWorkflow() {
         onClose={() => setIsSignatureDialogOpen(false)}
         signatures={signatures}
         onSave={(vals) => {
-          setSignatures(vals);
+          setSignatures({
+            diketahuiOleh: vals.diketahuiOleh,
+            dibuatOleh: vals.dibuatOleh,
+            catatan: vals.catatan,
+            kikipingOleh: vals.kikipingOleh || "",
+            kikipingNominal: vals.kikipingNominal ?? 0,
+          });
           setSignatureSubmitted(true);
         }}
         onCancel={() => {

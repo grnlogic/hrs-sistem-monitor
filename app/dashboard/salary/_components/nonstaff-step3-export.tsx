@@ -35,7 +35,13 @@ type NonStaffStep3Props = {
   handleExportSlipGabungan: () => void;
   handleExportRekapSemua: () => void;
   handleSimpanRekapan: () => void;
-  signatures: { diketahuiOleh: string; dibuatOleh: string; catatan: string };
+  signatures: {
+    diketahuiOleh: string;
+    dibuatOleh: string;
+    catatan: string;
+    kikipingOleh?: string;
+    kikipingNominal?: number;
+  };
   onEditSignatures: () => void;
   inputsBySalaryId: Record<string, InputState>;
 };
@@ -153,6 +159,8 @@ export function NonStaffStep3Export(props: NonStaffStep3Props) {
                     {col} (Bonus)
                   </TableHead>
                 ))}
+                <TableHead className="font-semibold text-emerald-800 text-right bg-emerald-50/40">Total Bonus</TableHead>
+                <TableHead className="font-semibold text-amber-950 text-right bg-amber-50/60 font-bold">Gaji Bruto</TableHead>
                 {activePotonganCols.map((col) => (
                   <TableHead key={`head-p-${col}`} className="font-semibold text-zinc-700 text-right">
                     {col} (Potongan)
@@ -165,7 +173,7 @@ export function NonStaffStep3Export(props: NonStaffStep3Props) {
             <TableBody>
               {snapshotRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9 + activeBonusCols.length + activePotonganCols.length} className="text-center text-zinc-500 py-8">
+                  <TableCell colSpan={11 + activeBonusCols.length + activePotonganCols.length} className="text-center text-zinc-500 py-8">
                     Belum ada data untuk export.
                   </TableCell>
                 </TableRow>
@@ -174,6 +182,8 @@ export function NonStaffStep3Export(props: NonStaffStep3Props) {
                   {snapshotRows.map((row) => {
                     const calc = calculatedForSnapshot(row);
                     const input = inputsBySalaryId[row.gajiId] || { bonusItems: [], potonganItems: [] };
+                    const totalRowBonus = (input.bonusItems || []).reduce((sum, b) => sum + toNumber(b.nominal), 0);
+                    const gajiBruto = row.gajiPokok + totalRowBonus;
 
                     return (
                       <TableRow key={`rekap-${row.gajiId}`} className="hover:bg-zinc-50/50">
@@ -198,6 +208,16 @@ export function NonStaffStep3Export(props: NonStaffStep3Props) {
                             </TableCell>
                           );
                         })}
+
+                        {/* Total Bonus */}
+                        <TableCell className="text-right font-semibold text-emerald-700 bg-emerald-50/30">
+                          {formatCurrency(totalRowBonus)}
+                        </TableCell>
+
+                        {/* Gaji Bruto (Gaji Pokok + Total Bonus) */}
+                        <TableCell className="text-right font-bold text-amber-950 bg-amber-50/40">
+                          {formatCurrency(gajiBruto)}
+                        </TableCell>
 
                         {/* Render active dynamic potongan cells */}
                         {activePotonganCols.map((col) => {
@@ -239,27 +259,42 @@ export function NonStaffStep3Export(props: NonStaffStep3Props) {
                   })}
 
                   {/* Summary Totals Row */}
-                  <TableRow className="bg-zinc-50/70 font-bold border-t-2 border-zinc-200">
-                    <TableCell colSpan={2} className="text-zinc-900 font-bold">Total</TableCell>
-                    <TableCell className="text-center text-zinc-900 font-bold">{totals.totalHariEfektif}</TableCell>
-                    <TableCell className="text-right text-zinc-900 font-bold">{formatCurrency(totals.totalUpahHarian)}</TableCell>
-                    <TableCell className="text-right text-zinc-900 font-bold">{formatCurrency(totals.totalGajiPokok)}</TableCell>
+                  {(() => {
+                    const totalAllBonus = totals.totalBonusCols.reduce((sum, v) => sum + v, 0);
+                    const totalGajiBruto = totals.totalGajiPokok + totalAllBonus;
 
-                    {activeBonusCols.map((col, idx) => (
-                      <TableCell key={`total-b-${col}`} className="text-right text-emerald-700 font-bold">
-                        {formatCurrency(totals.totalBonusCols[idx])}
-                      </TableCell>
-                    ))}
+                    return (
+                      <TableRow className="bg-zinc-50/90 font-bold border-t-2 border-zinc-300">
+                        <TableCell colSpan={2} className="text-zinc-900 font-bold text-sm">TOTAL SUMMARY</TableCell>
+                        <TableCell className="text-center text-zinc-900 font-bold">{totals.totalHariEfektif}</TableCell>
+                        <TableCell className="text-right text-zinc-900 font-bold">{formatCurrency(totals.totalUpahHarian)}</TableCell>
+                        <TableCell className="text-right text-zinc-900 font-bold">{formatCurrency(totals.totalGajiPokok)}</TableCell>
 
-                    {activePotonganCols.map((col, idx) => (
-                      <TableCell key={`total-p-${col}`} className="text-right text-rose-700 font-bold">
-                        {formatCurrency(totals.totalPotonganCols[idx])}
-                      </TableCell>
-                    ))}
+                        {activeBonusCols.map((col, idx) => (
+                          <TableCell key={`total-b-${col}`} className="text-right text-emerald-700 font-bold">
+                            {formatCurrency(totals.totalBonusCols[idx])}
+                          </TableCell>
+                        ))}
 
-                    <TableCell className="text-right text-zinc-950 font-bold">{formatCurrency(totals.totalGajiBersih)}</TableCell>
-                    <TableCell />
-                  </TableRow>
+                        <TableCell className="text-right text-emerald-800 font-bold bg-emerald-50/50">
+                          {formatCurrency(totalAllBonus)}
+                        </TableCell>
+
+                        <TableCell className="text-right text-amber-950 font-bold bg-amber-100/70">
+                          {formatCurrency(totalGajiBruto)}
+                        </TableCell>
+
+                        {activePotonganCols.map((col, idx) => (
+                          <TableCell key={`total-p-${col}`} className="text-right text-rose-700 font-bold">
+                            {formatCurrency(totals.totalPotonganCols[idx])}
+                          </TableCell>
+                        ))}
+
+                        <TableCell className="text-right text-zinc-950 font-bold">{formatCurrency(totals.totalGajiBersih)}</TableCell>
+                        <TableCell />
+                      </TableRow>
+                    );
+                  })()}
                 </>
               )}
             </TableBody>
@@ -304,7 +339,7 @@ export function NonStaffStep3Export(props: NonStaffStep3Props) {
               Ubah Tanda Tangan
             </Button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div>
               <p className="text-xs text-muted-foreground font-semibold">Dibuat Oleh</p>
               <p className="font-semibold text-zinc-800">{signatures.dibuatOleh}</p>
@@ -313,6 +348,19 @@ export function NonStaffStep3Export(props: NonStaffStep3Props) {
               <p className="text-xs text-muted-foreground font-semibold">Diketahui Oleh</p>
               <p className="font-semibold text-zinc-800">{signatures.diketahuiOleh}</p>
             </div>
+            {(signatures.kikipingOleh || Number(signatures.kikipingNominal || 0) > 0) && (
+              <div>
+                <p className="text-xs text-muted-foreground font-semibold">Kikiping Oleh</p>
+                <p className="font-semibold text-zinc-800">
+                  {signatures.kikipingOleh || "-"}
+                  {Number(signatures.kikipingNominal || 0) > 0 && (
+                    <span className="font-normal text-xs text-zinc-500 ml-1">
+                      ({formatCurrency(Number(signatures.kikipingNominal))})
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
           </div>
           {signatures.catatan && (
             <div className="pt-2 border-t text-sm">

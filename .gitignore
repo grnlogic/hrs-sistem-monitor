@@ -45,3 +45,8 @@ next-env.d.ts
 /public/uploads/galeri/video/*
 !/public/uploads/galeri/foto/.gitkeep
 !/public/uploads/galeri/video/.gitkeep
+
+# sqlite databases
+/data/*.db*
+*.db
+

@@ -236,7 +236,6 @@ export const salaryAPI = {
   saveBonusPotongan: async (data: {
     gajiId: string
     karyawanId: string
-    kikipingOleh?: string | null
     bonusItems: Array<{ id?: string; judul: string; nominal: number }>
     potonganItems: Array<{ id?: string; judul: string; nominal: number; isDefault?: boolean }>
     sisaPiutang?: number | null
@@ -273,6 +272,8 @@ export const salaryAPI = {
     diketahuiOleh: string;
     dibuatOleh: string;
     catatan?: string;
+    kikipingOleh?: string | null;
+    kikipingNominal?: number | null;
     gajiIds: string[];
     piutangPlans?: Array<{
       gajiId: string;
@@ -300,6 +301,43 @@ export const salaryAPI = {
   }) => {
     const q = new URLSearchParams(params).toString();
     return apiRequest(`/gaji/rekap-nonstaff?${q}`);
+  },
+
+  getRekapList: async (company: CompanyFilter = "", page: number = 1, limit: number = 20) => {
+    const params = new URLSearchParams();
+    params.append("page", String(page));
+    params.append("limit", String(limit));
+    return apiRequest(`/gaji/rekap-nonstaff/list?${params.toString()}`, {}, company);
+  },
+
+  getRekapDetail: async (id: string) => {
+    return apiRequest(`/gaji/rekap-nonstaff/${id}/detail`);
+  },
+
+  updateBonusPotonganRekap: async (
+    gajiId: string,
+    data: {
+      bonusItems?: Array<{ id?: string; judul: string; nominal: number }>;
+      potonganItems?: Array<{ id?: string; judul: string; nominal: number }>;
+      cicilanPinjaman?: number | null;
+      bonus?: number;
+      potongan?: number;
+    }
+  ) => {
+    return apiRequest(`/gaji/${gajiId}/bonus-potongan-rekap`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteAbsensiWithRecalculate: async (absensiId: string) => {
+    return apiRequest(`/absensi/${absensiId}/dengan-recalculate`, {
+      method: "DELETE",
+    });
+  },
+
+  getRekapSlipPayload: async (rekapId: string) => {
+    return apiRequest(`/gaji/rekap-nonstaff/${rekapId}/slip-payload`);
   },
 }
 

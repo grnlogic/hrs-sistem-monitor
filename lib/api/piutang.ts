@@ -17,6 +17,16 @@ export const piutangAPI = {
     });
   },
 
+  update: async (
+    id: string,
+    data: { saldoAwal?: number; jumlahCicilan?: number }
+  ) => {
+    return apiRequest(`/piutang/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
   delete: async (id: string) => {
     return apiRequest(`/piutang/${id}`, {
       method: "DELETE",

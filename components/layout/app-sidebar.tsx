@@ -120,6 +120,12 @@ const gajiMenuItems: MenuItem[] = [
     description: "Proses & Rekap Non-Staff",
   },
   {
+    title: "Rekapan Pembayaran",
+    url: "/dashboard/salary/rekapan",
+    icon: FileText,
+    description: "Arsip & Detail Rekapan Gaji",
+  },
+  {
     title: "Piutang Karyawan",
     url: "/dashboard/salary/loans",
     icon: Banknote,

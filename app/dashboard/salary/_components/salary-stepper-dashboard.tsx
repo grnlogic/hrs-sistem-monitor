@@ -22,8 +22,6 @@ import {
   type EstimatedRow,
   type CalculatedRow,
   fixedBonusTemplate,
-  AUTO_BONUS_JUDUL,
-  AUTO_BONUS_NOMINAL,
   fixedPotonganTemplate,
   monthOptions,
   toNumber,
@@ -547,26 +545,7 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
     });
   }
 
-  /** Tambah 1 baris bonus "kikiping" (10.000) bila belum ada; idempotent. */
-  function addKikipingItem(salaryId: string) {
-    setInputsBySalaryId((prev) => {
-      const current = prev[salaryId] || buildDefaultInputState();
-      const exists = current.bonusItems.some(
-        (item) => item.judul.toLowerCase() === AUTO_BONUS_JUDUL
-      );
-      if (exists) return prev;
-      return {
-        ...prev,
-        [salaryId]: {
-          ...current,
-          bonusItems: [
-            ...current.bonusItems,
-            { judul: AUTO_BONUS_JUDUL, nominal: AUTO_BONUS_NOMINAL },
-          ],
-        },
-      };
-    });
-  }
+
 
   function updateSisaPiutang(salaryId: string, value: number | null) {
     setInputsBySalaryId((prev) => {
@@ -855,7 +834,6 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
         updateItem={updateItem}
         addItem={addItem}
         deleteItem={deleteItem}
-        addKikipingItem={addKikipingItem}
         updateSisaPiutang={updateSisaPiutang}
         phase2ReadOnly={phase2ReadOnly}
         canPhase2Action={canPhase2Action}

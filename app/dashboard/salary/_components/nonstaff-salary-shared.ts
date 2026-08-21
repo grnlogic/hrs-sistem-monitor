@@ -6,7 +6,6 @@
 import { type LokasiCode } from "@/lib/api";
 import { LOKASI_PT, NAMA_PT } from "@/lib/constants/perusahaan";
 import { Badge } from "@/components/ui/display/badge";
-import { AUTO_BONUS_JUDUL, AUTO_BONUS_NOMINAL } from "./salary-stepper-shared";
 
 export type Step = 1 | 2 | 3;
 
@@ -86,8 +85,6 @@ export type GajiPeriodIndex = Record<
 >;
 
 export type InputState = {
-  kikipingOleh?: string | null;
-  autoKikipingAllowed?: boolean;
   bonusItems: SalaryItem[];
   potonganItems: SalaryItem[];
   sisaPiutang?: number | null;
@@ -129,9 +126,7 @@ export type CalculatedSnapshot = {
 
 /* ---------- Constants ---------- */
 
-export const DEFAULT_BONUS: SalaryItem[] = [
-  { judul: AUTO_BONUS_JUDUL, nominal: AUTO_BONUS_NOMINAL },
-];
+export const DEFAULT_BONUS: SalaryItem[] = [];
 export const DEFAULT_POTONGAN: SalaryItem[] = [];
 
 /* ---------- Utilities ---------- */
@@ -141,11 +136,9 @@ export function toNumber(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function buildDefaultInputState(autoKikiping: boolean = true): InputState {
+export function buildDefaultInputState(): InputState {
   return {
-    kikipingOleh: null,
-    autoKikipingAllowed: autoKikiping,
-    bonusItems: autoKikiping ? DEFAULT_BONUS.map((item) => ({ ...item })) : [],
+    bonusItems: DEFAULT_BONUS.map((item) => ({ ...item })),
     potonganItems: DEFAULT_POTONGAN.map((item) => ({ ...item })),
     bayarMingguIni: true,
     nominalCicilan: null,

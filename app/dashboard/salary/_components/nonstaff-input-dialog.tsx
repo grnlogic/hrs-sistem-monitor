@@ -41,7 +41,6 @@ import {
   toNumber,
   CompanyBadge,
 } from "./nonstaff-salary-shared";
-import { AUTO_BONUS_JUDUL, AUTO_BONUS_NOMINAL } from "./salary-stepper-shared";
 
 type NonStaffInputDialogProps = {
   dialogOpen: boolean;
@@ -89,47 +88,15 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
     if (dialogOpen && selectedSnapshot) {
       const parentState = inputsBySalaryId[selectedSnapshot.gajiId] || buildDefaultInputState();
       const draft: InputState = JSON.parse(JSON.stringify(parentState));
-
-      // Auto-fill bonus "kikiping" (10.000) for initial/unsaved draft ONLY if autoKikipingAllowed is true
-      if (
-        !draft.isBonusSaved &&
-        draft.autoKikipingAllowed !== false &&
-        (draft.bonusItems.length === 0 ||
-          (draft.bonusItems.length === 1 &&
-            (draft.bonusItems[0].judul === "Bonus" || draft.bonusItems[0].judul === "" || !draft.bonusItems[0].judul) &&
-            Number(draft.bonusItems[0].nominal) === 0))
-      ) {
-        draft.bonusItems = [{ judul: AUTO_BONUS_JUDUL, nominal: AUTO_BONUS_NOMINAL }];
-      }
-
       setDraftState(draft);
     }
   }, [dialogOpen, selectedSnapshot, inputsBySalaryId]);
 
-  const [kikipingOlehList, setKikipingOlehList] = React.useState<string[]>([]);
-
   React.useEffect(() => {
     if (dialogOpen) {
       load();
-      salaryAPI
-        .getKikipingOlehList()
-        .then((list) => {
-          if (Array.isArray(list)) setKikipingOlehList(list);
-        })
-        .catch(() => {});
     }
   }, [dialogOpen, load]);
-
-  const kikipingOlehOptions = React.useMemo(() => {
-    const set = new Set(kikipingOlehList);
-    if (draftState.kikipingOleh && draftState.kikipingOleh.trim()) {
-      set.add(draftState.kikipingOleh.trim());
-    }
-    return Array.from(set).map((name) => ({
-      value: name,
-      label: name,
-    }));
-  }, [kikipingOlehList, draftState.kikipingOleh]);
 
 
 
@@ -498,26 +465,6 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                 >
                   <Plus className="w-3.5 h-3.5" /> Tambah Potongan
                 </Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Kikiping oleh</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1.5">
-                <label className="text-xs text-muted-foreground block">
-                  Nama penginput kikiping (opsional)
-                </label>
-                <CreatableCombobox
-                  options={kikipingOlehOptions}
-                  value={draftState.kikipingOleh || ""}
-                  disabled={!canEditSalary}
-                  placeholder="Pilih atau ketik nama penginput kikiping..."
-                  onChange={(val) =>
-                    setDraftState((prev) => ({ ...prev, kikipingOleh: val }))
-                  }
-                />
               </CardContent>
             </Card>
 

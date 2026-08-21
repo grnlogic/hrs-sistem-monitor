@@ -19,8 +19,16 @@ type NonStaffSignatureDialogProps = {
     diketahuiOleh: string;
     dibuatOleh: string;
     catatan: string;
+    kikipingOleh?: string;
+    kikipingNominal?: number;
   };
-  onSave: (signatures: { diketahuiOleh: string; dibuatOleh: string; catatan: string }) => void;
+  onSave: (signatures: {
+    diketahuiOleh: string;
+    dibuatOleh: string;
+    catatan: string;
+    kikipingOleh?: string;
+    kikipingNominal?: number;
+  }) => void;
   onCancel: () => void;
 };
 
@@ -30,18 +38,22 @@ export function NonStaffSignatureDialog(props: NonStaffSignatureDialogProps) {
   const [diketahuiOleh, setDiketahuiOleh] = useState(signatures.diketahuiOleh || "SELVIE GUSTIARINI");
   const [dibuatOleh, setDibuatOleh] = useState(signatures.dibuatOleh || "SUCI");
   const [catatan, setCatatan] = useState(signatures.catatan || "");
+  const [kikipingOleh, setKikipingOleh] = useState(signatures.kikipingOleh || "");
+  const [kikipingNominal, setKikipingNominal] = useState<number>(signatures.kikipingNominal ?? 0);
 
   // Update local states if signatures prop changes
   useEffect(() => {
     setDiketahuiOleh(signatures.diketahuiOleh || "SELVIE GUSTIARINI");
     setDibuatOleh(signatures.dibuatOleh || "SUCI");
     setCatatan(signatures.catatan || "");
+    setKikipingOleh(signatures.kikipingOleh || "");
+    setKikipingNominal(signatures.kikipingNominal ?? 0);
   }, [signatures, isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!diketahuiOleh.trim() || !dibuatOleh.trim()) return;
-    onSave({ diketahuiOleh, dibuatOleh, catatan });
+    onSave({ diketahuiOleh, dibuatOleh, catatan, kikipingOleh, kikipingNominal });
     onClose();
   };
 
@@ -86,6 +98,34 @@ export function NonStaffSignatureDialog(props: NonStaffSignatureDialogProps) {
               onChange={(e) => setDibuatOleh(e.target.value)}
               className="rounded-xl h-10 px-3 py-1"
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-zinc-600 block mb-1">
+                Kikiping Oleh (Opsional)
+              </label>
+              <Input
+                type="text"
+                placeholder="Contoh: SELVIE / JONI"
+                value={kikipingOleh}
+                onChange={(e) => setKikipingOleh(e.target.value)}
+                className="rounded-xl h-10 px-3 py-1 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-zinc-600 block mb-1">
+                Nominal Kikiping (Opsional)
+              </label>
+              <Input
+                type="number"
+                min={0}
+                placeholder="0"
+                value={kikipingNominal || 0}
+                onChange={(e) => setKikipingNominal(Number(e.target.value || 0))}
+                className="rounded-xl h-10 px-3 py-1 text-sm"
+              />
+            </div>
           </div>
 
           <div>

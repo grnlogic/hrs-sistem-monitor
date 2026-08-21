@@ -36,6 +36,8 @@ type NonStaffStep2Props = {
   allDone: boolean;
   setStep: (step: 2 | 3) => void;
   onMarkAllDone: () => void;
+  /** Daftar nama karyawan yang di-skip ke Fase 2 karena statusnya sudah "Dibayar" di lokasi ini */
+  paidSkippedEmployees: string[];
 };
 
 export function NonStaffStep2BonusPotongan(props: NonStaffStep2Props) {
@@ -48,6 +50,7 @@ export function NonStaffStep2BonusPotongan(props: NonStaffStep2Props) {
     allDone,
     setStep,
     onMarkAllDone,
+    paidSkippedEmployees,
   } = props;
 
   return (
@@ -56,6 +59,21 @@ export function NonStaffStep2BonusPotongan(props: NonStaffStep2Props) {
         <CardTitle>Fase 2. Input Bonus &amp; Potongan</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Panel: daftar karyawan yang di-skip karena statusnya sudah Dibayar */}
+        {paidSkippedEmployees.length > 0 && (
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3">
+            <p className="text-xs font-semibold text-emerald-800 mb-1.5">
+              {paidSkippedEmployees.length} karyawan tidak ditarik ke Fase ini — sudah berstatus <span className="font-bold">Dibayar</span> di periode &amp; lokasi ini:
+            </p>
+            <ul className="list-disc list-inside space-y-0.5">
+              {paidSkippedEmployees.map((nama, idx) => (
+                <li key={idx} className="text-xs text-emerald-700">
+                  {nama}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="overflow-x-auto rounded-md border">
           <Table>
             <TableHeader>
@@ -134,7 +152,7 @@ export function NonStaffStep2BonusPotongan(props: NonStaffStep2Props) {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {bonusDetails.length === 0 && !input.kikipingOleh ? (
+                        {bonusDetails.length === 0 ? (
                           <span className="text-muted-foreground">-</span>
                         ) : (
                           <div className="space-y-1 text-xs">
@@ -148,14 +166,6 @@ export function NonStaffStep2BonusPotongan(props: NonStaffStep2Props) {
                                 </span>
                               </p>
                             ))}
-                            {input.kikipingOleh && (
-                              <p className="mt-1 text-[11px] text-muted-foreground italic border-t pt-1">
-                                Kikiping oleh:{" "}
-                                <span className="font-semibold text-zinc-700 not-italic">
-                                  {input.kikipingOleh}
-                                </span>
-                              </p>
-                            )}
                           </div>
                         )}
                       </TableCell>

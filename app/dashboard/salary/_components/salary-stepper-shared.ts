@@ -86,11 +86,7 @@ export const fixedPotonganTemplate: SalaryItem[] = [
   { judul: "Warung", nominal: 0, isDefault: true },
 ];
 
-/* Bonus otomatis "kikiping": flat 10.000 untuk semua karyawan, semua divisi.
-   Ditambahkan otomatis (1 baris) saat dialog input bonus dibuka; admin boleh
-   mengedit nominal atau menghapus barisnya. */
-export const AUTO_BONUS_JUDUL = "kikiping";
-export const AUTO_BONUS_NOMINAL = 10000;
+
 
 export const monthOptions = [
   { value: 1, label: "Januari" },
