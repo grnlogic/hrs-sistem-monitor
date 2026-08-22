@@ -303,11 +303,21 @@ export const salaryAPI = {
     return apiRequest(`/gaji/rekap-nonstaff?${q}`);
   },
 
-  getRekapList: async (company: CompanyFilter = "", page: number = 1, limit: number = 20) => {
+  getRekapList: async (company: CompanyFilter = "", page: number = 1, limit: number = 20, includeHidden: boolean = false) => {
     const params = new URLSearchParams();
     params.append("page", String(page));
     params.append("limit", String(limit));
+    if (includeHidden) {
+      params.append("includeHidden", "true");
+    }
     return apiRequest(`/gaji/rekap-nonstaff/list?${params.toString()}`, {}, company);
+  },
+
+  toggleHideRekap: async (id: string, hidden: boolean) => {
+    return apiRequest(`/gaji/rekap-nonstaff/${id}/hide`, {
+      method: "PATCH",
+      body: JSON.stringify({ hidden }),
+    });
   },
 
   getRekapDetail: async (id: string) => {

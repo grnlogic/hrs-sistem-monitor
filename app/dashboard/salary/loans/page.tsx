@@ -54,6 +54,7 @@ import {
   CheckCircle2,
   ChevronRight,
   RefreshCw,
+  X,
 } from "lucide-react";
 
 type Karyawan = {
@@ -101,6 +102,17 @@ export default function LoansPage() {
   const [installments, setInstallments] = useState<PiutangCicilan[]>([]);
   const [loadingInstallments, setLoadingInstallments] = useState(false);
 
+  // Search Loan List Filter State
+  const [loanListSearchTerm, setLoanListSearchTerm] = useState("");
+
+  // Edit Cicilan Dialog State (Tanggal & Nominal)
+  const [editingCicilan, setEditingCicilan] = useState<PiutangCicilan | null>(null);
+  const [cicilanEditData, setCicilanEditData] = useState({
+    tanggal: "",
+    nominal: "",
+  });
+  const [submittingCicilanEdit, setSubmittingCicilanEdit] = useState(false);
+
   // New Loan Form Dialog State
   const [isNewDialogOpen, setIsNewDialogOpen] = useState(false);
   const [newLoanData, setNewLoanData] = useState({
@@ -126,6 +138,70 @@ export default function LoansPage() {
   // UI state for error / success message
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+
+  const handleOpenEditCicilan = (inst: PiutangCicilan) => {
+    setEditingCicilan(inst);
+    setCicilanEditData({
+      tanggal: inst.tanggal ? inst.tanggal.slice(0, 10) : new Date().toISOString().slice(0, 10),
+      nominal: String(inst.jumlahDipotong),
+    });
+  };
+
+  const handleSaveCicilanEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCicilan) return;
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    const numNominal = Number(cicilanEditData.nominal);
+    if (isNaN(numNominal) || numNominal <= 0) {
+      setErrorMsg("Nominal cicilan harus berupa angka lebih besar dari 0");
+      return;
+    }
+
+    try {
+      setSubmittingCicilanEdit(true);
+      await piutangAPI.updateCicilan(editingCicilan.id, {
+        tanggal: cicilanEditData.tanggal,
+        nominal: numNominal,
+      });
+      setSuccessMsg("Catatan cicilan berhasil diperbarui!");
+      setEditingCicilan(null);
+      await fetchLoans();
+      if (selectedLoan) {
+        await loadInstallments(selectedLoan.id);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Gagal mengubah catatan cicilan");
+    } finally {
+      setSubmittingCicilanEdit(false);
+    }
+  };
+
+  const handleDeleteCicilan = async () => {
+    if (!editingCicilan) return;
+    if (
+      !window.confirm(
+        "Apakah Anda yakin ingin menghapus catatan cicilan ini? Sisa saldo piutang akan disesuaikan kembali."
+      )
+    )
+      return;
+
+    try {
+      setSubmittingCicilanEdit(true);
+      await piutangAPI.deleteCicilan(editingCicilan.id);
+      setSuccessMsg("Catatan cicilan berhasil dihapus!");
+      setEditingCicilan(null);
+      await fetchLoans();
+      if (selectedLoan) {
+        await loadInstallments(selectedLoan.id);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Gagal menghapus catatan cicilan");
+    } finally {
+      setSubmittingCicilanEdit(false);
+    }
+  };
 
   const fetchLoans = async () => {
     try {
@@ -292,6 +368,14 @@ export default function LoansPage() {
   const resolvedLoans = loans.filter((l) => !l.aktif);
   const totalOutstanding = activeLoans.reduce((sum, l) => sum + l.sisaSaldo, 0);
 
+  const filteredLoans = loans.filter((loan) => {
+    if (!loanListSearchTerm.trim()) return true;
+    const term = loanListSearchTerm.toLowerCase();
+    const empName = (loan.karyawan?.namaLengkap || "").toLowerCase();
+    const dept = (loan.karyawan?.departemen || "").toLowerCase();
+    return empName.includes(term) || dept.includes(term);
+  });
+
   return (
     <div className="p-6 space-y-6 bg-zinc-50/50 min-h-[calc(100vh-4rem)]">
       {/* Header Panel */}
@@ -413,14 +497,26 @@ export default function LoansPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Loan Table list */}
         <div className="lg:col-span-7 bg-white rounded-2xl shadow-sm border border-zinc-100 overflow-hidden">
-          <div className="p-5 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
+          <div className="p-5 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-50/50">
             <h2 className="font-semibold text-zinc-950 flex items-center gap-2">
               <Building2 className="h-4 w-4 text-zinc-500" />
               Daftar Piutang Berjalan
             </h2>
-            <span className="text-xs font-medium bg-zinc-100 text-zinc-600 px-2.5 py-1 rounded-full">
-              {loans.length} Record
-            </span>
+            <div className="flex items-center gap-2">
+              <div className="relative w-full sm:w-48">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+                <Input
+                  type="text"
+                  placeholder="Cari nama karyawan..."
+                  value={loanListSearchTerm}
+                  onChange={(e) => setLoanListSearchTerm(e.target.value)}
+                  className="pl-8 h-8 text-xs rounded-xl border-zinc-200"
+                />
+              </div>
+              <span className="text-xs font-medium bg-zinc-100 text-zinc-600 px-2.5 py-1 rounded-full whitespace-nowrap">
+                {filteredLoans.length} Record
+              </span>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -445,14 +541,14 @@ export default function LoansPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ) : loans.length === 0 ? (
+                ) : filteredLoans.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-12 text-zinc-400">
                       Tidak ada data piutang ditemukan.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  loans.map((loan) => (
+                  filteredLoans.map((loan) => (
                     <TableRow
                       key={loan.id}
                       onClick={() => handleSelectLoan(loan)}
@@ -529,8 +625,8 @@ export default function LoansPage() {
           </div>
         </div>
 
-        {/* Right Column: Loan Detail Panel & Manual Payment */}
-        <div className="lg:col-span-5 space-y-6">
+        {/* Right Column: Sticky Loan Detail Panel & Manual Payment */}
+        <div className="lg:col-span-5 space-y-6 sticky top-4 self-start">
           {selectedLoan ? (
             <div className="bg-white rounded-2xl shadow-sm border border-zinc-100 overflow-hidden">
               {/* Header Profile */}
@@ -665,18 +761,19 @@ export default function LoansPage() {
                           <TableHead className="text-xs py-2">Nominal</TableHead>
                           <TableHead className="text-xs py-2">Metode</TableHead>
                           <TableHead className="text-xs py-2 text-right">Sisa</TableHead>
+                          <TableHead className="text-xs py-2 text-center w-12">Aksi</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {loadingInstallments ? (
                           <TableRow>
-                            <TableCell colSpan={4} className="text-center py-6 text-zinc-400 text-xs">
+                            <TableCell colSpan={5} className="text-center py-6 text-zinc-400 text-xs">
                               Memuat riwayat...
                             </TableCell>
                           </TableRow>
                         ) : installments.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={4} className="text-center py-6 text-zinc-400 text-xs">
+                            <TableCell colSpan={5} className="text-center py-6 text-zinc-400 text-xs">
                               Belum ada pembayaran cicilan dicatat.
                             </TableCell>
                           </TableRow>
@@ -684,11 +781,13 @@ export default function LoansPage() {
                           installments.map((inst) => (
                             <TableRow key={inst.id} className="hover:bg-zinc-50/50">
                               <TableCell className="text-xs py-2">
-                                {new Date(inst.tanggal).toLocaleDateString("id-ID", {
-                                  day: "2-digit",
-                                  month: "short",
-                                  year: "numeric",
-                                })}
+                                <span>
+                                  {new Date(inst.tanggal).toLocaleDateString("id-ID", {
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "numeric",
+                                  })}
+                                </span>
                               </TableCell>
                               <TableCell className="text-xs font-medium py-2">
                                 {formatCurrency(inst.jumlahDipotong)}
@@ -706,6 +805,17 @@ export default function LoansPage() {
                               </TableCell>
                               <TableCell className="text-xs text-right py-2 font-medium">
                                 {formatCurrency(inst.sisaSaldoSetelah)}
+                              </TableCell>
+                              <TableCell className="text-xs text-center py-2">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => handleOpenEditCicilan(inst)}
+                                  className="h-6 w-6 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded mx-auto"
+                                  title="Edit Catatan Cicilan"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
                               </TableCell>
                             </TableRow>
                           ))
@@ -830,6 +940,82 @@ export default function LoansPage() {
               >
                 {submittingNew ? "Mendaftar..." : "Daftarkan Pinjaman"}
               </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Cicilan Dialog (Tanggal & Nominal) */}
+      <Dialog open={Boolean(editingCicilan)} onOpenChange={(open) => !open && setEditingCicilan(null)}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5 text-amber-600" />
+              Edit Catatan Cicilan
+            </DialogTitle>
+            <DialogDescription>
+              Ubah tanggal pembayaran atau nominal potongan cicilan ini. Sisa saldo piutang akan dihitung ulang secara otomatis.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveCicilanEdit} className="space-y-4 pt-2">
+            <div>
+              <label className="text-xs font-semibold text-zinc-600 block mb-1">
+                Tanggal Pembayaran
+              </label>
+              <Input
+                type="date"
+                required
+                value={cicilanEditData.tanggal}
+                onChange={(e) => setCicilanEditData({ ...cicilanEditData, tanggal: e.target.value })}
+                className="rounded-xl h-10"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-zinc-600 block mb-1">
+                Nominal Potongan Cicilan (Rp)
+              </label>
+              <Input
+                type="number"
+                min={1}
+                required
+                value={cicilanEditData.nominal}
+                onChange={(e) => setCicilanEditData({ ...cicilanEditData, nominal: e.target.value })}
+                className="rounded-xl h-10"
+              />
+              <p className="text-[11px] text-zinc-500 mt-1">
+                Perubahan nominal akan menyesuaikan sisa saldo piutang secara otomatis.
+              </p>
+            </div>
+
+            <DialogFooter className="pt-4 border-t flex justify-between items-center">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleDeleteCicilan}
+                className="rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 text-xs font-semibold"
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                Hapus Cicilan
+              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setEditingCicilan(null)}
+                  className="rounded-xl text-zinc-500"
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={submittingCicilanEdit}
+                  className="bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl font-semibold shadow-sm"
+                >
+                  {submittingCicilanEdit ? "Menyimpan..." : "Simpan Perubahan"}
+                </Button>
+              </div>
             </DialogFooter>
           </form>
         </DialogContent>

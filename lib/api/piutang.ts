@@ -46,4 +46,20 @@ export const piutangAPI = {
       body: JSON.stringify(data),
     });
   },
+
+  updateCicilan: async (
+    cicilanId: string,
+    data: { tanggal?: string; nominal?: number }
+  ) => {
+    return apiRequest(`/piutang/cicilan/${cicilanId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteCicilan: async (cicilanId: string) => {
+    return apiRequest(`/piutang/cicilan/${cicilanId}`, {
+      method: "DELETE",
+    });
+  },
 };

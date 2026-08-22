@@ -53,6 +53,8 @@ import {
   Plus,
   Banknote,
   FileBarChart2,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 type RekapHeader = {
@@ -63,6 +65,7 @@ type RekapHeader = {
   dibuatOleh: string;
   diketahuiOleh: string;
   catatan?: string;
+  hidden?: boolean;
   createdAt: string;
   updatedAt: string;
   jumlahKaryawan: number;
@@ -121,6 +124,7 @@ type ItemRowState = {
 
 export default function RekapanPage() {
   const [company, setCompany] = useState<CompanyFilter>("");
+  const [includeHidden, setIncludeHidden] = useState<boolean>(false);
   const [rekapanList, setRekapanList] = useState<RekapHeader[]>([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, totalPages: 1, totalCount: 0 });
   const [loading, setLoading] = useState<boolean>(true);
@@ -159,7 +163,7 @@ export default function RekapanPage() {
     try {
       setLoading(true);
       setErrorMsg("");
-      const res = await salaryAPI.getRekapList(company, pagination.page, pagination.limit);
+      const res = await salaryAPI.getRekapList(company, pagination.page, pagination.limit, includeHidden);
       setRekapanList(res.items || []);
       setPagination((prev) => ({
         ...prev,
@@ -172,7 +176,20 @@ export default function RekapanPage() {
     } finally {
       setLoading(false);
     }
-  }, [company, pagination.page, pagination.limit]);
+  }, [company, pagination.page, pagination.limit, includeHidden]);
+
+  const handleToggleHide = async (e: React.MouseEvent, rekapId: string, currentHidden: boolean) => {
+    e.stopPropagation();
+    try {
+      setErrorMsg("");
+      await salaryAPI.toggleHideRekap(rekapId, !currentHidden);
+      setSuccessMsg(!currentHidden ? "Rekapan berhasil disembunyikan" : "Rekapan berhasil ditampilkan kembali");
+      fetchRekapList();
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || "Gagal mengubah status rekapan");
+    }
+  };
 
   const fetchRekapDetail = useCallback(async (id: string) => {
     try {
@@ -553,8 +570,22 @@ export default function RekapanPage() {
               : "Daftar arsip batch rekapan pembayaran gaji non-staff per periode dan lokasi."}
           </p>
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          {!selectedRekapId && <CompanySwitcher value={company} onChange={setCompany} />}
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          {!selectedRekapId && (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+              <CompanySwitcher value={company} onChange={setCompany} />
+              <label className="flex items-center gap-2 text-xs font-semibold text-zinc-700 bg-zinc-100 hover:bg-zinc-200/80 p-2 px-3 rounded-xl cursor-pointer transition-colors select-none">
+                <input
+                  type="checkbox"
+                  checked={includeHidden}
+                  onChange={(e) => setIncludeHidden(e.target.checked)}
+                  className="rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500 h-4 w-4"
+                />
+                <EyeOff className="h-3.5 w-3.5 text-zinc-500" />
+                <span>Tampilkan yang disembunyikan</span>
+              </label>
+            </div>
+          )}
           <Button
             variant="outline"
             size="icon"
@@ -638,37 +669,73 @@ export default function RekapanPage() {
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {rekapanList.map((rekap) => (
-                <Card
-                  key={rekap.id}
-                  onClick={() => handleSelectRekap(rekap)}
-                  className="rounded-2xl border-zinc-100 shadow-sm hover:shadow-md transition-all cursor-pointer bg-white group overflow-hidden"
-                >
-                  <CardHeader className="p-5 pb-3 border-b border-zinc-50 bg-zinc-50/40 flex flex-row items-center justify-between space-y-0">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <Badge className="bg-zinc-900 text-white hover:bg-zinc-900 text-[10px] font-bold px-2.5 py-0.5 rounded-full">
-                          {rekap.lokasi}
-                        </Badge>
-                        <span className="text-xs font-semibold text-zinc-500">
-                          #{rekap.id}
-                        </span>
+              {rekapanList.map((rekap) => {
+                const isHidden = Boolean(rekap.hidden);
+                return (
+                  <Card
+                    key={rekap.id}
+                    onClick={() => handleSelectRekap(rekap)}
+                    className={`rounded-2xl shadow-sm transition-all cursor-pointer group overflow-hidden ${
+                      isHidden
+                        ? "bg-zinc-100/70 border-dashed border-zinc-300 opacity-75 hover:opacity-100"
+                        : "bg-white border-zinc-100 hover:shadow-md"
+                    }`}
+                  >
+                    <CardHeader className="p-5 pb-3 border-b border-zinc-50 bg-zinc-50/40 flex flex-row items-center justify-between space-y-0">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge className="bg-zinc-900 text-white hover:bg-zinc-900 text-[10px] font-bold px-2.5 py-0.5 rounded-full">
+                            {rekap.lokasi}
+                          </Badge>
+                          <span className="text-xs font-semibold text-zinc-500">
+                            #{rekap.id}
+                          </span>
+                          {isHidden && (
+                            <Badge variant="outline" className="bg-amber-100/90 text-amber-900 border-amber-300 text-[10px] font-semibold flex items-center gap-1 px-2 py-0">
+                              <EyeOff className="h-3 w-3" />
+                              Disembunyikan
+                            </Badge>
+                          )}
+                        </div>
+                        <CardTitle className="text-base font-bold text-zinc-900 group-hover:text-amber-600 transition-colors pt-1">
+                          {new Date(rekap.periodeAwal).toLocaleDateString("id-ID", {
+                            day: "numeric",
+                            month: "short",
+                          })}{" "}
+                          -{" "}
+                          {new Date(rekap.periodeAkhir).toLocaleDateString("id-ID", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </CardTitle>
                       </div>
-                      <CardTitle className="text-base font-bold text-zinc-900 group-hover:text-amber-600 transition-colors pt-1">
-                        {new Date(rekap.periodeAwal).toLocaleDateString("id-ID", {
-                          day: "numeric",
-                          month: "short",
-                        })}{" "}
-                        -{" "}
-                        {new Date(rekap.periodeAkhir).toLocaleDateString("id-ID", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </CardTitle>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-zinc-400 group-hover:translate-x-1 transition-transform" />
-                  </CardHeader>
+                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        {isHidden ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => handleToggleHide(e, rekap.id, true)}
+                            className="h-7 text-[11px] gap-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200 rounded-lg px-2"
+                            title="Tampilkan Kembali"
+                          >
+                            <Eye className="h-3.5 w-3.5 text-emerald-600" />
+                            <span>Tampilkan lagi</span>
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => handleToggleHide(e, rekap.id, false)}
+                            className="h-7 w-7 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            title="Sembunyikan Rekapan"
+                          >
+                            <EyeOff className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <ChevronRight className="h-5 w-5 text-zinc-400 group-hover:translate-x-1 transition-transform ml-1" />
+                      </div>
+                    </CardHeader>
 
                   <CardContent className="p-5 space-y-4">
                     <div className="grid grid-cols-2 gap-3 text-xs">
@@ -700,7 +767,8 @@ export default function RekapanPage() {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+              );
+            })}
             </div>
           )}
         </div>

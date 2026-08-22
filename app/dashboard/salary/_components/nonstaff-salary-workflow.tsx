@@ -743,6 +743,8 @@ export function NonStaffSalaryWorkflow() {
 
       const exactRowByKaryawanId: Record<string, { id: string; periodeAwal: string; periodeAkhir: string; statusPembayaran?: string }> = {};
       const fallbackRowByKaryawanId: Record<string, { id: string; periodeAwal: string; periodeAkhir: string; statusPembayaran?: string }> = {};
+      const allGajiIdsByKaryawanId: Record<string, string[]> = {};
+
       generatedRows.forEach((row: any) => {
         const karyawanId = String(row.karyawan?.id || row.karyawanId || "");
         const departemen = String(row.karyawan?.departemen || "-");
@@ -772,9 +774,23 @@ export function NonStaffSalaryWorkflow() {
         const isWithinSelectedRange = rowStart >= selectedStart && rowEnd <= selectedEnd;
         const isExactRange = rowStart === selectedStart && rowEnd === selectedEnd;
         const statusPembayaran = row.statusPembayaran || row.status_pembayaran || "";
+
+        if (!isWithinSelectedRange && !isExactRange) {
+          return;
+        }
+
+        // Kumpulkan SEMUA ID gaji harian karyawan yang lolos filter lokasi & periode ini
+        if (!allGajiIdsByKaryawanId[karyawanId]) {
+          allGajiIdsByKaryawanId[karyawanId] = [];
+        }
+        const strId = String(row.id);
+        if (!allGajiIdsByKaryawanId[karyawanId].includes(strId)) {
+          allGajiIdsByKaryawanId[karyawanId].push(strId);
+        }
+
         if (isExactRange) {
           exactRowByKaryawanId[karyawanId] = {
-            id: String(row.id),
+            id: strId,
             periodeAwal: rowStart,
             periodeAkhir: rowEnd,
             statusPembayaran,
@@ -782,14 +798,10 @@ export function NonStaffSalaryWorkflow() {
           return;
         }
 
-        if (!isWithinSelectedRange) {
-          return;
-        }
-
         const existing = fallbackRowByKaryawanId[karyawanId];
         if (!existing || rowEnd > existing.periodeAkhir || (rowEnd === existing.periodeAkhir && rowStart > existing.periodeAwal)) {
           fallbackRowByKaryawanId[karyawanId] = {
-            id: String(row.id),
+            id: strId,
             periodeAwal: rowStart,
             periodeAkhir: rowEnd,
             statusPembayaran,
@@ -835,9 +847,11 @@ export function NonStaffSalaryWorkflow() {
           }
 
           const gajiPokok = Math.round(review.hariEfektif * review.upahHarian);
+          const employeeGajiIds = allGajiIdsByKaryawanId[review.karyawanId] || [matchedRow.id];
 
           return {
             gajiId: matchedRow.id,
+            gajiIds: employeeGajiIds,
             karyawanId: review.karyawanId,
             nama: review.nama,
             divisi: review.divisi,
@@ -1388,6 +1402,14 @@ export function NonStaffSalaryWorkflow() {
         type: "loading",
       });
 
+      const flattenedGajiIds = Array.from(
+        new Set(
+          snapshotRows.flatMap((r) =>
+            r.gajiIds && r.gajiIds.length > 0 ? r.gajiIds : [r.gajiId]
+          )
+        )
+      );
+
       const result = await salaryAPI.saveNonStaffRekap({
         periodeAwal: toApiDate(startDate),
         periodeAkhir: toApiDate(endDate),
@@ -1397,7 +1419,7 @@ export function NonStaffSalaryWorkflow() {
         catatan: signatures.catatan,
         kikipingOleh: signatures.kikipingOleh,
         kikipingNominal: signatures.kikipingNominal,
-        gajiIds: snapshotRows.map((r) => r.gajiId),
+        gajiIds: flattenedGajiIds,
         // Plan cicilan piutang per karyawan (override nominal, skip, uang
         // pribadi) dari dialog Fase 2 — dieksekusi FINAL di endpoint rekap.
         piutangPlans: snapshotRows.map((r) => {

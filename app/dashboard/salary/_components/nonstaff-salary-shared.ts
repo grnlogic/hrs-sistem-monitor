@@ -62,6 +62,7 @@ export type AttendanceSummary = {
 
 export type SnapshotRow = {
   gajiId: string;
+  gajiIds?: string[];
   karyawanId: string;
   nama: string;
   divisi: string;
