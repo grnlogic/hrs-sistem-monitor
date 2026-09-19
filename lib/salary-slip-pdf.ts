@@ -442,13 +442,20 @@ function measureNonStaffSlipWidth(doc: any, payload: NonStaffSlipExportPayload):
   // Value column widths — measure actual rupiah strings
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.0);
+  const resolvedHariEfektif = payload.hariEfektif ?? payload.totalEffectiveDays ?? 0;
+  const resolvedUpahHarian = payload.upahHarian ?? payload.dailyRate ?? 0;
+  const resolvedGajiBersih =
+    payload.gajiBersih ??
+    payload.netSalary ??
+    Math.max(0, Number(payload.gajiPokok || 0) + Number(payload.totalBonus || 0) - Number(payload.totalPotongan || 0));
+
   const valueCandidates = [
     formatRupiah(payload.gajiPokok),
     formatRupiah(payload.totalBonus),
     formatRupiah(payload.totalPotongan),
-    formatRupiah(payload.gajiBersih),
-    formatRupiah(payload.upahHarian),
-    String(payload.hariEfektif),
+    formatRupiah(resolvedGajiBersih),
+    formatRupiah(resolvedUpahHarian),
+    String(resolvedHariEfektif),
     ...safeItems(payload.bonusItems).map((i) => formatRupiah(i.nominal)),
     ...safeItems(payload.potonganItems).map((i) => formatRupiah(i.nominal)),
   ];
@@ -619,14 +626,19 @@ export type NonStaffSlipExportPayload = {
   companyLocation: LokasiCode | string;
   periodStart: string;
   periodEnd: string;
-  nama: string;
-  divisi: string;
-  hariEfektif: number;
-  upahHarian: number;
+  nama?: string;
+  employeeName?: string;
+  divisi?: string;
+  division?: string;
+  hariEfektif?: number;
+  totalEffectiveDays?: number;
+  upahHarian?: number;
+  dailyRate?: number;
   gajiPokok: number;
   totalBonus: number;
   totalPotongan: number;
-  gajiBersih: number;
+  gajiBersih?: number;
+  netSalary?: number;
   bonusItems: Array<{ judul: string; nominal: number }>;
   potonganItems: Array<{ judul: string; nominal: number }>;
   sisaPiutang?: number | null;
@@ -778,10 +790,22 @@ async function drawNonStaffSlip(
     cursorY += NS_ROW_GAP;
   };
 
+  const resolvedNama = payload.nama || payload.employeeName || "Karyawan";
+  const resolvedDivisi = payload.divisi || payload.division || "-";
+  const resolvedHariEfektif = payload.hariEfektif ?? payload.totalEffectiveDays ?? 0;
+  const resolvedUpahHarian = payload.upahHarian ?? payload.dailyRate ?? 0;
+  const resolvedGajiPokok = Number(payload.gajiPokok || 0);
+  const resolvedTotalBonus = Number(payload.totalBonus || 0);
+  const resolvedTotalPotongan = Number(payload.totalPotongan || 0);
+  const resolvedGajiBersih =
+    payload.gajiBersih ??
+    payload.netSalary ??
+    Math.max(0, resolvedGajiPokok + resolvedTotalBonus - resolvedTotalPotongan);
+
   // Info section
   cursorY += 1.5; // small gap before info block
-  linePair("Nama", truncateText(payload.nama, 22));
-  linePair("Divisi", truncateText(payload.divisi || "-", 20));
+  linePair("Nama", truncateText(resolvedNama, 22));
+  linePair("Divisi", truncateText(resolvedDivisi || "-", 20));
   linePair("Status", "Non-Staff");
 
   // Attendance section
@@ -791,8 +815,8 @@ async function drawNonStaffSlip(
       linePair(`Hari (${det.divisi})`, `${det.hariEfektif} hr @ ${formatRupiah(det.upahHarian)}`);
     }
   } else {
-    linePair("Hari Efektif", String(payload.hariEfektif));
-    linePair("Upah Harian", formatRupiah(payload.upahHarian));
+    linePair("Hari Efektif", String(resolvedHariEfektif));
+    linePair("Upah Harian", formatRupiah(resolvedUpahHarian));
   }
 
   // Pendapatan
@@ -804,11 +828,11 @@ async function drawNonStaffSlip(
   cursorY += NS_SEC_GAP;
 
   doc.setTextColor(20, 20, 20);
-  linePair("Gaji Pokok", formatRupiah(payload.gajiPokok));
+  linePair("Gaji Pokok", formatRupiah(resolvedGajiPokok));
   for (const item of bonusItems) {
     linePair(truncateText(item.judul, 18), formatRupiah(item.nominal));
   }
-  linePair("Total", formatRupiah(payload.gajiPokok + payload.totalBonus), true);
+  linePair("Total", formatRupiah(resolvedGajiPokok + resolvedTotalBonus), true);
 
   // Potongan
   cursorY += NS_SEC_GAP;
@@ -822,7 +846,7 @@ async function drawNonStaffSlip(
   for (const item of potonganItems) {
     linePair(truncateText(item.judul, 18), formatRupiah(item.nominal));
   }
-  linePair("Total", formatRupiah(payload.totalPotongan), true);
+  linePair("Total", formatRupiah(resolvedTotalPotongan), true);
 
   // Thin divider before GAJI BERSIH
   cursorY += 1.0;
@@ -830,7 +854,7 @@ async function drawNonStaffSlip(
   doc.setLineWidth(0.15);
   doc.line(leftX, cursorY - 0.5, rightEdge, cursorY - 0.5);
 
-  linePair("GAJI BERSIH", formatRupiah(payload.gajiBersih), true);
+  linePair("GAJI BERSIH", formatRupiah(resolvedGajiBersih), true);
 
   if (payload.sisaPiutang && payload.sisaPiutang > 0) {
     linePair("Sisa Piutang", formatRupiah(payload.sisaPiutang), false);

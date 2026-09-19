@@ -551,25 +551,59 @@ export default function RekapanPage() {
     try {
       setExporting(true);
       const res = await salaryAPI.getRekapSlipPayload(selectedRekapId);
-      let payloads = res.payloads || [];
+      let rawPayloads = res.payloads || [];
 
       if (isPartial && targetGajiList) {
         const allowedGajiIds = new Set(targetGajiList.map((g) => String(g.id)));
         const allowedKaryawanIds = new Set(targetGajiList.map((g) => String(g.karyawanId)));
-        payloads = payloads.filter(
+        rawPayloads = rawPayloads.filter(
           (p: any) =>
             allowedGajiIds.has(String(p.gajiId)) ||
             allowedKaryawanIds.has(String(p.karyawanId))
         );
       }
 
-      if (payloads.length === 0) {
+      if (rawPayloads.length === 0) {
         setErrorMsg("Tidak ada data slip yang tersedia untuk direkap ke PDF.");
         return;
       }
 
       const periodeAwalStr = rekapDetail.periodeAwal.slice(0, 10);
       const periodeAkhirStr = rekapDetail.periodeAkhir.slice(0, 10);
+
+      const payloads = rawPayloads.map((p: any) => {
+        const gajiPokok = Number(p.gajiPokok || 0);
+        const totalBonus = Number(p.totalBonus || 0);
+        const totalPotongan = Number(p.totalPotongan || 0);
+        const hariEfektif = Number(p.hariEfektif ?? p.totalEffectiveDays ?? 0);
+        const upahHarian = Number(p.upahHarian ?? p.dailyRate ?? 0);
+        const gajiBersih = Number(
+          p.gajiBersih ?? p.netSalary ?? Math.max(0, gajiPokok + totalBonus - totalPotongan)
+        );
+        return {
+          ...p,
+          companyLocation: p.companyLocation || p.location || rekapDetail.lokasi,
+          periodStart: p.periodStart || p.startDate || periodeAwalStr,
+          periodEnd: p.periodEnd || p.endDate || periodeAkhirStr,
+          nama: p.nama || p.employeeName || "Karyawan",
+          employeeName: p.employeeName || p.nama || "Karyawan",
+          divisi: p.divisi || p.division || "-",
+          division: p.division || p.divisi || "-",
+          hariEfektif,
+          totalEffectiveDays: hariEfektif,
+          upahHarian,
+          dailyRate: upahHarian,
+          gajiPokok,
+          totalBonus,
+          totalPotongan,
+          gajiBersih,
+          netSalary: gajiBersih,
+          bonusItems: p.bonusItems || [],
+          potonganItems: p.potonganItems || [],
+          sisaPiutang: p.sisaPiutang ?? null,
+        };
+      });
+
       const fileName = isPartial
         ? `slip-gaji-nonstaff-${periodeAwalStr}_${periodeAkhirStr}-terpilih-${payloads.length}-karyawan.pdf`
         : res.fileName || `slip-gaji-nonstaff-${periodeAwalStr}_${periodeAkhirStr}.pdf`;
