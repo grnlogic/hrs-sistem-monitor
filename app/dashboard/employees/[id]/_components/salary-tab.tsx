@@ -20,7 +20,11 @@ import {
   formatPeriodeGaji,
   getSalaryRowKey,
   getStatusBadge,
+  getLokasiBadge,
+  getSalaryEffectiveLocation,
 } from "./utils";
+import { AlertTriangle } from "lucide-react";
+import { Badge } from "@/components/ui/display/badge";
 
 interface SalaryTabProps {
   filteredSalaryHistory: any[];
@@ -36,6 +40,8 @@ interface SalaryTabProps {
     bonusItems: Array<{ judul: string; nominal: number }>;
     potonganItems: Array<{ judul: string; nominal: number }>;
   };
+  salaryLocationFilter?: string;
+  setSalaryLocationFilter?: (val: string) => void;
 }
 
 export function SalaryTab({
@@ -49,6 +55,8 @@ export function SalaryTab({
   setSelectedExportedSalaryKey,
   selectedSalary,
   selectedSalaryRincian,
+  salaryLocationFilter = "ALL",
+  setSalaryLocationFilter,
 }: SalaryTabProps) {
   return (
     <Card>
@@ -59,7 +67,7 @@ export function SalaryTab({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-zinc-600">Dari tanggal</label>
             <Input
@@ -76,6 +84,19 @@ export function SalaryTab({
               onChange={(event) => setSalaryRangeEnd(event.target.value)}
             />
           </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-zinc-600">Filter Lokasi</label>
+            <select
+              className="h-9 w-full rounded border border-zinc-300 bg-white px-2 text-xs font-medium text-zinc-800"
+              value={salaryLocationFilter}
+              onChange={(event) => setSalaryLocationFilter && setSalaryLocationFilter(event.target.value)}
+            >
+              <option value="ALL">Semua Lokasi</option>
+              <option value="PJP">PJP</option>
+              <option value="SP">SP</option>
+              <option value="PRIMA">PRIMA</option>
+            </select>
+          </div>
           <div className="flex items-end">
             <Button
               type="button"
@@ -83,6 +104,7 @@ export function SalaryTab({
               onClick={() => {
                 setSalaryRangeStart("");
                 setSalaryRangeEnd("");
+                if (setSalaryLocationFilter) setSalaryLocationFilter("ALL");
               }}
             >
               Reset Range
@@ -101,21 +123,24 @@ export function SalaryTab({
               <TableHeader>
                 <TableRow>
                   <TableHead>Periode</TableHead>
+                  <TableHead>Lokasi Gaji</TableHead>
                   <TableHead>Gaji Pokok</TableHead>
                   <TableHead>Gaji Bersih</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Status &amp; Rekap</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredSalaryHistory.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center">
+                    <TableCell colSpan={5} className="text-center py-6 text-zinc-500">
                       Tidak ada data gaji
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredSalaryHistory.map((salary, idx) => {
                     const rowKey = getSalaryRowKey(salary, idx);
+                    const lokasiGaji = getSalaryEffectiveLocation(salary);
+                    const hasMismatch = Array.isArray(salary.mismatches) && salary.mismatches.length > 0;
 
                     return (
                       <TableRow
@@ -126,13 +151,31 @@ export function SalaryTab({
                           {formatPeriodeGaji(salary.periodeAwal, salary.periodeAkhir)}
                         </TableCell>
                         <TableCell>
+                          {getLokasiBadge(lokasiGaji)}
+                        </TableCell>
+                        <TableCell>
                           {formatCurrency(Number(salary.gajiPokok) || 0)}
                         </TableCell>
                         <TableCell className="font-medium">
                           {formatCurrency(Number(salary.totalGajiBersih) || 0)}
                         </TableCell>
                         <TableCell>
-                          {getStatusBadge(salary.statusPembayaran || "-")}
+                          <div className="flex flex-col gap-1 items-start">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {getStatusBadge(salary.statusPembayaran || "-")}
+                              {salary.rekapId && (
+                                <span className="text-[11px] text-zinc-500 font-medium">
+                                  Rekap #{salary.rekapId}
+                                </span>
+                              )}
+                            </div>
+                            {hasMismatch && (
+                              <Badge className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] px-1.5 py-0.5 font-semibold flex items-center gap-1">
+                                <AlertTriangle className="h-3 w-3" />
+                                Absensi di {salary.mismatches.map((m: any) => m.lokasiAbsensi).join(", ")}
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -157,7 +200,7 @@ export function SalaryTab({
                   >
                     {exportedSalaryGroups.map((item) => (
                       <option key={item.key} value={item.key}>
-                        {`${formatPeriodeGaji(item.periodeAwal, item.periodeAkhir)} · ${item.rows.length} entri · ${formatCurrency(
+                        {`${formatPeriodeGaji(item.periodeAwal, item.periodeAkhir)} · ${item.lokasi || "Tidak diketahui"} · ${item.rows.length} entri · ${formatCurrency(
                           item.rows.reduce((sum: number, row: any) => sum + (Number(row.salary?.totalGajiBersih) || 0), 0)
                         )}`}
                       </option>
@@ -167,9 +210,12 @@ export function SalaryTab({
               ) : null}
               {selectedSalary ? (
                 <>
-                  <p className="text-xs text-zinc-600 mt-1">
-                    {formatPeriodeGaji(selectedSalary.periodeAwal, selectedSalary.periodeAkhir)}
-                  </p>
+                  <div className="flex items-center justify-between mt-1">
+                    <p className="text-xs text-zinc-600">
+                      {formatPeriodeGaji(selectedSalary.periodeAwal, selectedSalary.periodeAkhir)}
+                    </p>
+                    {getLokasiBadge(selectedSalary.lokasi || getSalaryEffectiveLocation(selectedSalary))}
+                  </div>
                   <div className="mt-2">{getStatusBadge(selectedSalary.statusPembayaran || "-")}</div>
                 </>
               ) : (

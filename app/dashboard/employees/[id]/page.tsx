@@ -41,7 +41,7 @@ import { LoansTab } from "./_components/loans-tab";
 import { EmployeeProfileCard } from "./_components/employee-profile-card";
 import { CropModal } from "./_components/crop-modal";
 import { FilePreviewModal } from "./_components/file-preview-modal";
-import { getSalaryRowKey, determineSubStatus } from "./_components/utils";
+import { getSalaryRowKey, determineSubStatus, getSalaryEffectiveLocation } from "./_components/utils";
 
 // Aspect ratio untuk foto profil (1:1 square)
 const ASPECT_RATIO = 1;
@@ -78,6 +78,7 @@ export default function EmployeeDetailPage() {
   const [loans, setLoans] = useState<any[]>([]);
   const [salaryRangeStart, setSalaryRangeStart] = useState("");
   const [salaryRangeEnd, setSalaryRangeEnd] = useState("");
+  const [salaryLocationFilter, setSalaryLocationFilter] = useState<string>("ALL");
   const [selectedExportedSalaryKey, setSelectedExportedSalaryKey] = useState<string | null>(null);
   const [attendanceHistory, setAttendanceHistory] = useState<any[]>([]);
   const [izinSakitHistory, setIzinSakitHistory] = useState<any[]>([]);
@@ -335,6 +336,7 @@ export default function EmployeeDetailPage() {
           relation: karyawan.hubunganKontakDarurat || "-",
           phone: karyawan.noTeleponKontakDarurat || "-",
         },
+        lokasiDefault: karyawan.lokasiDefault || "PJP",
         _rawKaryawan: karyawan,
       };
       setEmployee(mapped);
@@ -409,6 +411,11 @@ export default function EmployeeDetailPage() {
     const end = salaryRangeEnd ? new Date(salaryRangeEnd) : null;
 
     return salaryHistory.filter((salary) => {
+      if (salaryLocationFilter !== "ALL") {
+        const loc = getSalaryEffectiveLocation(salary);
+        if (loc.toUpperCase() !== salaryLocationFilter.toUpperCase()) return false;
+      }
+
       const periodStart = salary?.periodeAwal ? new Date(salary.periodeAwal) : null;
       const periodEnd = salary?.periodeAkhir ? new Date(salary.periodeAkhir) : null;
       if (!periodStart || Number.isNaN(periodStart.getTime())) return true;
@@ -421,7 +428,7 @@ export default function EmployeeDetailPage() {
       if (end && periodStart > end) return false;
       return true;
     });
-  }, [salaryHistory, salaryRangeStart, salaryRangeEnd]);
+  }, [salaryHistory, salaryRangeStart, salaryRangeEnd, salaryLocationFilter]);
 
   const exportedSalaryGroups = useMemo(() => {
     const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -434,20 +441,24 @@ export default function EmployeeDetailPage() {
           return null;
         }
 
+        const lokasi = getSalaryEffectiveLocation(salary);
+
         return {
           salary,
           rowKey: getSalaryRowKey(salary, index),
           start,
           end,
+          lokasi,
         };
       })
-      .filter((item): item is { salary: any; rowKey: string; start: Date; end: Date } => Boolean(item))
+      .filter((item): item is { salary: any; rowKey: string; start: Date; end: Date; lokasi: string } => Boolean(item))
       .filter((item) => String(item.salary?.statusPembayaran || "").trim().toLowerCase() === "dibayar")
       .sort((a, b) => a.start.getTime() - b.start.getTime());
 
     const grouped: Array<{
       periodeAwal: Date;
       periodeAkhir: Date;
+      lokasi: string;
       rows: Array<{ salary: any; rowKey: string }>;
     }> = [];
 
@@ -457,13 +468,16 @@ export default function EmployeeDetailPage() {
         grouped.push({
           periodeAwal: item.start,
           periodeAkhir: item.end,
+          lokasi: item.lokasi,
           rows: [{ salary: item.salary, rowKey: item.rowKey }],
         });
         continue;
       }
 
       const isSameBatch = item.start.getTime() <= lastGroup.periodeAkhir.getTime() + ONE_DAY_MS;
-      if (isSameBatch) {
+      const isSameLokasi = lastGroup.lokasi === item.lokasi;
+
+      if (isSameBatch && isSameLokasi) {
         lastGroup.rows.push({ salary: item.salary, rowKey: item.rowKey });
         if (item.end > lastGroup.periodeAkhir) {
           lastGroup.periodeAkhir = item.end;
@@ -472,6 +486,7 @@ export default function EmployeeDetailPage() {
         grouped.push({
           periodeAwal: item.start,
           periodeAkhir: item.end,
+          lokasi: item.lokasi,
           rows: [{ salary: item.salary, rowKey: item.rowKey }],
         });
       }
@@ -479,9 +494,10 @@ export default function EmployeeDetailPage() {
 
     return grouped
       .map((group, index) => ({
-        key: `export-${group.periodeAwal.toISOString()}-${group.periodeAkhir.toISOString()}-${index}`,
+        key: `export-${group.lokasi}-${group.periodeAwal.toISOString()}-${group.periodeAkhir.toISOString()}-${index}`,
         periodeAwal: group.periodeAwal.toISOString(),
         periodeAkhir: group.periodeAkhir.toISOString(),
+        lokasi: group.lokasi,
         rows: group.rows,
       }))
       .reverse();
@@ -515,6 +531,7 @@ export default function EmployeeDetailPage() {
       ...latestRow,
       periodeAwal: found.periodeAwal,
       periodeAkhir: found.periodeAkhir,
+      lokasi: found.lokasi,
       gajiPokok: totalGajiPokok,
       bonus: totalBonus,
       potongan: totalPotongan,
@@ -784,11 +801,16 @@ export default function EmployeeDetailPage() {
             setSelectedExportedSalaryKey={setSelectedExportedSalaryKey}
             selectedSalary={selectedSalary}
             selectedSalaryRincian={selectedSalaryRincian}
+            salaryLocationFilter={salaryLocationFilter}
+            setSalaryLocationFilter={setSalaryLocationFilter}
           />
         </TabsContent>
 
         {showAttendanceTab && <TabsContent value="attendance">
-          <AttendanceTab attendanceHistory={attendanceHistory} />
+          <AttendanceTab
+            attendanceHistory={attendanceHistory}
+            lokasiDefault={employee?.lokasiDefault || employee?._rawKaryawan?.lokasiDefault}
+          />
         </TabsContent>}
 
         <TabsContent value="izin-sakit">

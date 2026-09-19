@@ -32,6 +32,43 @@ export function getStatusBadge(status: string) {
   }
 }
 
+export function getLokasiBadge(lokasi?: string | null) {
+  const norm = String(lokasi || "").trim().toUpperCase();
+  switch (norm) {
+    case "PJP":
+      return (
+        <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 font-semibold text-[11px] px-2 py-0.5">
+          PJP
+        </Badge>
+      );
+    case "SP":
+      return (
+        <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold text-[11px] px-2 py-0.5">
+          SP
+        </Badge>
+      );
+    case "PRIMA":
+      return (
+        <Badge variant="outline" className="border-purple-200 bg-purple-50 text-purple-700 font-semibold text-[11px] px-2 py-0.5">
+          PRIMA
+        </Badge>
+      );
+    default:
+      return (
+        <Badge variant="outline" className="border-zinc-200 bg-zinc-50 text-zinc-600 text-[11px] px-2 py-0.5">
+          {lokasi || "Tidak diketahui"}
+        </Badge>
+      );
+  }
+}
+
+export function getSalaryEffectiveLocation(salary: any): string {
+  if (salary?.lokasiEfektif) return salary.lokasiEfektif;
+  if (salary?.lokasi) return salary.lokasi;
+  if (salary?.rekap?.lokasi) return salary.rekap.lokasi;
+  return "Tidak diketahui";
+}
+
 export function determineSubStatus(status: string, keterangan?: string): string {
   const normStatus = String(status || "").trim().toUpperCase();
   const ket = String(keterangan || "").trim().toLowerCase();
