@@ -50,3 +50,7 @@ next-env.d.ts
 /data/*.db*
 *.db
 
+# database backups
+backup database/
+*.sql
+

@@ -441,7 +441,7 @@ export default function NewAttendancePage() {
       }
 
     } catch (err) {
-      const message = "Gagal mencatat absensi. Silakan coba lagi.";
+      const message = err instanceof Error ? err.message : "Gagal mencatat absensi. Silakan coba lagi.";
       setError(message);
       showSaveToast("error", message);
     } finally {

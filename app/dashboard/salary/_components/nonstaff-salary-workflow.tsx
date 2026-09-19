@@ -726,15 +726,19 @@ export function NonStaffSalaryWorkflow() {
     try {
       setSubmitting(true);
       // Draft dibuat/di-refresh saat konfirmasi agar flow tidak bergantung tombol terpisah.
-      const resText = await generateSalaryAPI.generateNonStaffMingguan(
+      const res = await generateSalaryAPI.generateNonStaffMingguan(
         startDate,
         endDate,
         selectedDivisions,
         selectedKaryawanIds,
         manualUpahHarian,
-        company
+        company,
+        "json"
       );
-      showToast("success", resText);
+      const toastMessage = typeof res === "object" && res?.message
+        ? res.message
+        : String(res || "Generate gaji non-staff selesai.");
+      showToast("success", toastMessage);
 
       const generated = await salaryAPI.getGajiByDateRange(startDate, endDate, undefined, undefined, company);
       const generatedRows = Array.isArray(generated) ? generated : [];
@@ -872,7 +876,30 @@ export function NonStaffSalaryWorkflow() {
         .filter((row): row is SnapshotRow => row !== null);
 
       if (normalizedSnapshots.length === 0) {
-        if (localPaidSkipped.length > 0) {
+        const skippedOtherDetails = (typeof res === "object" && Array.isArray(res?.skippedPaidOtherLocationDetails))
+          ? res.skippedPaidOtherLocationDetails
+          : [];
+
+        if (skippedOtherDetails.length > 0) {
+          const detailMessages = skippedOtherDetails.map((d: any) => {
+            const rekapStr = d.rekapId ? `Rekap #${d.rekapId}` : "tanpa nomor rekap";
+            return `${d.nama} (${d.tanggal}): Sudah dibayar di ${d.lokasi}, ${rekapStr}`;
+          });
+          const uniqueLocRekaps = Array.from(
+            new Set(
+              skippedOtherDetails.map((d: any) => {
+                const rekapStr = d.rekapId ? `Rekap #${d.rekapId}` : "-";
+                return `${d.lokasi} (${rekapStr})`;
+              })
+            )
+          ).join(", ");
+
+          setError(
+            `Tidak ada draft gaji baru yang dapat diproses ke Fase 2. Gaji karyawan terpilih sudah dibayar di lokasi lain: ${uniqueLocRekaps}.\nDetail:\n• ` +
+            detailMessages.slice(0, 5).join("\n• ") +
+            (detailMessages.length > 5 ? `\n...dan ${detailMessages.length - 5} lainnya` : "")
+          );
+        } else if (localPaidSkipped.length > 0) {
           setError(
             `Semua (${localPaidSkipped.length}) karyawan terpilih gajinya sudah berstatus Dibayar untuk periode ini dan tidak ditarik ke Fase 2.`
           );

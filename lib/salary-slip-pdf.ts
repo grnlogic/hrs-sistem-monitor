@@ -939,6 +939,7 @@ export async function exportNonStaffRekapPdf(
     catatan?: string;
     kikipingOleh?: string;
     kikipingNominal?: number;
+    subLabel?: string;
   },
   fileName: string
 ) {
@@ -955,7 +956,16 @@ export async function exportNonStaffRekapPdf(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.text(`Periode: ${meta.periodLabel}`, 14, 19);
-  doc.text(`Lokasi: ${normalizeLokasi(meta.location)}`, 14, 24);
+  let currentY = 24;
+  doc.text(`Lokasi: ${normalizeLokasi(meta.location)}`, 14, currentY);
+  if (meta.subLabel) {
+    currentY += 4.5;
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(180, 83, 9);
+    doc.text(`[${meta.subLabel}]`, 14, currentY);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "normal");
+  }
 
   // Headers setup
   const headers = [
@@ -1061,7 +1071,7 @@ export async function exportNonStaffRekapPdf(
   ];
 
   autoTable(doc, {
-    startY: 28,
+    startY: meta.subLabel ? 34 : 28,
     head: [headers],
     body: bodyRows,
     foot: [footRow],

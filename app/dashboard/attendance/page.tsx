@@ -477,7 +477,7 @@ export default function AttendancePage() {
       setShowEditModal(false);
       setEditingItem(null);
     } catch (err) {
-      setError("Gagal mengupdate data absensi");
+      setError(err instanceof Error ? err.message : "Gagal mengupdate data absensi");
     } finally {
       setIsLoading(false);
     }

@@ -154,6 +154,9 @@ export default function RekapanPage() {
   // PDF Exporting states
   const [exportingPdf, setExportingPdf] = useState<boolean>(false);
   const [exportingRekapPdf, setExportingRekapPdf] = useState<boolean>(false);
+  const [selectedGajiIds, setSelectedGajiIds] = useState<string[]>([]);
+  const [exportingRekapTerpilihPdf, setExportingRekapTerpilihPdf] = useState<boolean>(false);
+  const [exportingSlipsTerpilih, setExportingSlipsTerpilih] = useState<boolean>(false);
 
   // Global Messages
   const [errorMsg, setErrorMsg] = useState<string>("");
@@ -210,6 +213,7 @@ export default function RekapanPage() {
   }, [fetchRekapList]);
 
   useEffect(() => {
+    setSelectedGajiIds([]);
     if (selectedRekapId) {
       fetchRekapDetail(selectedRekapId);
     } else {
@@ -224,6 +228,7 @@ export default function RekapanPage() {
   const handleBackToList = () => {
     setSelectedRekapId(null);
     setRekapDetail(null);
+    setSelectedGajiIds([]);
   };
 
   // Open Edit Bonus/Potongan/Pinjaman Dialog (Itemized)
@@ -422,50 +427,56 @@ export default function RekapanPage() {
     }
   };
 
-  // Export Rekap Semua PDF (Button 2)
-  const handleExportRekapSemuaPdf = async () => {
-    if (!rekapDetail || !rekapDetail.gaji || rekapDetail.gaji.length === 0) {
+  // Helper to build rows for Rekap PDF
+  const buildRekapPdfRows = (gajiList: GajiItemDetail[]) => {
+    return gajiList.map((g) => {
+      const bonusItems = Array.isArray(g.bonusItems) && g.bonusItems.length > 0
+        ? g.bonusItems.map((b) => ({ judul: String(b.judul || b.label || "Bonus"), nominal: Number(b.nominal || 0) }))
+        : Array.isArray(g.gajiBonus) && g.gajiBonus.length > 0
+        ? g.gajiBonus.map((b) => ({ judul: String(b.judul || "Bonus"), nominal: Number(b.nominal || 0) }))
+        : Number(g.bonus || 0) > 0
+        ? [{ judul: "Bonus", nominal: Number(g.bonus) }]
+        : [];
+
+      const potonganItems = Array.isArray(g.potonganItems) && g.potonganItems.length > 0
+        ? g.potonganItems.map((p) => ({ judul: String(p.judul || p.label || "Potongan"), nominal: Number(p.nominal || 0) }))
+        : Array.isArray(g.gajiPotongan) && g.gajiPotongan.length > 0
+        ? g.gajiPotongan.map((p) => ({ judul: String(p.judul || "Potongan"), nominal: Number(p.nominal || 0) }))
+        : Number(g.potongan || 0) > 0
+        ? [{ judul: "Potongan", nominal: Number(g.potongan) }]
+        : [];
+
+      const gajiPokok = Number(g.gajiPokok || g.totalGaji || 0);
+
+      return {
+        nama: g.karyawan?.namaLengkap || "Karyawan",
+        divisi: g.karyawan?.departemen || "-",
+        hariEfektif: Number(g.totalHariEfektif || 0),
+        upahHarian: Number(g.karyawan?.gajiPerHari || 0),
+        gajiPokok,
+        totalBonus: Number(g.bonus || 0),
+        totalPotongan: Number(g.potongan || 0),
+        gajiBersih: Number(g.totalGajiBersih || 0),
+        bonusItems,
+        potonganItems,
+      };
+    });
+  };
+
+  // Generic Rekap PDF Runner (Full or Filtered)
+  const runExportRekapPdf = async (targetGajiList: GajiItemDetail[], isPartial: boolean) => {
+    if (!rekapDetail || targetGajiList.length === 0) {
       setErrorMsg("Tidak ada data gaji untuk diexport.");
       return;
     }
     setErrorMsg("");
     setSuccessMsg("");
 
+    const setExporting = isPartial ? setExportingRekapTerpilihPdf : setExportingRekapPdf;
+
     try {
-      setExportingRekapPdf(true);
-
-      const rows = rekapDetail.gaji.map((g) => {
-        const bonusItems = Array.isArray(g.bonusItems) && g.bonusItems.length > 0
-          ? g.bonusItems.map((b) => ({ judul: String(b.judul || b.label || "Bonus"), nominal: Number(b.nominal || 0) }))
-          : Array.isArray(g.gajiBonus) && g.gajiBonus.length > 0
-          ? g.gajiBonus.map((b) => ({ judul: String(b.judul || "Bonus"), nominal: Number(b.nominal || 0) }))
-          : Number(g.bonus || 0) > 0
-          ? [{ judul: "Bonus", nominal: Number(g.bonus) }]
-          : [];
-
-        const potonganItems = Array.isArray(g.potonganItems) && g.potonganItems.length > 0
-          ? g.potonganItems.map((p) => ({ judul: String(p.judul || p.label || "Potongan"), nominal: Number(p.nominal || 0) }))
-          : Array.isArray(g.gajiPotongan) && g.gajiPotongan.length > 0
-          ? g.gajiPotongan.map((p) => ({ judul: String(p.judul || "Potongan"), nominal: Number(p.nominal || 0) }))
-          : Number(g.potongan || 0) > 0
-          ? [{ judul: "Potongan", nominal: Number(g.potongan) }]
-          : [];
-
-        const gajiPokok = Number(g.gajiPokok || g.totalGaji || 0);
-
-        return {
-          nama: g.karyawan?.namaLengkap || "Karyawan",
-          divisi: g.karyawan?.departemen || "-",
-          hariEfektif: Number(g.totalHariEfektif || 0),
-          upahHarian: Number(g.karyawan?.gajiPerHari || 0),
-          gajiPokok,
-          totalBonus: Number(g.bonus || 0),
-          totalPotongan: Number(g.potongan || 0),
-          gajiBersih: Number(g.totalGajiBersih || 0),
-          bonusItems,
-          potonganItems,
-        };
-      });
+      setExporting(true);
+      const rows = buildRekapPdfRows(targetGajiList);
 
       const activeBonusCols = new Set<string>();
       const activePotonganCols = new Set<string>();
@@ -481,6 +492,12 @@ export default function RekapanPage() {
 
       const periodeAwalStr = rekapDetail.periodeAwal.slice(0, 10);
       const periodeAkhirStr = rekapDetail.periodeAkhir.slice(0, 10);
+      const subLabel = isPartial
+        ? `Rekap sebagian: ${rows.length} dari ${rekapDetail.gaji.length} karyawan`
+        : undefined;
+      const fileName = isPartial
+        ? `rekap-gaji-nonstaff-${periodeAwalStr}_${periodeAkhirStr}-terpilih-${rows.length}-karyawan.pdf`
+        : `rekap-gaji-nonstaff-${periodeAwalStr}_${periodeAkhirStr}.pdf`;
 
       await exportNonStaffRekapPdf(
         rows,
@@ -492,46 +509,95 @@ export default function RekapanPage() {
           diketahuiOleh: rekapDetail.diketahuiOleh || "-",
           dibuatOleh: rekapDetail.dibuatOleh || "-",
           catatan: rekapDetail.catatan || undefined,
+          subLabel,
         },
-        `rekap-gaji-nonstaff-${periodeAwalStr}_${periodeAkhirStr}.pdf`
+        fileName
       );
 
-      setSuccessMsg("File PDF Rekap Semua berhasil diexport!");
+      setSuccessMsg(
+        isPartial
+          ? `File PDF Rekap Terpilih (${rows.length} karyawan) berhasil diexport!`
+          : "File PDF Rekap Semua berhasil diexport!"
+      );
     } catch (err: any) {
       console.error("Export rekap PDF error:", err);
-      setErrorMsg(err.message || "Gagal mengexport PDF Rekap Semua");
+      setErrorMsg(err.message || "Gagal mengexport PDF Rekap");
     } finally {
-      setExportingRekapPdf(false);
+      setExporting(false);
     }
   };
 
-  // Generate & Download PDF Slips (Button 3)
-  const handleGeneratePdfSlips = async () => {
+  // Export Rekap Semua PDF (Button 2)
+  const handleExportRekapSemuaPdf = () => {
+    runExportRekapPdf(rekapDetail?.gaji || [], false);
+  };
+
+  // Export Rekap Terpilih PDF (Button 2b)
+  const handleExportRekapTerpilihPdf = () => {
+    if (!rekapDetail?.gaji) return;
+    const selected = rekapDetail.gaji.filter((g) => selectedGajiIds.includes(g.id));
+    runExportRekapPdf(selected, true);
+  };
+
+  // Generic Slip PDF Runner (Full or Filtered)
+  const runGeneratePdfSlips = async (targetGajiList?: GajiItemDetail[]) => {
     if (!selectedRekapId || !rekapDetail) return;
     setErrorMsg("");
     setSuccessMsg("");
 
+    const isPartial = Boolean(targetGajiList && targetGajiList.length > 0);
+    const setExporting = isPartial ? setExportingSlipsTerpilih : setExportingPdf;
+
     try {
-      setExportingPdf(true);
+      setExporting(true);
       const res = await salaryAPI.getRekapSlipPayload(selectedRekapId);
-      const payloads = res.payloads || [];
+      let payloads = res.payloads || [];
+
+      if (isPartial && targetGajiList) {
+        const allowedGajiIds = new Set(targetGajiList.map((g) => String(g.id)));
+        const allowedKaryawanIds = new Set(targetGajiList.map((g) => String(g.karyawanId)));
+        payloads = payloads.filter(
+          (p: any) =>
+            allowedGajiIds.has(String(p.gajiId)) ||
+            allowedKaryawanIds.has(String(p.karyawanId))
+        );
+      }
 
       if (payloads.length === 0) {
         setErrorMsg("Tidak ada data slip yang tersedia untuk direkap ke PDF.");
         return;
       }
 
-      await exportNonStaffSlipGabunganPdf(
-        payloads,
-        res.fileName || `slip-gaji-nonstaff-${rekapDetail.periodeAwal.slice(0, 10)}_${rekapDetail.periodeAkhir.slice(0, 10)}.pdf`
+      const periodeAwalStr = rekapDetail.periodeAwal.slice(0, 10);
+      const periodeAkhirStr = rekapDetail.periodeAkhir.slice(0, 10);
+      const fileName = isPartial
+        ? `slip-gaji-nonstaff-${periodeAwalStr}_${periodeAkhirStr}-terpilih-${payloads.length}-karyawan.pdf`
+        : res.fileName || `slip-gaji-nonstaff-${periodeAwalStr}_${periodeAkhirStr}.pdf`;
+
+      await exportNonStaffSlipGabunganPdf(payloads, fileName);
+      setSuccessMsg(
+        isPartial
+          ? `File PDF slip gaji terpilih (${payloads.length} karyawan) berhasil dibuat & di-download!`
+          : "File PDF slip gaji berhasil dibuat & di-download!"
       );
-      setSuccessMsg("File PDF slip gaji berhasil dibuat & di-download!");
     } catch (err: any) {
       console.error("Export slip PDF error:", err);
       setErrorMsg(err.message || "Gagal mengexport PDF slip gaji");
     } finally {
-      setExportingPdf(false);
+      setExporting(false);
     }
+  };
+
+  // Generate & Download PDF Slips - Semua (Button 3)
+  const handleGeneratePdfSlips = () => {
+    runGeneratePdfSlips();
+  };
+
+  // Generate & Download PDF Slips - Terpilih (Button 3b)
+  const handleGeneratePdfSlipsTerpilih = () => {
+    if (!rekapDetail?.gaji) return;
+    const selected = rekapDetail.gaji.filter((g) => selectedGajiIds.includes(g.id));
+    runGeneratePdfSlips(selected);
   };
 
   // Live Summary Calculations for Dialog
@@ -570,7 +636,7 @@ export default function RekapanPage() {
               : "Daftar arsip batch rekapan pembayaran gaji non-staff per periode dan lokasi."}
           </p>
         </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
           {!selectedRekapId && (
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
               <CompanySwitcher value={company} onChange={setCompany} />
@@ -596,7 +662,7 @@ export default function RekapanPage() {
             <RefreshCw className={`h-4 w-4 ${loading || loadingDetail ? "animate-spin" : ""}`} />
           </Button>
 
-          {/* 3 Main Action Buttons matching Step 3 / Fase 3 */}
+          {/* Action Buttons for Rekap Detail */}
           {selectedRekapId && rekapDetail && (
             <>
               {/* BUTTON 1: Rekap Ulang */}
@@ -620,6 +686,24 @@ export default function RekapanPage() {
                 {exportingRekapPdf ? "Exporting..." : "Export Rekap Semua (PDF)"}
               </Button>
 
+              {/* BUTTON 2B: Export Rekap Terpilih (PDF) */}
+              <Button
+                variant="outline"
+                onClick={handleExportRekapTerpilihPdf}
+                disabled={selectedGajiIds.length === 0 || exportingRekapTerpilihPdf}
+                className="gap-2 rounded-xl text-xs font-semibold border-amber-300 bg-amber-50/60 text-amber-900 hover:bg-amber-100 disabled:opacity-40"
+                title={
+                  selectedGajiIds.length === 0
+                    ? "Pilih karyawan di tabel terlebih dahulu untuk mengexport rekap terpilih"
+                    : `Export PDF untuk ${selectedGajiIds.length} karyawan terpilih`
+                }
+              >
+                <FileBarChart2 className="h-3.5 w-3.5 text-amber-700" />
+                {exportingRekapTerpilihPdf
+                  ? "Exporting..."
+                  : `Export Rekap Terpilih (PDF)${selectedGajiIds.length > 0 ? ` (${selectedGajiIds.length})` : ""}`}
+              </Button>
+
               {/* BUTTON 3: Generate Ulang Slip PDF */}
               <Button
                 onClick={handleGeneratePdfSlips}
@@ -628,6 +712,23 @@ export default function RekapanPage() {
               >
                 <Download className="h-3.5 w-3.5" />
                 {exportingPdf ? "Membuat PDF..." : "Generate Ulang Slip PDF"}
+              </Button>
+
+              {/* BUTTON 3B: Generate Slip Terpilih (PDF) */}
+              <Button
+                onClick={handleGeneratePdfSlipsTerpilih}
+                disabled={selectedGajiIds.length === 0 || exportingSlipsTerpilih}
+                className="gap-2 bg-amber-700 text-white hover:bg-amber-800 rounded-xl text-xs font-semibold shadow-sm disabled:opacity-40"
+                title={
+                  selectedGajiIds.length === 0
+                    ? "Pilih karyawan di tabel terlebih dahulu untuk membuat slip terpilih"
+                    : `Generate slip PDF untuk ${selectedGajiIds.length} karyawan terpilih`
+                }
+              >
+                <Download className="h-3.5 w-3.5" />
+                {exportingSlipsTerpilih
+                  ? "Membuat Slip..."
+                  : `Generate Slip Terpilih (PDF)${selectedGajiIds.length > 0 ? ` (${selectedGajiIds.length})` : ""}`}
               </Button>
             </>
           )}
@@ -905,9 +1006,16 @@ export default function RekapanPage() {
                       Kelola absensi harian, bonus/potongan, dan nominal gaji per karyawan pada rekapan ini.
                     </CardDescription>
                   </div>
-                  <span className="text-xs font-semibold bg-zinc-100 text-zinc-600 px-3 py-1 rounded-full">
-                    {rekapDetail.gaji.length} Baris Data
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {selectedGajiIds.length > 0 && (
+                      <Badge variant="outline" className="bg-amber-100 text-amber-900 border-amber-300 text-xs font-semibold px-2.5 py-0.5">
+                        {selectedGajiIds.length} dipilih
+                      </Badge>
+                    )}
+                    <span className="text-xs font-semibold bg-zinc-100 text-zinc-600 px-3 py-1 rounded-full">
+                      {rekapDetail.gaji.length} Baris Data
+                    </span>
+                  </div>
                 </CardHeader>
 
                 {/* Legend Keterangan Badge Absensi */}
@@ -935,6 +1043,34 @@ export default function RekapanPage() {
                   <Table>
                     <TableHeader className="bg-zinc-50/70">
                       <TableRow>
+                        <TableHead className="w-10 text-center py-3.5 px-3">
+                          <input
+                            type="checkbox"
+                            className="rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500 h-4 w-4 cursor-pointer align-middle"
+                            checked={
+                              Boolean(rekapDetail.gaji.length > 0 && selectedGajiIds.length === rekapDetail.gaji.length)
+                            }
+                            ref={(el) => {
+                              if (el) {
+                                el.indeterminate =
+                                  selectedGajiIds.length > 0 &&
+                                  selectedGajiIds.length < rekapDetail.gaji.length;
+                              }
+                            }}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedGajiIds(rekapDetail.gaji.map((g) => g.id));
+                              } else {
+                                setSelectedGajiIds([]);
+                              }
+                            }}
+                            title={
+                              selectedGajiIds.length === rekapDetail.gaji.length
+                                ? "Batal pilih semua"
+                                : "Pilih semua karyawan"
+                            }
+                          />
+                        </TableHead>
                         <TableHead className="font-semibold text-xs py-3.5">Karyawan & Divisi</TableHead>
                         <TableHead className="font-semibold text-xs py-3.5">Absensi Harian</TableHead>
                         <TableHead className="font-semibold text-xs py-3.5 text-center">Hari Efektif</TableHead>
@@ -951,9 +1087,28 @@ export default function RekapanPage() {
                         const pokVal = Number(gajiItem.gajiPokok || gajiItem.totalGaji || 0);
                         const bonVal = Number(gajiItem.bonus || 0);
                         const brutoVal = pokVal + bonVal;
+                        const isSelected = selectedGajiIds.includes(gajiItem.id);
 
                         return (
-                        <TableRow key={gajiItem.id} className="hover:bg-zinc-50/50">
+                        <TableRow
+                          key={gajiItem.id}
+                          className={isSelected ? "bg-amber-50/50 hover:bg-amber-50/70 transition-colors" : "hover:bg-zinc-50/50"}
+                        >
+                          {/* Row Checkbox */}
+                          <TableCell className="align-top py-4 text-center px-3">
+                            <input
+                              type="checkbox"
+                              className="rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500 h-4 w-4 cursor-pointer align-middle"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                const id = gajiItem.id;
+                                setSelectedGajiIds((prev) =>
+                                  e.target.checked ? [...prev, id] : prev.filter((x) => x !== id)
+                                );
+                              }}
+                            />
+                          </TableCell>
+
                           {/* Karyawan Name & Division */}
                           <TableCell className="align-top py-4">
                             <div>
@@ -1077,7 +1232,7 @@ export default function RekapanPage() {
 
                         return (
                           <TableRow className="bg-zinc-100/90 font-bold border-t-2 border-zinc-300">
-                            <TableCell colSpan={2} className="py-3.5 text-zinc-900 font-bold text-sm">
+                            <TableCell colSpan={3} className="py-3.5 text-zinc-900 font-bold text-sm">
                               TOTAL SUMMARY
                             </TableCell>
                             <TableCell className="py-3.5 text-center font-bold text-xs text-zinc-900">

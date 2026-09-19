@@ -441,7 +441,15 @@ export const generateSalaryAPI = {
     }
   },
 
-  generateNonStaffMingguan: async (periodeAwal: string, periodeAkhir: string, divisi?: string[], karyawanIds?: string[], upahHarianOverrides?: Record<string, number>, company: CompanyFilter = "") => {
+  generateNonStaffMingguan: async (
+    periodeAwal: string,
+    periodeAkhir: string,
+    divisi?: string[],
+    karyawanIds?: string[],
+    upahHarianOverrides?: Record<string, number>,
+    company: CompanyFilter = "",
+    responseFormat: "text" | "json" = "text"
+  ) => {
     const formData = new URLSearchParams()
     formData.append('periodeAwal', periodeAwal)
     formData.append('periodeAkhir', periodeAkhir)
@@ -453,6 +461,9 @@ export const generateSalaryAPI = {
     }
     if (upahHarianOverrides && Object.keys(upahHarianOverrides).length > 0) {
       formData.append('upahHarianOverrides', JSON.stringify(upahHarianOverrides))
+    }
+    if (responseFormat === "json") {
+      formData.append('responseFormat', 'json')
     }
     
     const token = getAuthToken()
@@ -475,6 +486,10 @@ export const generateSalaryAPI = {
       if (!response.ok) {
         const errorData = await response.text()
         throw new Error(errorData || `HTTP error! status: ${response.status}`)
+      }
+
+      if (responseFormat === "json") {
+        return response.json()
       }
 
       return response.text()
