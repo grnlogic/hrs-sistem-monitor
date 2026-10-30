@@ -701,27 +701,28 @@ function calculateNonStaffSlipHeight(payload: NonStaffSlipExportPayload): number
     : 2;
   height += attendanceRowCount * NS_ROW_GAP;
 
-  // Pendapatan
-  height += NS_SEC_GAP; // section label
+  // Pendapatan (both gaps around section label + rows)
+  height += 2 * NS_SEC_GAP; // before & after section label
   height += NS_ROW_GAP; // Gaji Pokok
   height += bonusItems.length * NS_ROW_GAP;
   height += NS_ROW_GAP; // Total
 
-  // Potongan
-  height += NS_SEC_GAP; // section label
+  // Potongan (both gaps around section label + rows)
+  height += 2 * NS_SEC_GAP; // before & after section label
   height += potonganItems.length * NS_ROW_GAP;
   height += NS_ROW_GAP; // Total
 
-  // Gaji bersih + divider above it
-  height += 1.0; // thin divider gap
-  height += NS_ROW_GAP;
+  // Divider above GAJI BERSIH (gap before divider + gap after divider to text baseline)
+  height += 1.5; // gap before divider line
+  height += 3.0; // gap after divider line to GAJI BERSIH text baseline
+  height += NS_ROW_GAP; // GAJI BERSIH row
 
   if (payload.sisaPiutang && payload.sisaPiutang > 0) {
-    height += NS_ROW_GAP;
+    height += NS_ROW_GAP; // Sisa Piutang row
   }
 
-  // Bottom padding
-  height += 4.0;
+  // Safe bottom padding to ensure box border never overlaps text
+  height += 6.0;
 
   return Math.max(50.0, height);
 }
@@ -848,12 +849,14 @@ async function drawNonStaffSlip(
   }
   linePair("Total", formatRupiah(resolvedTotalPotongan), true);
 
-  // Thin divider before GAJI BERSIH
-  cursorY += 1.0;
+  // Thin divider before GAJI BERSIH (dengan jarak yang cukup agar tidak menimpa teks)
+  cursorY += 1.5;
+  const dividerY = cursorY;
   doc.setDrawColor(180, 188, 200);
-  doc.setLineWidth(0.15);
-  doc.line(leftX, cursorY - 0.5, rightEdge, cursorY - 0.5);
+  doc.setLineWidth(0.18);
+  doc.line(leftX, dividerY, rightEdge, dividerY);
 
+  cursorY += 3.0;
   linePair("GAJI BERSIH", formatRupiah(resolvedGajiBersih), true);
 
   if (payload.sisaPiutang && payload.sisaPiutang > 0) {

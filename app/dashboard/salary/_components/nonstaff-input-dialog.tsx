@@ -83,14 +83,20 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
 
   // Local draft state — isolates edits so changes only persist when user clicks "Simpan Perubahan"
   const [draftState, setDraftState] = React.useState<InputState>(buildDefaultInputState());
+  const lastOpenedSalaryIdRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
-    if (dialogOpen && selectedSnapshot) {
+    if (!dialogOpen) {
+      lastOpenedSalaryIdRef.current = null;
+      return;
+    }
+    if (selectedSnapshot && lastOpenedSalaryIdRef.current !== selectedSnapshot.gajiId) {
+      lastOpenedSalaryIdRef.current = selectedSnapshot.gajiId;
       const parentState = inputsBySalaryId[selectedSnapshot.gajiId] || buildDefaultInputState();
       const draft: InputState = JSON.parse(JSON.stringify(parentState));
       setDraftState(draft);
     }
-  }, [dialogOpen, selectedSnapshot, inputsBySalaryId]);
+  }, [dialogOpen, selectedSnapshot]);
 
   React.useEffect(() => {
     if (dialogOpen) {
@@ -203,12 +209,21 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
 
   const handleSave = () => {
     if (!selectedSnapshot) return;
+    const finalDraft: InputState = {
+      ...draftState,
+      bayarMingguIni: draftState.bayarMingguIni !== false,
+      nominalCicilan: draftState.bayarMingguIni !== false ? draftState.nominalCicilan : null,
+      potonganItems: draftState.bayarMingguIni !== false
+        ? draftState.potonganItems
+        : draftState.potonganItems.filter((i) => i.judul.toLowerCase() !== "pinjaman"),
+    };
+
     const persist = [
-      ...draftState.bonusItems.map((item) => ensureItemSaved("BONUS", item.judul)),
-      ...draftState.potonganItems.map((item) => ensureItemSaved("POTONGAN", item.judul)),
+      ...finalDraft.bonusItems.map((item) => ensureItemSaved("BONUS", item.judul)),
+      ...finalDraft.potonganItems.map((item) => ensureItemSaved("POTONGAN", item.judul)),
     ];
     void Promise.all(persist).finally(() => {
-      saveInputSalary(selectedSnapshot.gajiId, draftState);
+      saveInputSalary(selectedSnapshot.gajiId, finalDraft);
     });
   };
 
