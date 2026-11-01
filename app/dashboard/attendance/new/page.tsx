@@ -96,6 +96,11 @@ const hitungHariEfektif = (status: AbsensiStatus, isLembur: boolean) => {
   return hari;
 };
 
+const isBlendingDept = (dept?: string | null): boolean => {
+  const d = (dept || "").trim().toUpperCase();
+  return d.includes("BLEND") || d.includes("BLAND");
+};
+
 export default function NewAttendancePage() {
   const router = useRouter();
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
@@ -129,11 +134,12 @@ export default function NewAttendancePage() {
   const buildInitialAbsensiMap = (employeeList: EmployeeOption[]) => {
     const initialMap: Record<number, AbsensiDraft> = {};
     employeeList.forEach((emp) => {
+      const isBlending = isBlendingDept(emp.departemen);
       initialMap[emp.id] = {
         status: "HADIR",
         lembur: false,
         keterangan: "",
-        lokasi: "",
+        lokasi: isBlending ? emp.lokasiDefault : "",
         divisiKerja: "",
         divisiKerjaKedua: "",
       };
@@ -165,16 +171,19 @@ export default function NewAttendancePage() {
       const data = await employeeAPI.getAll();
       const mappedEmployees: EmployeeOption[] = data
         .filter((emp: any) => emp.statusKaryawan !== "NONAKTIF" && emp.statusKaryawan !== "TIDAK_AKTIF" && emp.statusKaryawan !== "NON_AKTIF")
-        .map((emp: any) => ({
-        id: Number(emp.id),
-        namaLengkap: emp.namaLengkap || emp.name || "(Tanpa Nama)",
-        nik: emp.nik || emp.nip || "(Tanpa NIK)",
-        departemen: emp.departemen || "Lainnya",
-        jabatan: emp.jabatan || emp.position || "-",
-        lokasiDefault: ["PJP", "SP", "PRIMA"].includes((emp.lokasiDefault || "").toUpperCase())
-          ? (emp.lokasiDefault.toUpperCase() as "PJP" | "SP" | "PRIMA")
-          : "PJP",
-      }));
+        .map((emp: any) => {
+          const rawLoc = emp.lokasiDefault || emp.lokasiKerja || emp.lokasi || "";
+          return {
+            id: Number(emp.id),
+            namaLengkap: emp.namaLengkap || emp.name || "(Tanpa Nama)",
+            nik: emp.nik || emp.nip || "(Tanpa NIK)",
+            departemen: emp.departemen || "Lainnya",
+            jabatan: emp.jabatan || emp.position || "-",
+            lokasiDefault: ["PJP", "SP", "PRIMA"].includes(String(rawLoc).toUpperCase())
+              ? (String(rawLoc).toUpperCase() as "PJP" | "SP" | "PRIMA")
+              : "PJP",
+          };
+        });
 
       setEmployees(mappedEmployees);
       setAbsensiMap(buildInitialAbsensiMap(mappedEmployees));
@@ -242,14 +251,22 @@ export default function NewAttendancePage() {
 
   const updateAbsensi = (employeeId: number, patch: Partial<AbsensiDraft>) => {
     setAbsensiMap((prev) => {
+      const emp = employees.find((e) => e.id === employeeId);
+      const isBlending = emp ? (isBlendingDept(emp.departemen) || isBlendingDept(patch.divisiKerja)) : false;
       const current = prev[employeeId] || {
         status: "HADIR" as AbsensiStatus,
         lembur: false,
         keterangan: "",
-        lokasi: "PJP",
+        lokasi: isBlending && emp ? emp.lokasiDefault : "",
+        divisiKerja: "",
+        divisiKerjaKedua: "",
       };
 
       const next: AbsensiDraft = { ...current, ...patch };
+
+      if (!next.lokasi && patch.divisiKerja && isBlendingDept(patch.divisiKerja) && emp) {
+        next.lokasi = emp.lokasiDefault;
+      }
 
       return {
         ...prev,
@@ -262,11 +279,14 @@ export default function NewAttendancePage() {
     setAbsensiMap((prev) => {
       const next = { ...prev };
       displayedEmployees.forEach((emp) => {
+        const isBlending = isBlendingDept(emp.departemen);
         const prevData = next[emp.id] || {
           status: "HADIR" as AbsensiStatus,
           lembur: false,
           keterangan: "",
-          lokasi: emp.lokasiDefault,
+          lokasi: isBlending ? emp.lokasiDefault : "",
+          divisiKerja: "",
+          divisiKerjaKedua: "",
         };
         next[emp.id] = {
           ...prevData,
@@ -312,11 +332,12 @@ export default function NewAttendancePage() {
 
       const rows = displayedEmployees
         .map((emp) => {
+          const isBlending = isBlendingDept(emp.departemen);
           const item = absensiMap[emp.id] || {
             status: "HADIR" as AbsensiStatus,
             lembur: false,
             keterangan: "",
-            lokasi: emp.lokasiDefault,
+            lokasi: isBlending ? emp.lokasiDefault : "",
           };
 
           return {
@@ -683,11 +704,12 @@ export default function NewAttendancePage() {
                     </TableRow>
                   ) : (
                     displayedEmployees.map((employee) => {
+                      const isBlending = isBlendingDept(employee.departemen);
                       const rowData = absensiMap[employee.id] || {
                         status: "HADIR" as AbsensiStatus,
                         lembur: false,
                         keterangan: "",
-                        lokasi: "",
+                        lokasi: isBlending ? employee.lokasiDefault : "",
                         divisiKerja: "",
                         divisiKerjaKedua: "",
                       };
