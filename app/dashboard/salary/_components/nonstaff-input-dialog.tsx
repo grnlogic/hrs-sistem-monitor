@@ -211,6 +211,7 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
     if (!selectedSnapshot) return;
     const finalDraft: InputState = {
       ...draftState,
+      sisaPiutang: liveSisaPiutang,
       bayarMingguIni: draftState.bayarMingguIni !== false,
       nominalCicilan: draftState.bayarMingguIni !== false ? draftState.nominalCicilan : null,
       potonganItems: draftState.bayarMingguIni !== false

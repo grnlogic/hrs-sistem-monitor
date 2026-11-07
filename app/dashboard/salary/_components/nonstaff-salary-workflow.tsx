@@ -1276,6 +1276,24 @@ export function NonStaffSalaryWorkflow() {
         const effectivePotonganItems = input.bayarMingguIni === false
           ? input.potonganItems.filter((item) => item.judul.toLowerCase() !== "pinjaman")
           : input.potonganItems;
+
+        const pinjamanItem = effectivePotonganItems.find(
+          (item) => item.judul.toLowerCase() === "pinjaman" && Number(item.nominal) > 0
+        );
+        const pinjamanDeducted = pinjamanItem ? Number(pinjamanItem.nominal) : 0;
+
+        let exportSisaPiutang: number | null = null;
+        if (input.piutangInfo && Number(input.piutangInfo.sisaSaldo) > 0) {
+          const currentSaldo = Number(input.piutangInfo.sisaSaldo);
+          exportSisaPiutang = pinjamanDeducted > 0
+            ? Math.max(0, currentSaldo - pinjamanDeducted)
+            : currentSaldo;
+        } else if (input.sisaPiutang != null) {
+          exportSisaPiutang = pinjamanDeducted > 0
+            ? input.sisaPiutang
+            : (input.piutangInfo ? Number(input.piutangInfo.sisaSaldo) : input.sisaPiutang);
+        }
+
         const breakdown = (row.lokasiBreakdown || []).filter((item) => item.hariEfektif > 0);
 
         if (breakdown.length <= 1 || row.hariEfektif <= 0) {
@@ -1293,7 +1311,7 @@ export function NonStaffSalaryWorkflow() {
             gajiBersih: calc.gajiBersih,
             bonusItems: input.bonusItems,
             potonganItems: effectivePotonganItems,
-            sisaPiutang: input.sisaPiutang,
+            sisaPiutang: exportSisaPiutang,
           });
           return;
         }
@@ -1328,7 +1346,7 @@ export function NonStaffSalaryWorkflow() {
             gajiBersih: partGajiPokok + partBonus - partPotongan,
             bonusItems: input.bonusItems,
             potonganItems: effectivePotonganItems,
-            sisaPiutang: input.sisaPiutang,
+            sisaPiutang: exportSisaPiutang,
           });
         });
       });
@@ -1360,6 +1378,9 @@ export function NonStaffSalaryWorkflow() {
       const rows = snapshotRows.map((row) => {
         const input = inputsBySalaryId[row.gajiId] || buildDefaultInputState();
         const calc = calculatedForSnapshot(row);
+        const effectivePotonganItems = input.bayarMingguIni === false
+          ? input.potonganItems.filter((item) => item.judul.toLowerCase() !== "pinjaman")
+          : input.potonganItems;
         return {
           nama: row.nama,
           divisi: row.divisi,
@@ -1370,7 +1391,7 @@ export function NonStaffSalaryWorkflow() {
           totalPotongan: calc.totalPotongan,
           gajiBersih: calc.gajiBersih,
           bonusItems: input.bonusItems,
-          potonganItems: input.potonganItems,
+          potonganItems: effectivePotonganItems,
         };
       });
 
@@ -1381,7 +1402,10 @@ export function NonStaffSalaryWorkflow() {
         input?.bonusItems?.forEach((item) => {
           if (item.judul.trim() && toNumber(item.nominal) > 0) activeBonusCols.add(item.judul.trim());
         });
-        input?.potonganItems?.forEach((item) => {
+        const effectivePotongan = input?.bayarMingguIni === false
+          ? input.potonganItems.filter((item) => item.judul.toLowerCase() !== "pinjaman")
+          : (input?.potonganItems || []);
+        effectivePotongan.forEach((item) => {
           if (item.judul.trim() && toNumber(item.nominal) > 0) activePotonganCols.add(item.judul.trim());
         });
       });
