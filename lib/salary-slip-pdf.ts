@@ -749,7 +749,11 @@ async function drawNonStaffSlip(
   // Border
   doc.setDrawColor(180, 186, 198);
   doc.setLineWidth(0.18);
-  doc.rect(x, y, width, height);
+  doc.roundedRect(x, y, width, height, 1, 1);
+
+  // Header background (soft tint, selaras dengan template slip Staff)
+  doc.setFillColor(245, 247, 250);
+  doc.rect(x + 0.6, y + 0.6, width - 1.2, 10.5, "F");
 
   let cursorY = y + 4.0;
 
@@ -781,12 +785,19 @@ async function drawNonStaffSlip(
   );
   cursorY += 3.2;
 
-  // Compact row helper: label at leftX, value at fixed valueX
-  const linePair = (label: string, value: string, bold = false) => {
+  // Compact row helper: styling berjenjang (label muted [80, 80, 80], value tegas [20, 20, 20])
+  const linePair = (
+    label: string,
+    value: string,
+    bold = false,
+    labelColor: [number, number, number] = [80, 80, 80],
+    valueColor: [number, number, number] = [20, 20, 20]
+  ) => {
     doc.setFont("helvetica", bold ? "bold" : "normal");
     doc.setFontSize(bold ? 8.0 : 7.8);
-    doc.setTextColor(20, 20, 20);
+    doc.setTextColor(labelColor[0], labelColor[1], labelColor[2]);
     doc.text(truncateText(label, 22), leftX, cursorY);
+    doc.setTextColor(valueColor[0], valueColor[1], valueColor[2]);
     doc.text(value, valueX, cursorY);
     cursorY += NS_ROW_GAP;
   };
@@ -824,30 +835,28 @@ async function drawNonStaffSlip(
   cursorY += NS_SEC_GAP;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.0);
-  doc.setTextColor(60, 60, 60);
+  doc.setTextColor(70, 70, 70);
   doc.text("PENDAPATAN", leftX, cursorY);
   cursorY += NS_SEC_GAP;
 
-  doc.setTextColor(20, 20, 20);
   linePair("Gaji Pokok", formatRupiah(resolvedGajiPokok));
   for (const item of bonusItems) {
     linePair(truncateText(item.judul, 18), formatRupiah(item.nominal));
   }
-  linePair("Total", formatRupiah(resolvedGajiPokok + resolvedTotalBonus), true);
+  linePair("Total", formatRupiah(resolvedGajiPokok + resolvedTotalBonus), true, [40, 40, 40], [20, 20, 20]);
 
   // Potongan
   cursorY += NS_SEC_GAP;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.0);
-  doc.setTextColor(60, 60, 60);
+  doc.setTextColor(70, 70, 70);
   doc.text("POTONGAN", leftX, cursorY);
   cursorY += NS_SEC_GAP;
 
-  doc.setTextColor(20, 20, 20);
   for (const item of potonganItems) {
     linePair(truncateText(item.judul, 18), formatRupiah(item.nominal));
   }
-  linePair("Total", formatRupiah(resolvedTotalPotongan), true);
+  linePair("Total", formatRupiah(resolvedTotalPotongan), true, [40, 40, 40], [20, 20, 20]);
 
   // Thin divider before GAJI BERSIH (dengan jarak yang cukup agar tidak menimpa teks)
   cursorY += 1.5;
@@ -857,10 +866,10 @@ async function drawNonStaffSlip(
   doc.line(leftX, dividerY, rightEdge, dividerY);
 
   cursorY += 3.0;
-  linePair("GAJI BERSIH", formatRupiah(resolvedGajiBersih), true);
+  linePair("GAJI BERSIH", formatRupiah(resolvedGajiBersih), true, [20, 20, 20], [20, 20, 20]);
 
   if (payload.sisaPiutang && payload.sisaPiutang > 0) {
-    linePair("Sisa Piutang", formatRupiah(payload.sisaPiutang), false);
+    linePair("Sisa Piutang", formatRupiah(payload.sisaPiutang), false, [110, 110, 110], [110, 110, 110]);
   }
 }
 
@@ -978,10 +987,12 @@ export async function exportNonStaffRekapPdf(
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
+  doc.setTextColor(30, 35, 45);
   doc.text(`REKAP GAJI NON-STAFF - ${profile.companyName}`, 14, 13);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
+  doc.setTextColor(90, 95, 105);
   doc.text(`Periode: ${meta.periodLabel}`, 14, 19);
   let currentY = 24;
   doc.text(`Lokasi: ${normalizeLokasi(meta.location)}`, 14, currentY);
@@ -990,7 +1001,7 @@ export async function exportNonStaffRekapPdf(
     doc.setFont("helvetica", "bold");
     doc.setTextColor(180, 83, 9);
     doc.text(`[${meta.subLabel}]`, 14, currentY);
-    doc.setTextColor(0, 0, 0);
+    doc.setTextColor(30, 35, 45);
     doc.setFont("helvetica", "normal");
   }
 
@@ -1102,9 +1113,26 @@ export async function exportNonStaffRekapPdf(
     head: [headers],
     body: bodyRows,
     foot: [footRow],
-    styles: { fontSize: 7.0, cellPadding: 1.2, valign: "top", overflow: "linebreak" },
-    headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: "bold" },
-    footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: "bold" },
+    styles: {
+      fontSize: 7.0,
+      cellPadding: 1.2,
+      valign: "top",
+      overflow: "linebreak",
+      textColor: [35, 40, 48],
+    },
+    headStyles: {
+      fillColor: [240, 243, 248],
+      textColor: [50, 60, 75],
+      fontStyle: "bold",
+    },
+    footStyles: {
+      fillColor: [232, 237, 245],
+      textColor: [25, 30, 40],
+      fontStyle: "bold",
+    },
+    alternateRowStyles: {
+      fillColor: [250, 252, 254],
+    },
     theme: "grid",
   });
 
@@ -1127,7 +1155,7 @@ export async function exportNonStaffRekapPdf(
   const finSummaryStartY = (doc as any).lastAutoTable.finalY + 6;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.0);
-  doc.setTextColor(30, 30, 30);
+  doc.setTextColor(30, 35, 45);
   doc.text("REKAPAN FINANCIAL & TOTAL SUMMARY", 14, finSummaryStartY);
 
   autoTable(doc, {
@@ -1140,9 +1168,12 @@ export async function exportNonStaffRekapPdf(
       ["REKAPAN JUMLAH PINJAMAN (CICILAN)", formatRupiah(totalPinjaman)],
       ["TOTAL UPAH DITERIMA (GAJI BERSIH)", formatRupiah(totalGajiBersih)],
     ],
-    styles: { fontSize: 8.0, cellPadding: 1.4 },
-    headStyles: { fillColor: [230, 235, 245], textColor: [0, 0, 0], fontStyle: "bold" },
-    columnStyles: { 0: { fontStyle: "bold", cellWidth: 110 }, 1: { fontStyle: "bold", halign: "right", cellWidth: 50 } },
+    styles: { fontSize: 8.0, cellPadding: 1.4, textColor: [35, 40, 48] },
+    headStyles: { fillColor: [225, 233, 245], textColor: [35, 50, 75], fontStyle: "bold" },
+    columnStyles: {
+      0: { fontStyle: "bold", cellWidth: 110 },
+      1: { fontStyle: "bold", halign: "right", cellWidth: 50, textColor: [20, 25, 35] },
+    },
     theme: "grid",
     tableWidth: 160,
   });
@@ -1150,6 +1181,7 @@ export async function exportNonStaffRekapPdf(
   const summaryStartY = (doc as any).lastAutoTable.finalY + 6;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.0);
+  doc.setTextColor(30, 35, 45);
   doc.text("Summary Total per Divisi", 14, summaryStartY);
 
   autoTable(doc, {
@@ -1159,8 +1191,11 @@ export async function exportNonStaffRekapPdf(
       divisi,
       formatRupiah(total),
     ]),
-    styles: { fontSize: 8.0, cellPadding: 1.5 },
-    headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0] },
+    styles: { fontSize: 8.0, cellPadding: 1.5, textColor: [35, 40, 48] },
+    headStyles: { fillColor: [242, 245, 250], textColor: [60, 70, 85], fontStyle: "bold" },
+    columnStyles: {
+      1: { halign: "right", fontStyle: "bold", textColor: [20, 25, 35] },
+    },
     theme: "grid",
     tableWidth: 120,
   });
@@ -1172,9 +1207,11 @@ export async function exportNonStaffRekapPdf(
   if (meta.catatan) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
+    doc.setTextColor(80, 85, 95);
     doc.text("Catatan:", 14, finalY + 8);
     doc.setFont("helvetica", "italic");
     doc.setFontSize(8);
+    doc.setTextColor(90, 95, 105);
     const splitNotes = doc.splitTextToSize(`"${meta.catatan}"`, 260);
     doc.text(splitNotes, 14, finalY + 12);
     noteHeight = splitNotes.length * 4.2 + 8;
@@ -1184,37 +1221,39 @@ export async function exportNonStaffRekapPdf(
   const signY = finalY + 10 + noteHeight;
   const hasKikiping = Boolean(meta.kikipingOleh || (meta.kikipingNominal && meta.kikipingNominal > 0));
 
+  const drawSignatures = (baseY: number) => {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(90, 95, 105);
+    doc.text("Dibuat oleh,", 30, baseY);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(25, 30, 40);
+    doc.text(meta.dibuatOleh, 30, baseY + 20);
+
+    if (hasKikiping) {
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(90, 95, 105);
+      doc.text("Kikiping oleh,", 120, baseY);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(25, 30, 40);
+      const kikipingText = `${meta.kikipingOleh || "-"}${meta.kikipingNominal ? ` (${formatRupiah(meta.kikipingNominal)})` : ""}`;
+      doc.text(kikipingText, 120, baseY + 20);
+    }
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(90, 95, 105);
+    doc.text("Diketahui oleh,", 210, baseY);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(25, 30, 40);
+    doc.text(meta.diketahuiOleh, 210, baseY + 20);
+  };
+
   // Prevent page spill
   if (signY > 185) {
     doc.addPage();
-    const nextY = 20;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9.5);
-    doc.text("Dibuat oleh,", 30, nextY);
-    doc.text(meta.dibuatOleh, 30, nextY + 20);
-
-    if (hasKikiping) {
-      doc.text("Kikiping oleh,", 120, nextY);
-      const kikipingText = `${meta.kikipingOleh || "-"}${meta.kikipingNominal ? ` (${formatRupiah(meta.kikipingNominal)})` : ""}`;
-      doc.text(kikipingText, 120, nextY + 20);
-    }
-
-    doc.text("Diketahui oleh,", 210, nextY);
-    doc.text(meta.diketahuiOleh, 210, nextY + 20);
+    drawSignatures(20);
   } else {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9.5);
-    doc.text("Dibuat oleh,", 30, signY);
-    doc.text(meta.dibuatOleh, 30, signY + 20);
-
-    if (hasKikiping) {
-      doc.text("Kikiping oleh,", 120, signY);
-      const kikipingText = `${meta.kikipingOleh || "-"}${meta.kikipingNominal ? ` (${formatRupiah(meta.kikipingNominal)})` : ""}`;
-      doc.text(kikipingText, 120, signY + 20);
-    }
-
-    doc.text("Diketahui oleh,", 210, signY);
-    doc.text(meta.diketahuiOleh, 210, signY + 20);
+    drawSignatures(signY);
   }
 
   doc.save(fileName);
