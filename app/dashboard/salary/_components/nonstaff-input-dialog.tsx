@@ -519,6 +519,22 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                     </div>
 
                     <div className="space-y-3 pt-1.5">
+                      {draftState.sudahBayarDiLokasiLain && (
+                        <div className="rounded-md border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900">
+                          <p className="font-semibold flex items-center gap-1.5">
+                            <span>⚠️</span> Sudah Terpotong di Lokasi Lain
+                          </p>
+                          <p className="text-[11px] mt-1 text-amber-800">
+                            Cicilan periode ini sudah dipotong di{" "}
+                            <span className="font-bold">{draftState.infoCicilanLain?.lokasi || "lokasi sebelumnya"}</span>
+                            {draftState.infoCicilanLain?.jumlahDipotong
+                              ? ` (${formatCurrency(draftState.infoCicilanLain.jumlahDipotong)})`
+                              : ""}
+                            . Potongan cicilan di lokasi ini otomatis dilewati (skip) agar saldo tidak terpotong ganda.
+                          </p>
+                        </div>
+                      )}
+
                       <div className="flex items-start gap-2">
                         <Checkbox
                           id="bayarMingguIni"

@@ -271,7 +271,7 @@ async function drawSingleSlip(
   // Header — company name
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10.5);
-  doc.setTextColor(30, 30, 30);
+  doc.setTextColor(0, 0, 0);
   doc.text(
     truncateText(profile.companyName.toUpperCase(), 32),
     contentX,
@@ -281,7 +281,7 @@ async function drawSingleSlip(
   // Header — period & lokasi
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.0);
-  doc.setTextColor(70, 70, 70);
+  doc.setTextColor(0, 0, 0);
   doc.text(
     truncateText(payload.periodLabel.toUpperCase(), 36),
     contentX,
@@ -306,7 +306,7 @@ async function drawSingleSlip(
 
   // Body
   let rowY = originY + S_BODY_START;
-  doc.setTextColor(20, 20, 20);
+  doc.setTextColor(0, 0, 0);
 
   const addRow = (label: string, value: string, bold = false) => {
     doc.setFont("helvetica", bold ? "bold" : "normal");
@@ -325,10 +325,10 @@ async function drawSingleSlip(
   // Section label: Potongan
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.0);
-  doc.setTextColor(80, 80, 80);
+  doc.setTextColor(0, 0, 0);
   doc.text("Potongan", contentX, rowY);
   rowY += S_SEC_GAP;
-  doc.setTextColor(20, 20, 20);
+  doc.setTextColor(0, 0, 0);
 
   addRow("_ Pinjaman", formatRupiah(pinjaman));
   addRow("_ Sumbangan", formatRupiah(sumbangan));
@@ -348,7 +348,7 @@ async function drawSingleSlip(
   if (gajiBersihSebelumBulat !== gajiBersih) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.0);
-    doc.setTextColor(130, 130, 130);
+    doc.setTextColor(0, 0, 0);
     doc.text(
       `(dibulatkan dari ${formatRupiah(gajiBersihSebelumBulat)})`,
       rightX,
@@ -356,7 +356,7 @@ async function drawSingleSlip(
       { align: "right" }
     );
     rowY += S_ROW_GAP;
-    doc.setTextColor(20, 20, 20);
+    doc.setTextColor(0, 0, 0);
   }
 
   if (payload.sisaPiutang && payload.sisaPiutang > 0) {
@@ -770,14 +770,14 @@ async function drawNonStaffSlip(
   // Company name — smaller font
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.5);
-  doc.setTextColor(30, 30, 30);
+  doc.setTextColor(0, 0, 0);
   doc.text(truncateText(profile.companyName, 34), leftX, cursorY);
   cursorY += 4.0;
 
   // Period
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
-  doc.setTextColor(70, 70, 70);
+  doc.setTextColor(0, 0, 0);
   doc.text(
     `Periode: ${formatPeriodRangeLabel(payload.periodStart, payload.periodEnd)}`,
     leftX,
@@ -785,13 +785,13 @@ async function drawNonStaffSlip(
   );
   cursorY += 3.2;
 
-  // Compact row helper: styling berjenjang (label muted [80, 80, 80], value tegas [20, 20, 20])
+  // Compact row helper: semua teks full hitam
   const linePair = (
     label: string,
     value: string,
     bold = false,
-    labelColor: [number, number, number] = [80, 80, 80],
-    valueColor: [number, number, number] = [20, 20, 20]
+    labelColor: [number, number, number] = [0, 0, 0],
+    valueColor: [number, number, number] = [0, 0, 0]
   ) => {
     doc.setFont("helvetica", bold ? "bold" : "normal");
     doc.setFontSize(bold ? 8.0 : 7.8);
@@ -835,7 +835,7 @@ async function drawNonStaffSlip(
   cursorY += NS_SEC_GAP;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.0);
-  doc.setTextColor(70, 70, 70);
+  doc.setTextColor(0, 0, 0);
   doc.text("PENDAPATAN", leftX, cursorY);
   cursorY += NS_SEC_GAP;
 
@@ -843,20 +843,20 @@ async function drawNonStaffSlip(
   for (const item of bonusItems) {
     linePair(truncateText(item.judul, 18), formatRupiah(item.nominal));
   }
-  linePair("Total", formatRupiah(resolvedGajiPokok + resolvedTotalBonus), true, [40, 40, 40], [20, 20, 20]);
+  linePair("Total", formatRupiah(resolvedGajiPokok + resolvedTotalBonus), true);
 
   // Potongan
   cursorY += NS_SEC_GAP;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.0);
-  doc.setTextColor(70, 70, 70);
+  doc.setTextColor(0, 0, 0);
   doc.text("POTONGAN", leftX, cursorY);
   cursorY += NS_SEC_GAP;
 
   for (const item of potonganItems) {
     linePair(truncateText(item.judul, 18), formatRupiah(item.nominal));
   }
-  linePair("Total", formatRupiah(resolvedTotalPotongan), true, [40, 40, 40], [20, 20, 20]);
+  linePair("Total", formatRupiah(resolvedTotalPotongan), true);
 
   // Thin divider before GAJI BERSIH (dengan jarak yang cukup agar tidak menimpa teks)
   cursorY += 1.5;
@@ -866,10 +866,10 @@ async function drawNonStaffSlip(
   doc.line(leftX, dividerY, rightEdge, dividerY);
 
   cursorY += 3.0;
-  linePair("GAJI BERSIH", formatRupiah(resolvedGajiBersih), true, [20, 20, 20], [20, 20, 20]);
+  linePair("GAJI BERSIH", formatRupiah(resolvedGajiBersih), true);
 
   if (payload.sisaPiutang && payload.sisaPiutang > 0) {
-    linePair("Sisa Piutang", formatRupiah(payload.sisaPiutang), false, [110, 110, 110], [110, 110, 110]);
+    linePair("Sisa Piutang", formatRupiah(payload.sisaPiutang), false);
   }
 }
 

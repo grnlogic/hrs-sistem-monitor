@@ -106,8 +106,16 @@ export type InputState = {
   /** Data tidak sehat: karyawan punya >1 piutang aktif (rekap akan ditolak BE). */
   piutangKonflik?: boolean;
   piutangAktifCount?: number;
-  /** Flag penanda jika bonus sudah pernah disimpan oleh user */
+  /** Flag penanda jika draft bonus/potongan sudah pernah disimpan oleh user */
+  isDraftSaved?: boolean;
   isBonusSaved?: boolean;
+  /** Info jika cicilan piutang minggu ini sudah dibayar di lokasi lain (lintas lokasi) */
+  sudahBayarDiLokasiLain?: boolean;
+  infoCicilanLain?: {
+    lokasi: string;
+    jumlahDipotong: number;
+    tanggal?: string | null;
+  } | null;
 };
 
 export type RekapPopupState = {

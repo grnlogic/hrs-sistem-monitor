@@ -918,6 +918,8 @@ export function NonStaffSalaryWorkflow() {
         normalizedSnapshots.map(async (row) => {
           try {
             const detail = await salaryAPI.getBonusPotonganDetail(row.gajiId);
+            const isDraftSaved = Boolean(detail?.isDraftSaved || detail?.isBonusSaved);
+
             const bonusFromApi: SalaryItem[] = Array.isArray(detail?.bonusItems)
               ? detail.bonusItems.map((item: any) => ({
                   id: item.id ? String(item.id) : undefined,
@@ -925,9 +927,9 @@ export function NonStaffSalaryWorkflow() {
                   nominal: toNumber(item.nominal),
                 }))
               : [];
-            const normalizedBonus = bonusFromApi.length > 0
+            const normalizedBonus = isDraftSaved
               ? bonusFromApi
-              : buildDefaultInputState().bonusItems;
+              : (bonusFromApi.length > 0 ? bonusFromApi : buildDefaultInputState().bonusItems);
 
             const potonganFromApi: SalaryItem[] = Array.isArray(detail?.potonganItems)
               ? detail.potonganItems.map((item: any) => ({
@@ -938,22 +940,33 @@ export function NonStaffSalaryWorkflow() {
                 }))
               : [];
 
-            const normalizedPotongan = [...DEFAULT_POTONGAN.map((item) => ({ ...item }))];
-            for (const potongan of potonganFromApi) {
-              const targetIndex = normalizedPotongan.findIndex(
-                (base) => base.judul.toLowerCase() === potongan.judul.toLowerCase()
-              );
-              if (targetIndex >= 0) {
-                normalizedPotongan[targetIndex] = {
-                  ...normalizedPotongan[targetIndex],
-                  id: potongan.id,
-                  nominal: potongan.nominal,
-                  isDefault: true,
-                };
-              } else {
-                normalizedPotongan.push({ ...potongan, isDefault: false });
-              }
-            }
+            const normalizedPotongan = isDraftSaved
+              ? potonganFromApi
+              : (() => {
+                  const result = [...DEFAULT_POTONGAN.map((item) => ({ ...item }))];
+                  for (const potongan of potonganFromApi) {
+                    const targetIndex = result.findIndex(
+                      (base) => base.judul.toLowerCase() === potongan.judul.toLowerCase()
+                    );
+                    if (targetIndex >= 0) {
+                      result[targetIndex] = {
+                        ...result[targetIndex],
+                        id: potongan.id,
+                        nominal: potongan.nominal,
+                        isDefault: true,
+                      };
+                    } else {
+                      result.push({ ...potongan, isDefault: false });
+                    }
+                  }
+                  return result;
+                })();
+
+            const pakaiUangPribadi = Boolean(detail?.pakaiUangPribadi || detail?.piutangPlan?.pakaiUangPribadi);
+            const sudahBayarDiLokasiLain = Boolean(detail?.sudahBayarDiLokasiLain);
+            const defaultBayarMingguIni = sudahBayarDiLokasiLain ? false : true;
+            const bayarMingguIni = detail?.piutangPlan?.bayarMingguIni ?? defaultBayarMingguIni;
+            const infoCicilanLain = detail?.infoCicilanLain || null;
 
             setInputsBySalaryId((prev) => ({
               ...prev,
@@ -961,7 +974,7 @@ export function NonStaffSalaryWorkflow() {
                 bonusItems: normalizedBonus,
                 potonganItems: normalizedPotongan,
                 sisaPiutang: detail?.sisaPiutang !== undefined ? detail.sisaPiutang : null,
-                bayarMingguIni: detail?.piutangPlan?.bayarMingguIni ?? true,
+                bayarMingguIni,
                 nominalCicilan:
                   detail?.cicilanNominal != null
                     ? Number(detail.cicilanNominal)
@@ -970,12 +983,21 @@ export function NonStaffSalaryWorkflow() {
                       : detail?.piutang?.jumlahCicilan != null
                         ? Number(detail.piutang.jumlahCicilan)
                         : null,
+                pakaiUangPribadi,
                 piutangInfo: detail?.piutang || null,
                 piutangKonflik: Boolean(detail?.piutangKonflik),
                 piutangAktifCount: Number(detail?.piutangAktifCount || 0),
-                isBonusSaved: Boolean(detail?.isBonusSaved),
+                isDraftSaved,
+                isBonusSaved: isDraftSaved,
+                sudahBayarDiLokasiLain,
+                infoCicilanLain,
               },
             }));
+
+            // Jika data bonus/potongan sudah pernah disimpan sebelumnya, otomatis tandai Selesai
+            if (isDraftSaved) {
+              setDoneBySalaryId((prev) => ({ ...prev, [row.gajiId]: true }));
+            }
           } catch (e) {
             console.error("Error prefetching detail for gajiId", row.gajiId, e);
           }
@@ -1017,6 +1039,8 @@ export function NonStaffSalaryWorkflow() {
 
     try {
       const detail = await salaryAPI.getBonusPotonganDetail(row.gajiId);
+      const isDraftSaved = Boolean(detail?.isDraftSaved || detail?.isBonusSaved);
+
       const bonusFromApi: SalaryItem[] = Array.isArray(detail?.bonusItems)
         ? detail.bonusItems.map((item: any) => ({
             id: item.id ? String(item.id) : undefined,
@@ -1024,6 +1048,10 @@ export function NonStaffSalaryWorkflow() {
             nominal: toNumber(item.nominal),
           }))
         : [];
+      const normalizedBonus = isDraftSaved
+        ? bonusFromApi
+        : (bonusFromApi.length > 0 ? bonusFromApi : buildDefaultInputState().bonusItems);
+
       const potonganFromApi: SalaryItem[] = Array.isArray(detail?.potonganItems)
         ? detail.potonganItems.map((item: any) => ({
             id: item.id ? String(item.id) : undefined,
@@ -1033,26 +1061,33 @@ export function NonStaffSalaryWorkflow() {
           }))
         : [];
 
-      const normalizedBonus = bonusFromApi.length > 0
-        ? bonusFromApi
-        : buildDefaultInputState().bonusItems;
-      const normalizedPotongan = [...DEFAULT_POTONGAN.map((item) => ({ ...item }))];
+      const normalizedPotongan = isDraftSaved
+        ? potonganFromApi
+        : (() => {
+            const result = [...DEFAULT_POTONGAN.map((item) => ({ ...item }))];
+            for (const potongan of potonganFromApi) {
+              const targetIndex = result.findIndex(
+                (base) => base.judul.toLowerCase() === potongan.judul.toLowerCase()
+              );
+              if (targetIndex >= 0) {
+                result[targetIndex] = {
+                  ...result[targetIndex],
+                  id: potongan.id,
+                  nominal: potongan.nominal,
+                  isDefault: true,
+                };
+              } else {
+                result.push({ ...potongan, isDefault: false });
+              }
+            }
+            return result;
+          })();
 
-      for (const potongan of potonganFromApi) {
-        const targetIndex = normalizedPotongan.findIndex(
-          (base) => base.judul.toLowerCase() === potongan.judul.toLowerCase()
-        );
-        if (targetIndex >= 0) {
-          normalizedPotongan[targetIndex] = {
-            ...normalizedPotongan[targetIndex],
-            id: potongan.id,
-            nominal: potongan.nominal,
-            isDefault: true,
-          };
-        } else {
-          normalizedPotongan.push({ ...potongan, isDefault: false });
-        }
-      }
+      const pakaiUangPribadi = Boolean(detail?.pakaiUangPribadi || detail?.piutangPlan?.pakaiUangPribadi);
+      const sudahBayarDiLokasiLain = Boolean(detail?.sudahBayarDiLokasiLain);
+      const defaultBayarMingguIni = sudahBayarDiLokasiLain ? false : true;
+      const bayarMingguIni = detail?.piutangPlan?.bayarMingguIni ?? defaultBayarMingguIni;
+      const infoCicilanLain = detail?.infoCicilanLain || null;
 
       setInputsBySalaryId((prev) => ({
         ...prev,
@@ -1060,7 +1095,7 @@ export function NonStaffSalaryWorkflow() {
           bonusItems: normalizedBonus,
           potonganItems: normalizedPotongan,
           sisaPiutang: detail?.sisaPiutang !== undefined ? detail.sisaPiutang : null,
-          bayarMingguIni: detail?.piutangPlan?.bayarMingguIni ?? true,
+          bayarMingguIni,
           nominalCicilan:
             detail?.cicilanNominal != null
               ? Number(detail.cicilanNominal)
@@ -1069,14 +1104,20 @@ export function NonStaffSalaryWorkflow() {
                 : detail?.piutang?.jumlahCicilan != null
                   ? Number(detail.piutang.jumlahCicilan)
                   : null,
+          pakaiUangPribadi,
           piutangInfo: detail?.piutang || null,
           piutangKonflik: Boolean(detail?.piutangKonflik),
           piutangAktifCount: Number(detail?.piutangAktifCount || 0),
-          isBonusSaved: Boolean(detail?.isBonusSaved),
+          isDraftSaved,
+          isBonusSaved: isDraftSaved,
+          sudahBayarDiLokasiLain,
+          infoCicilanLain,
         },
       }));
-      // Note: Status is NOT auto-set to done on dialog open.
-      // Status will only be marked done (Selesai) when user clicks "Simpan Perubahan".
+
+      if (isDraftSaved) {
+        setDoneBySalaryId((prev) => ({ ...prev, [row.gajiId]: true }));
+      }
     } catch (detailErr) {
       console.error(detailErr);
       setInputsBySalaryId((prev) => ({
@@ -1239,6 +1280,7 @@ export function NonStaffSalaryWorkflow() {
         ...prev,
         [salaryId]: {
           ...finalState,
+          isDraftSaved: true,
           isBonusSaved: true,
         },
       }));

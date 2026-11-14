@@ -364,7 +364,22 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
         return;
       }
 
-      const allDone = mapped.length > 0 && mapped.every((row) => inputDoneBySalaryId[row.id]);
+      const initialDone: Record<string, boolean> = {};
+      mapped.forEach((row) => {
+        const rawRow = (Array.isArray(rows) ? rows : []).find((r: any) => String(r.id) === row.id);
+        const hasSaved = rawRow && (
+          (rawRow.bonusItems != null && Array.isArray(rawRow.bonusItems) && rawRow.bonusItems.length > 0) ||
+          rawRow.potonganItems != null ||
+          toNumber(rawRow.bonus) > 0 ||
+          toNumber(rawRow.potongan) > 0
+        );
+        if (hasSaved) {
+          initialDone[row.id] = true;
+        }
+      });
+      setInputDoneBySalaryId((prev) => ({ ...initialDone, ...prev }));
+
+      const allDone = mapped.length > 0 && mapped.every((row) => initialDone[row.id] || inputDoneBySalaryId[row.id]);
       if (allDone) {
         setWorkflowStatus("INPUT_DONE");
         setActiveStep(3);
