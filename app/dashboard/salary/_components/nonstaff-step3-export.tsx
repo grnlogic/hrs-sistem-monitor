@@ -18,7 +18,8 @@ import {
   TableRow,
 } from "@/components/ui/display/table";
 import { formatCurrency } from "@/lib/utils";
-import { FileDown, FileBarChart2, Save, Edit3 } from "lucide-react";
+import { FileDown, Eye, Save, Edit3, CheckSquare } from "lucide-react";
+import { Checkbox } from "@/components/ui/form/checkbox";
 import {
   type SnapshotRow,
   type CalculatedSnapshot,
@@ -32,9 +33,8 @@ type NonStaffStep3Props = {
   calculatedForSnapshot: (row: SnapshotRow) => CalculatedSnapshot;
   divisionSummary: Array<{ divisi: string; total: number }>;
   submitting: boolean;
-  handleExportSlipGabungan: () => void;
-  handleExportRekapSemua: () => void;
   handleSimpanRekapan: () => void;
+  handleDownloadKeduaPdfOnly: () => void;
   signatures: {
     diketahuiOleh: string;
     dibuatOleh: string;
@@ -44,6 +44,9 @@ type NonStaffStep3Props = {
   };
   onEditSignatures: () => void;
   inputsBySalaryId: Record<string, InputState>;
+  showSisaPiutangMap: Record<string, boolean>;
+  onToggleSisaPiutang: (gajiId: string) => void;
+  onToggleAllSisaPiutang: () => void;
 };
 
 export function NonStaffStep3Export(props: NonStaffStep3Props) {
@@ -52,20 +55,24 @@ export function NonStaffStep3Export(props: NonStaffStep3Props) {
     calculatedForSnapshot,
     divisionSummary,
     submitting,
-    handleExportSlipGabungan,
-    handleExportRekapSemua,
     handleSimpanRekapan,
+    handleDownloadKeduaPdfOnly,
     signatures,
     onEditSignatures,
     inputsBySalaryId,
+    showSisaPiutangMap,
+    onToggleSisaPiutang,
+    onToggleAllSisaPiutang,
   } = props;
 
   const alreadyPaid = useMemo(() => {
-    return (
-      snapshotRows.length > 0 &&
-      snapshotRows.every(
-        (r) => (r.statusPembayaran || "").toLowerCase() === "dibayar"
-      )
+    if (snapshotRows.length === 0) return false;
+    const nonAbsensiRows = snapshotRows.filter(
+      (r) => (r.statusPembayaran || "").toLowerCase() !== "tidak ada absensi"
+    );
+    if (nonAbsensiRows.length === 0) return false;
+    return nonAbsensiRows.every(
+      (r) => (r.statusPembayaran || "").toLowerCase() === "dibayar"
     );
   }, [snapshotRows]);
 
@@ -141,8 +148,24 @@ export function NonStaffStep3Export(props: NonStaffStep3Props) {
 
   return (
     <Card className="rounded-2xl border-zinc-100 shadow-sm">
-      <CardHeader>
-        <CardTitle className="text-zinc-800 font-bold">Fase 3. Export & Finalisasi</CardTitle>
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <CardTitle className="text-zinc-800 font-bold">Fase 3. Export & Finalisasi</CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">
+            Pilih karyawan yang ingin ditampilkan sisa piutangnya pada slip gaji (default tidak dicentang).
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onToggleAllSisaPiutang}
+          disabled={snapshotRows.length === 0}
+          className="rounded-xl border-zinc-200 text-xs h-9 gap-1.5 font-medium hover:bg-zinc-100 text-zinc-700 shrink-0 self-start sm:self-auto"
+        >
+          <CheckSquare className="w-4 h-4 text-zinc-600" />
+          Checklist Semua
+        </Button>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="overflow-x-auto rounded-xl border border-zinc-100">
@@ -168,12 +191,27 @@ export function NonStaffStep3Export(props: NonStaffStep3Props) {
                 ))}
                 <TableHead className="font-semibold text-zinc-700 text-right">Gaji Bersih</TableHead>
                 <TableHead className="font-semibold text-zinc-700 text-center">Status</TableHead>
+                <TableHead className="font-semibold text-zinc-700 text-center min-w-[240px]">
+                  <div className="flex items-center justify-center gap-2">
+                    <span>Sisa Piutang di Slip</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={onToggleAllSisaPiutang}
+                      disabled={snapshotRows.length === 0}
+                      className="h-6 px-2 text-[10px] font-semibold text-zinc-600 hover:text-zinc-900 border border-zinc-200 rounded"
+                    >
+                      Checklist Semua
+                    </Button>
+                  </div>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {snapshotRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11 + activeBonusCols.length + activePotonganCols.length} className="text-center text-zinc-500 py-8">
+                  <TableCell colSpan={12 + activeBonusCols.length + activePotonganCols.length} className="text-center text-zinc-500 py-8">
                     Belum ada data untuk export.
                   </TableCell>
                 </TableRow>
@@ -254,6 +292,19 @@ export function NonStaffStep3Export(props: NonStaffStep3Props) {
                             </Badge>
                           )}
                         </TableCell>
+                        <TableCell className="text-center whitespace-nowrap">
+                          <label
+                            htmlFor={`piutang-check-${row.gajiId}`}
+                            className="inline-flex items-center gap-2 text-xs text-zinc-700 cursor-pointer select-none hover:text-zinc-950 font-normal"
+                          >
+                            <Checkbox
+                              id={`piutang-check-${row.gajiId}`}
+                              checked={!!showSisaPiutangMap[row.gajiId]}
+                              onCheckedChange={() => onToggleSisaPiutang(row.gajiId)}
+                            />
+                            <span>Tampilkan sisa piutang di slip</span>
+                          </label>
+                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -291,6 +342,7 @@ export function NonStaffStep3Export(props: NonStaffStep3Props) {
                         ))}
 
                         <TableCell className="text-right text-zinc-950 font-bold">{formatCurrency(totals.totalGajiBersih)}</TableCell>
+                        <TableCell />
                         <TableCell />
                       </TableRow>
                     );
@@ -372,35 +424,29 @@ export function NonStaffStep3Export(props: NonStaffStep3Props) {
           )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t mt-6">
-          <Button
-            onClick={handleExportSlipGabungan}
-            disabled={submitting || snapshotRows.length === 0}
-            className="gap-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl h-11"
-          >
-            <FileDown className="w-4 h-4" />
-            Export Slip Gabungan (PDF)
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleExportRekapSemua}
-            disabled={submitting || snapshotRows.length === 0}
-            className="gap-2 rounded-xl h-11 border-zinc-200 text-zinc-700 hover:bg-zinc-50"
-          >
-            <FileBarChart2 className="w-4 h-4" />
-            Export Rekap Semua (PDF)
-          </Button>
-          <div className="sm:ml-auto">
+        {/* Action Button: Hanya ada satu tombol di kanan */}
+        <div className="flex items-center justify-end pt-6 border-t mt-6">
+          {alreadyPaid ? (
             <Button
+              type="button"
+              onClick={handleDownloadKeduaPdfOnly}
+              disabled={submitting || snapshotRows.length === 0}
+              className="gap-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl h-11 px-6 font-medium shadow-xs"
+            >
+              <FileDown className="w-4 h-4" />
+              Download Ulang File PDF
+            </Button>
+          ) : (
+            <Button
+              type="button"
               onClick={handleSimpanRekapan}
-              disabled={submitting || snapshotRows.length === 0 || alreadyPaid}
-              className="w-full gap-2 bg-zinc-700 hover:bg-zinc-800 text-white rounded-xl h-11"
+              disabled={submitting || snapshotRows.length === 0}
+              className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-11 px-6 font-medium shadow-xs"
             >
               <Save className="w-4 h-4" />
-              {alreadyPaid ? "Rekapan Sudah Terbayar" : "Simpan Rekapan & Set Terbayar"}
+              Simpan / Bayarkan
             </Button>
-          </div>
+          )}
         </div>
       </CardContent>
     </Card>

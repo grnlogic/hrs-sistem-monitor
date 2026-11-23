@@ -21,6 +21,8 @@ import {
 import {
   exportNonStaffRekapPdf,
   exportNonStaffSlipGabunganPdf,
+  getNonStaffRekapBlob,
+  getNonStaffSlipGabunganBlob,
   type NonStaffSlipExportPayload,
 } from "@/lib/salary-slip-pdf";
 import { formatCurrency } from "@/lib/utils";
@@ -53,6 +55,7 @@ import { NonStaffStep3Export } from "./nonstaff-step3-export";
 import { NonStaffInputDialog } from "./nonstaff-input-dialog";
 import { NonStaffRekapPopup } from "./nonstaff-rekap-popup";
 import { NonStaffSignatureDialog } from "./nonstaff-signature-dialog";
+import { NonStaffPreviewPdfDialog } from "./nonstaff-preview-pdf-dialog";
 
 /* ---------- Helper functions (stay in parent) ---------- */
 
@@ -266,6 +269,8 @@ export function NonStaffSalaryWorkflow() {
 
   const [inputsBySalaryId, setInputsBySalaryId] = useState<Record<string, InputState>>({});
   const [doneBySalaryId, setDoneBySalaryId] = useState<Record<string, boolean>>({});
+  const [showSisaPiutangMap, setShowSisaPiutangMap] = useState<Record<string, boolean>>({});
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const simpanRekapanInFlight = useRef(false);
   const [rekapPopup, setRekapPopup] = useState<RekapPopupState>({
@@ -339,6 +344,13 @@ export function NonStaffSalaryWorkflow() {
     setSelectedKaryawanIds([]);
     setSelectedDivisions([]);
   }, [step, setSelectedKaryawanIds, setSelectedDivisions]);
+
+  // Reset pilihan tampilan sisa piutang di slip saat keluar dari Fase 3 atau ganti periode/entitas
+  useEffect(() => {
+    if (step !== 3) {
+      setShowSisaPiutangMap({});
+    }
+  }, [step, company, startDate, endDate]);
 
   const canEditSalary = true;
 
@@ -1304,126 +1316,66 @@ export function NonStaffSalaryWorkflow() {
     setDoneBySalaryId(nextDoneMap);
   }
 
-  async function handleExportSlipGabungan() {
-    try {
-      setSubmitting(true);
-      setError("");
+  function handleToggleSisaPiutang(gajiId: string) {
+    setShowSisaPiutangMap((prev) => ({
+      ...prev,
+      [gajiId]: !prev[gajiId],
+    }));
+  }
 
-      const payload: NonStaffSlipExportPayload[] = [];
-      let lintasLokasiSplitCount = 0;
+  function handleToggleAllSisaPiutang() {
+    const allChecked =
+      snapshotRows.length > 0 &&
+      snapshotRows.every((r) => !!showSisaPiutangMap[r.gajiId]);
 
-      snapshotRows.forEach((row) => {
-        const input = inputsBySalaryId[row.gajiId] || buildDefaultInputState();
-        const calc = calculatedForSnapshot(row);
-        const effectivePotonganItems = input.bayarMingguIni === false
-          ? input.potonganItems.filter((item) => item.judul.toLowerCase() !== "pinjaman")
-          : input.potonganItems;
-
-        const pinjamanItem = effectivePotonganItems.find(
-          (item) => item.judul.toLowerCase() === "pinjaman" && Number(item.nominal) > 0
-        );
-        const pinjamanDeducted = pinjamanItem ? Number(pinjamanItem.nominal) : 0;
-
-        let exportSisaPiutang: number | null = null;
-        if (input.piutangInfo && Number(input.piutangInfo.sisaSaldo) > 0) {
-          const currentSaldo = Number(input.piutangInfo.sisaSaldo);
-          exportSisaPiutang = pinjamanDeducted > 0
-            ? Math.max(0, currentSaldo - pinjamanDeducted)
-            : currentSaldo;
-        } else if (input.sisaPiutang != null) {
-          exportSisaPiutang = pinjamanDeducted > 0
-            ? input.sisaPiutang
-            : (input.piutangInfo ? Number(input.piutangInfo.sisaSaldo) : input.sisaPiutang);
-        }
-
-        const breakdown = (row.lokasiBreakdown || []).filter((item) => item.hariEfektif > 0);
-
-        if (breakdown.length <= 1 || row.hariEfektif <= 0) {
-          payload.push({
-            companyLocation: row.lokasiSlip || company,
-            periodStart: startDate,
-            periodEnd: endDate,
-            nama: row.nama,
-            divisi: row.divisi,
-            hariEfektif: row.hariEfektif,
-            upahHarian: row.upahHarian,
-            gajiPokok: row.gajiPokok,
-            totalBonus: calc.totalBonus,
-            totalPotongan: calc.totalPotongan,
-            gajiBersih: calc.gajiBersih,
-            bonusItems: input.bonusItems,
-            potonganItems: effectivePotonganItems,
-            sisaPiutang: exportSisaPiutang,
-          });
-          return;
-        }
-
-        lintasLokasiSplitCount += 1;
-        let usedGajiPokok = 0;
-        let usedBonus = 0;
-        let usedPotongan = 0;
-
-        breakdown.forEach((part, index) => {
-          const ratio = part.hariEfektif / row.hariEfektif;
-          const isLast = index === breakdown.length - 1;
-          const partGajiPokok = isLast ? row.gajiPokok - usedGajiPokok : Math.round(row.gajiPokok * ratio);
-          const partBonus = isLast ? calc.totalBonus - usedBonus : Math.round(calc.totalBonus * ratio);
-          const partPotongan = isLast ? calc.totalPotongan - usedPotongan : Math.round(calc.totalPotongan * ratio);
-
-          usedGajiPokok += partGajiPokok;
-          usedBonus += partBonus;
-          usedPotongan += partPotongan;
-
-          payload.push({
-            companyLocation: part.lokasi,
-            periodStart: startDate,
-            periodEnd: endDate,
-            nama: `${row.nama} (${part.lokasi})`,
-            divisi: row.divisi,
-            hariEfektif: Number(part.hariEfektif.toFixed(2)),
-            upahHarian: row.upahHarian,
-            gajiPokok: partGajiPokok,
-            totalBonus: partBonus,
-            totalPotongan: partPotongan,
-            gajiBersih: partGajiPokok + partBonus - partPotongan,
-            bonusItems: input.bonusItems,
-            potonganItems: effectivePotonganItems,
-            sisaPiutang: exportSisaPiutang,
-          });
-        });
+    if (allChecked) {
+      setShowSisaPiutangMap({});
+    } else {
+      const nextMap: Record<string, boolean> = {};
+      snapshotRows.forEach((r) => {
+        nextMap[r.gajiId] = true;
       });
-
-      await exportNonStaffSlipGabunganPdf(payload, `slip-gaji-nonstaff-${startDate}_${endDate}.pdf`);
-      if (lintasLokasiSplitCount > 0) {
-        setMessage(`Export slip gabungan selesai. ${lintasLokasiSplitCount} karyawan lintas lokasi dipecah jadi slip per lokasi.`);
-      } else {
-        setMessage("Export slip gabungan selesai.");
-      }
-    } catch (exportErr) {
-      console.error(exportErr);
-      const message = String((exportErr as any)?.message || "");
-      if (message.toLowerCase().includes("modul pdf") || message.toLowerCase().includes("chunk")) {
-        setError("Gagal export slip gabungan karena modul PDF belum siap. Refresh halaman lalu coba lagi.");
-      } else {
-        setError("Gagal export slip gabungan.");
-      }
-    } finally {
-      setSubmitting(false);
+      setShowSisaPiutangMap(nextMap);
     }
   }
 
-  async function handleExportRekapSemua() {
-    try {
-      setSubmitting(true);
-      setError("");
+  const prepareSlipExportPayload = useCallback((): NonStaffSlipExportPayload[] => {
+    const payload: NonStaffSlipExportPayload[] = [];
 
-      const rows = snapshotRows.map((row) => {
-        const input = inputsBySalaryId[row.gajiId] || buildDefaultInputState();
-        const calc = calculatedForSnapshot(row);
-        const effectivePotonganItems = input.bayarMingguIni === false
-          ? input.potonganItems.filter((item) => item.judul.toLowerCase() !== "pinjaman")
-          : input.potonganItems;
-        return {
+    snapshotRows.forEach((row) => {
+      const input = inputsBySalaryId[row.gajiId] || buildDefaultInputState();
+      const calc = calculatedForSnapshot(row);
+      const effectivePotonganItems = input.bayarMingguIni === false
+        ? input.potonganItems.filter((item) => item.judul.toLowerCase() !== "pinjaman")
+        : input.potonganItems;
+
+      const pinjamanItem = effectivePotonganItems.find(
+        (item) => item.judul.toLowerCase() === "pinjaman" && Number(item.nominal) > 0
+      );
+      const pinjamanDeducted = pinjamanItem ? Number(pinjamanItem.nominal) : 0;
+
+      let exportSisaPiutang: number | null = null;
+      if (input.piutangInfo && Number(input.piutangInfo.sisaSaldo) > 0) {
+        const currentSaldo = Number(input.piutangInfo.sisaSaldo);
+        exportSisaPiutang = pinjamanDeducted > 0
+          ? Math.max(0, currentSaldo - pinjamanDeducted)
+          : currentSaldo;
+      } else if (input.sisaPiutang != null) {
+        exportSisaPiutang = pinjamanDeducted > 0
+          ? input.sisaPiutang
+          : (input.piutangInfo ? Number(input.piutangInfo.sisaSaldo) : input.sisaPiutang);
+      }
+
+      const isChecked = !!showSisaPiutangMap[row.gajiId];
+      const finalSisaPiutang = isChecked ? exportSisaPiutang : null;
+
+      const breakdown = (row.lokasiBreakdown || []).filter((item) => item.hariEfektif > 0);
+
+      if (breakdown.length <= 1 || row.hariEfektif <= 0) {
+        payload.push({
+          companyLocation: row.lokasiSlip || company,
+          periodStart: startDate,
+          periodEnd: endDate,
           nama: row.nama,
           divisi: row.divisi,
           hariEfektif: row.hariEfektif,
@@ -1434,58 +1386,145 @@ export function NonStaffSalaryWorkflow() {
           gajiBersih: calc.gajiBersih,
           bonusItems: input.bonusItems,
           potonganItems: effectivePotonganItems,
-        };
-      });
-
-      const activeBonusCols = new Set<string>();
-      const activePotonganCols = new Set<string>();
-      snapshotRows.forEach((row) => {
-        const input = inputsBySalaryId[row.gajiId];
-        input?.bonusItems?.forEach((item) => {
-          if (item.judul.trim() && toNumber(item.nominal) > 0) activeBonusCols.add(item.judul.trim());
+          sisaPiutang: finalSisaPiutang,
         });
-        const effectivePotongan = input?.bayarMingguIni === false
-          ? input.potonganItems.filter((item) => item.judul.toLowerCase() !== "pinjaman")
-          : (input?.potonganItems || []);
-        effectivePotongan.forEach((item) => {
-          if (item.judul.trim() && toNumber(item.nominal) > 0) activePotonganCols.add(item.judul.trim());
+        return;
+      }
+
+      let usedGajiPokok = 0;
+      let usedBonus = 0;
+      let usedPotongan = 0;
+
+      breakdown.forEach((part, index) => {
+        const ratio = part.hariEfektif / row.hariEfektif;
+        const isLast = index === breakdown.length - 1;
+        const partGajiPokok = isLast ? row.gajiPokok - usedGajiPokok : Math.round(row.gajiPokok * ratio);
+        const partBonus = isLast ? calc.totalBonus - usedBonus : Math.round(calc.totalBonus * ratio);
+        const partPotongan = isLast ? calc.totalPotongan - usedPotongan : Math.round(calc.totalPotongan * ratio);
+
+        usedGajiPokok += partGajiPokok;
+        usedBonus += partBonus;
+        usedPotongan += partPotongan;
+
+        payload.push({
+          companyLocation: part.lokasi,
+          periodStart: startDate,
+          periodEnd: endDate,
+          nama: `${row.nama} (${part.lokasi})`,
+          divisi: row.divisi,
+          hariEfektif: Number(part.hariEfektif.toFixed(2)),
+          upahHarian: row.upahHarian,
+          gajiPokok: partGajiPokok,
+          totalBonus: partBonus,
+          totalPotongan: partPotongan,
+          gajiBersih: partGajiPokok + partBonus - partPotongan,
+          bonusItems: input.bonusItems,
+          potonganItems: effectivePotonganItems,
+          sisaPiutang: finalSisaPiutang,
         });
       });
+    });
 
-      await exportNonStaffRekapPdf(
-        rows,
-        {
-          location: company,
-          periodLabel: formatPeriod(startDate, endDate),
-          bonusColumns: Array.from(activeBonusCols),
-          potonganColumns: Array.from(activePotonganCols),
-          diketahuiOleh: signatures.diketahuiOleh,
-          dibuatOleh: signatures.dibuatOleh,
-          catatan: signatures.catatan,
-          kikipingOleh: signatures.kikipingOleh,
-          kikipingNominal: signatures.kikipingNominal,
-        },
-        `rekap-gaji-nonstaff-${startDate}_${endDate}.pdf`
-      );
+    return payload;
+  }, [snapshotRows, inputsBySalaryId, calculatedForSnapshot, showSisaPiutangMap, company, startDate, endDate]);
 
-      setMessage("Export rekap semua selesai.");
-    } catch (exportErr) {
-      console.error(exportErr);
-      setError("Gagal export rekap semua.");
+  const prepareRekapExportData = useCallback(() => {
+    const rows = snapshotRows.map((row) => {
+      const input = inputsBySalaryId[row.gajiId] || buildDefaultInputState();
+      const calc = calculatedForSnapshot(row);
+      const effectivePotonganItems = input.bayarMingguIni === false
+        ? input.potonganItems.filter((item) => item.judul.toLowerCase() !== "pinjaman")
+        : input.potonganItems;
+      return {
+        nama: row.nama,
+        divisi: row.divisi,
+        hariEfektif: row.hariEfektif,
+        upahHarian: row.upahHarian,
+        gajiPokok: row.gajiPokok,
+        totalBonus: calc.totalBonus,
+        totalPotongan: calc.totalPotongan,
+        gajiBersih: calc.gajiBersih,
+        bonusItems: input.bonusItems,
+        potonganItems: effectivePotonganItems,
+      };
+    });
+
+    const activeBonusCols = new Set<string>();
+    const activePotonganCols = new Set<string>();
+    snapshotRows.forEach((row) => {
+      const input = inputsBySalaryId[row.gajiId];
+      input?.bonusItems?.forEach((item) => {
+        if (item.judul.trim() && toNumber(item.nominal) > 0) activeBonusCols.add(item.judul.trim());
+      });
+      const effectivePotongan = input?.bayarMingguIni === false
+        ? input.potonganItems.filter((item) => item.judul.toLowerCase() !== "pinjaman")
+        : (input?.potonganItems || []);
+      effectivePotongan.forEach((item) => {
+        if (item.judul.trim() && toNumber(item.nominal) > 0) activePotonganCols.add(item.judul.trim());
+      });
+    });
+
+    const meta = {
+      location: company,
+      periodLabel: formatPeriod(startDate, endDate),
+      bonusColumns: Array.from(activeBonusCols),
+      potonganColumns: Array.from(activePotonganCols),
+      diketahuiOleh: signatures.diketahuiOleh,
+      dibuatOleh: signatures.dibuatOleh,
+      catatan: signatures.catatan,
+      kikipingOleh: signatures.kikipingOleh,
+      kikipingNominal: signatures.kikipingNominal,
+    };
+
+    return { rows, meta };
+  }, [snapshotRows, inputsBySalaryId, calculatedForSnapshot, company, startDate, endDate, signatures]);
+
+  const handleGenerateSlipBlob = useCallback(async () => {
+    const payload = prepareSlipExportPayload();
+    return await getNonStaffSlipGabunganBlob(payload);
+  }, [prepareSlipExportPayload]);
+
+  const handleGenerateRekapBlob = useCallback(async () => {
+    const { rows, meta } = prepareRekapExportData();
+    return await getNonStaffRekapBlob(rows, meta);
+  }, [prepareRekapExportData]);
+
+  async function downloadKeduaPdf() {
+    const slipPayload = prepareSlipExportPayload();
+    const { rows, meta } = prepareRekapExportData();
+    const slipFileName = `slip-gaji-nonstaff-${startDate}_${endDate}.pdf`;
+    const rekapFileName = `rekap-gaji-nonstaff-${startDate}_${endDate}.pdf`;
+
+    // 1. Download Slip Gabungan (PDF)
+    await exportNonStaffSlipGabunganPdf(slipPayload, slipFileName);
+
+    // Jeda 600ms agar browser Chromium/Brave dapat memproses unduhan pertama sebelum mengunduh yang kedua
+    await new Promise((resolve) => setTimeout(resolve, 600));
+
+    // 2. Download Rekap Semua (PDF)
+    await exportNonStaffRekapPdf(rows, meta, rekapFileName);
+  }
+
+  async function handleDownloadKeduaPdfOnly() {
+    try {
+      setSubmitting(true);
+      setError("");
+      await downloadKeduaPdf();
+      setMessage("Kedua file PDF resmi (Slip dan Rekap) berhasil diunduh ulang.");
+    } catch (err) {
+      console.error("Gagal mengunduh ulang kedua PDF:", err);
+      setError("Gagal mengunduh ulang PDF. Silakan coba lagi.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function handleSimpanRekapan() {
+  async function handleEksekusiSimpanBayarkan() {
     if (simpanRekapanInFlight.current || submitting) {
       return;
     }
 
-    if (!window.confirm("Apakah Anda yakin ingin memproses rekapan dan menandai gaji periode ini sebagai Terbayar? Tindakan ini akan memotong piutang aktif secara permanen dan tidak dapat dibatalkan.")) {
-      return;
-    }
-
+    setPreviewDialogOpen(false);
     simpanRekapanInFlight.current = true;
 
     try {
@@ -1494,7 +1533,7 @@ export function NonStaffSalaryWorkflow() {
       setRekapPopup({
         open: true,
         title: "Menyimpan Rekapan",
-        message: "Sedang memperbarui status pembayaran periode ini. Mohon tunggu...",
+        message: "Sedang memperbarui status pembayaran dan memotong piutang periode ini. Mohon tunggu...",
         type: "loading",
       });
 
@@ -1506,6 +1545,7 @@ export function NonStaffSalaryWorkflow() {
         )
       );
 
+      // Langkah 1: Simpan ke database
       const result = await salaryAPI.saveNonStaffRekap({
         periodeAwal: toApiDate(startDate),
         periodeAkhir: toApiDate(endDate),
@@ -1516,8 +1556,7 @@ export function NonStaffSalaryWorkflow() {
         kikipingOleh: signatures.kikipingOleh,
         kikipingNominal: signatures.kikipingNominal,
         gajiIds: flattenedGajiIds,
-        // Plan cicilan piutang per karyawan (override nominal, skip, uang
-        // pribadi) dari dialog Fase 2 — dieksekusi FINAL di endpoint rekap.
+        // Plan cicilan piutang per karyawan dari dialog Fase 2 — dieksekusi FINAL di endpoint rekap.
         piutangPlans: snapshotRows.map((r) => {
           const input = inputsBySalaryId[r.gajiId] || buildDefaultInputState();
           return {
@@ -1529,18 +1568,7 @@ export function NonStaffSalaryWorkflow() {
         }),
       });
 
-      let msg = `Status pembayaran berhasil diperbarui untuk ${result.successCount} data. `;
-      if (result.skippedNoAbsensiCount > 0) {
-        msg += `${result.skippedNoAbsensiCount} data dengan status "Tidak Ada Absensi" dilewati. `;
-      }
-      if (result.totalPinjamanDipotong != null && result.totalPinjamanDipotong > 0) {
-        msg += `Potongan pinjaman periode ini: ${formatCurrency(result.totalPinjamanDipotong)}. `;
-      }
-
-      setMessage(
-        `Rekapan diproses. Berhasil: ${result.successCount}, ` +
-          (result.skippedNoAbsensiCount > 0 ? `Tanpa Absensi dilewati: ${result.skippedNoAbsensiCount}` : "")
-      );
+      // Langkah 2: Update status lokal di UI secara langsung tanpa reload manual
       setSnapshotRows((prev) =>
         prev.map((row) => {
           if ((row.statusPembayaran || "").toLowerCase() !== "tidak ada absensi") {
@@ -1549,9 +1577,30 @@ export function NonStaffSalaryWorkflow() {
           return row;
         })
       );
+
+      // Langkah 3: BARU setelah penyimpanan BERHASIL, otomatis download kedua PDF
+      try {
+        await downloadKeduaPdf();
+      } catch (dlErr) {
+        console.error("Unduhan otomatis PDF tertahan peramban:", dlErr);
+      }
+
+      let msg = `Data rekapan berhasil disimpan ke database dan status gaji diubah menjadi Dibayar untuk ${result.successCount} data. Berkas Slip dan Rekap sedang diunduh otomatis. (Catatan: Jika peramban Anda menahan unduhan otomatis, tekan 'Keep' / 'Simpan' pada bar unduhan, atau gunakan tombol 'Download kembali kedua PDF' di bawah).`;
+      if (result.skippedNoAbsensiCount > 0) {
+        msg += ` ${result.skippedNoAbsensiCount} data dengan status "Tidak Ada Absensi" dilewati.`;
+      }
+      if (result.totalPinjamanDipotong != null && result.totalPinjamanDipotong > 0) {
+        msg += ` Potongan pinjaman periode ini: ${formatCurrency(result.totalPinjamanDipotong)}.`;
+      }
+
+      setMessage(
+        `Rekapan diproses. Berhasil: ${result.successCount}` +
+          (result.skippedNoAbsensiCount > 0 ? `, Tanpa Absensi dilewati: ${result.skippedNoAbsensiCount}` : "")
+      );
+
       setRekapPopup({
         open: true,
-        title: "Berhasil",
+        title: "Berhasil Disimpan & Dibayarkan",
         message: msg,
         type: "success",
       });
@@ -1562,7 +1611,7 @@ export function NonStaffSalaryWorkflow() {
       setRekapPopup({
         open: true,
         title: "Gagal Menyimpan",
-        message: detailMsg || "Terjadi kendala saat update status pembayaran. Silakan coba lagi.",
+        message: detailMsg || "Terjadi kendala saat update status pembayaran. Data tidak tersimpan dan file tidak diunduh. Silakan coba lagi.",
         type: "error",
       });
     } finally {
@@ -1718,12 +1767,14 @@ export function NonStaffSalaryWorkflow() {
           calculatedForSnapshot={calculatedForSnapshot}
           divisionSummary={divisionSummary}
           submitting={submitting}
-          handleExportSlipGabungan={handleExportSlipGabungan}
-          handleExportRekapSemua={handleExportRekapSemua}
-          handleSimpanRekapan={handleSimpanRekapan}
+          handleSimpanRekapan={() => setPreviewDialogOpen(true)}
+          handleDownloadKeduaPdfOnly={handleDownloadKeduaPdfOnly}
           signatures={signatures}
           onEditSignatures={() => setIsSignatureDialogOpen(true)}
           inputsBySalaryId={inputsBySalaryId}
+          showSisaPiutangMap={showSisaPiutangMap}
+          onToggleSisaPiutang={handleToggleSisaPiutang}
+          onToggleAllSisaPiutang={handleToggleAllSisaPiutang}
         />
       ) : null}
 
@@ -1757,6 +1808,15 @@ export function NonStaffSalaryWorkflow() {
           setIsSignatureDialogOpen(false);
           setStep(2);
         }}
+      />
+
+      <NonStaffPreviewPdfDialog
+        isOpen={previewDialogOpen}
+        onClose={() => setPreviewDialogOpen(false)}
+        onConfirmBayar={handleEksekusiSimpanBayarkan}
+        onGenerateSlipBlob={handleGenerateSlipBlob}
+        onGenerateRekapBlob={handleGenerateRekapBlob}
+        submitting={submitting}
       />
 
     </div>

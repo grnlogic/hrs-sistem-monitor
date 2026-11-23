@@ -39,7 +39,7 @@ export const piutangAPI = {
 
   bayarManual: async (
     id: string,
-    data: { nominal: number; pakaiUangPribadi: boolean; tanggal?: string }
+    data: { nominal: number; pakaiUangPribadi: boolean; tanggal?: string; keterangan?: string }
   ) => {
     return apiRequest(`/piutang/${id}/bayar`, {
       method: "POST",
@@ -49,7 +49,7 @@ export const piutangAPI = {
 
   updateCicilan: async (
     cicilanId: string,
-    data: { tanggal?: string; nominal?: number }
+    data: { tanggal?: string; nominal?: number; keterangan?: string }
   ) => {
     return apiRequest(`/piutang/cicilan/${cicilanId}`, {
       method: "PATCH",

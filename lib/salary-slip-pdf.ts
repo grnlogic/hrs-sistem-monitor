@@ -876,9 +876,8 @@ async function drawNonStaffSlip(
 // ─── Export: Non-Staff Slip PDF ───────────────────────────────────────────────
 //   5 kolom × 3 baris = 15 slip per halaman (bisa lebih sedikit jika baris bonus banyak)
 
-export async function exportNonStaffSlipGabunganPdf(
-  payloads: NonStaffSlipExportPayload[],
-  fileName: string
+export async function buildNonStaffSlipGabunganDoc(
+  payloads: NonStaffSlipExportPayload[]
 ) {
   const jsPDF = await loadJsPdfCtor();
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -947,12 +946,27 @@ export async function exportNonStaffSlipGabunganPdf(
     cursorY += rowHeight + gapY;
   }
 
+  return doc;
+}
+
+export async function exportNonStaffSlipGabunganPdf(
+  payloads: NonStaffSlipExportPayload[],
+  fileName: string
+) {
+  const doc = await buildNonStaffSlipGabunganDoc(payloads);
   doc.save(fileName);
+}
+
+export async function getNonStaffSlipGabunganBlob(
+  payloads: NonStaffSlipExportPayload[]
+): Promise<Blob> {
+  const doc = await buildNonStaffSlipGabunganDoc(payloads);
+  return doc.output("blob");
 }
 
 // ─── Export: Non-Staff Rekap PDF ──────────────────────────────────────────────
 
-export async function exportNonStaffRekapPdf(
+export async function buildNonStaffRekapDoc(
   rows: Array<{
     nama: string;
     divisi: string;
@@ -976,8 +990,7 @@ export async function exportNonStaffRekapPdf(
     kikipingOleh?: string;
     kikipingNominal?: number;
     subLabel?: string;
-  },
-  fileName: string
+  }
 ) {
   const jsPDF = await loadJsPdfCtor();
   const autoTable = await loadAutoTableFn();
@@ -1256,5 +1269,66 @@ export async function exportNonStaffRekapPdf(
     drawSignatures(signY);
   }
 
+  return doc;
+}
+
+export async function exportNonStaffRekapPdf(
+  rows: Array<{
+    nama: string;
+    divisi: string;
+    hariEfektif: number;
+    upahHarian: number;
+    gajiPokok: number;
+    totalBonus: number;
+    totalPotongan: number;
+    gajiBersih: number;
+    bonusItems: Array<{ judul: string; nominal: number }>;
+    potonganItems: Array<{ judul: string; nominal: number }>;
+  }>,
+  meta: {
+    location: LokasiCode | string;
+    periodLabel: string;
+    bonusColumns: string[];
+    potonganColumns: string[];
+    diketahuiOleh: string;
+    dibuatOleh: string;
+    catatan?: string;
+    kikipingOleh?: string;
+    kikipingNominal?: number;
+    subLabel?: string;
+  },
+  fileName: string
+) {
+  const doc = await buildNonStaffRekapDoc(rows, meta);
   doc.save(fileName);
+}
+
+export async function getNonStaffRekapBlob(
+  rows: Array<{
+    nama: string;
+    divisi: string;
+    hariEfektif: number;
+    upahHarian: number;
+    gajiPokok: number;
+    totalBonus: number;
+    totalPotongan: number;
+    gajiBersih: number;
+    bonusItems: Array<{ judul: string; nominal: number }>;
+    potonganItems: Array<{ judul: string; nominal: number }>;
+  }>,
+  meta: {
+    location: LokasiCode | string;
+    periodLabel: string;
+    bonusColumns: string[];
+    potonganColumns: string[];
+    diketahuiOleh: string;
+    dibuatOleh: string;
+    catatan?: string;
+    kikipingOleh?: string;
+    kikipingNominal?: number;
+    subLabel?: string;
+  }
+): Promise<Blob> {
+  const doc = await buildNonStaffRekapDoc(rows, meta);
+  return doc.output("blob");
 }

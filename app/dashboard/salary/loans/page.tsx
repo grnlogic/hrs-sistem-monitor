@@ -52,6 +52,7 @@ import {
   User,
   Info,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   RefreshCw,
   X,
@@ -86,6 +87,7 @@ type PiutangCicilan = {
   sisaSaldoSetelah: number;
   pakaiUangPribadi: boolean;
   createdAt: string;
+  keterangan?: string | null;
   gaji?: {
     periodeAwal: string;
     periodeAkhir: string;
@@ -105,11 +107,16 @@ export default function LoansPage() {
   // Search Loan List Filter State
   const [loanListSearchTerm, setLoanListSearchTerm] = useState("");
 
-  // Edit Cicilan Dialog State (Tanggal & Nominal)
+  // Pagination State untuk Daftar Piutang Berjalan
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10); // default 10
+
+  // Edit Cicilan Dialog State (Tanggal, Nominal, Keterangan)
   const [editingCicilan, setEditingCicilan] = useState<PiutangCicilan | null>(null);
   const [cicilanEditData, setCicilanEditData] = useState({
     tanggal: "",
     nominal: "",
+    keterangan: "",
   });
   const [submittingCicilanEdit, setSubmittingCicilanEdit] = useState(false);
 
@@ -128,6 +135,7 @@ export default function LoansPage() {
     nominal: "",
     pakaiUangPribadi: false,
     tanggal: new Date().toISOString().split("T")[0],
+    keterangan: "",
   });
   const [submittingPayment, setSubmittingPayment] = useState(false);
 
@@ -144,6 +152,7 @@ export default function LoansPage() {
     setCicilanEditData({
       tanggal: inst.tanggal ? inst.tanggal.slice(0, 10) : new Date().toISOString().slice(0, 10),
       nominal: String(inst.jumlahDipotong),
+      keterangan: inst.keterangan || "",
     });
   };
 
@@ -164,6 +173,7 @@ export default function LoansPage() {
       await piutangAPI.updateCicilan(editingCicilan.id, {
         tanggal: cicilanEditData.tanggal,
         nominal: numNominal,
+        keterangan: cicilanEditData.keterangan.trim(),
       });
       setSuccessMsg("Catatan cicilan berhasil diperbarui!");
       setEditingCicilan(null);
@@ -267,6 +277,7 @@ export default function LoansPage() {
       nominal: "",
       pakaiUangPribadi: false,
       tanggal: new Date().toISOString().split("T")[0],
+      keterangan: "",
     });
   };
 
@@ -333,6 +344,7 @@ export default function LoansPage() {
         nominal,
         pakaiUangPribadi: paymentData.pakaiUangPribadi,
         tanggal: paymentData.tanggal,
+        keterangan: paymentData.keterangan.trim(),
       });
 
       setSuccessMsg("Pembayaran cicilan berhasil dicatat!");
@@ -345,6 +357,7 @@ export default function LoansPage() {
         nominal: "",
         pakaiUangPribadi: false,
         tanggal: new Date().toISOString().split("T")[0],
+        keterangan: "",
       });
     } catch (err: any) {
       setErrorMsg(err.message || "Gagal memproses pembayaran manual");
@@ -375,6 +388,35 @@ export default function LoansPage() {
     const dept = (loan.karyawan?.departemen || "").toLowerCase();
     return empName.includes(term) || dept.includes(term);
   });
+
+  // Reset ke halaman 1 saat kata kunci pencarian atau jumlah per halaman berubah
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [loanListSearchTerm, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredLoans.length / pageSize));
+  const validCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (validCurrentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, filteredLoans.length);
+  const paginatedLoans = filteredLoans.slice(startIndex, endIndex);
+
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (validCurrentPage > 3) pages.push("...");
+      const start = Math.max(2, validCurrentPage - 1);
+      const end = Math.min(totalPages - 1, validCurrentPage + 1);
+      for (let i = start; i <= end; i++) {
+        if (!pages.includes(i)) pages.push(i);
+      }
+      if (validCurrentPage < totalPages - 2) pages.push("...");
+      if (!pages.includes(totalPages)) pages.push(totalPages);
+    }
+    return pages;
+  };
 
   return (
     <div className="p-6 space-y-6 bg-zinc-50/50 min-h-[calc(100vh-4rem)]">
@@ -548,7 +590,7 @@ export default function LoansPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredLoans.map((loan) => (
+                  paginatedLoans.map((loan) => (
                     <TableRow
                       key={loan.id}
                       onClick={() => handleSelectLoan(loan)}
@@ -623,6 +665,94 @@ export default function LoansPage() {
               </TableBody>
             </Table>
           </div>
+
+          {/* Navigasi dan Kontrol Pagination */}
+          {filteredLoans.length > 0 && (
+            <div className="p-4 border-t border-zinc-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-600 bg-zinc-50/40">
+              <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+                <span className="text-zinc-500">
+                  Menampilkan{" "}
+                  <strong className="text-zinc-800">
+                    {startIndex + 1}-{endIndex}
+                  </strong>{" "}
+                  dari <strong className="text-zinc-800">{filteredLoans.length}</strong>
+                </span>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-zinc-400 text-[11px]">Baris:</span>
+                  <Select
+                    value={String(pageSize)}
+                    onValueChange={(val) => {
+                      setPageSize(Number(val));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-7 w-[68px] text-xs rounded-lg bg-white border-zinc-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[5, 10, 15, 20, 25, 50].map((size) => (
+                        <SelectItem key={size} value={String(size)} className="text-xs">
+                          {size}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 w-full sm:w-auto justify-center sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={validCurrentPage <= 1}
+                  className="h-8 px-2.5 rounded-lg border-zinc-200 text-xs gap-1"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  <span>Sebelumnya</span>
+                </Button>
+
+                <div className="flex items-center gap-1 mx-1">
+                  {getPageNumbers().map((p, idx) =>
+                    p === "..." ? (
+                      <span key={`ellipsis-${idx}`} className="px-1 text-zinc-400">
+                        ...
+                      </span>
+                    ) : (
+                      <Button
+                        key={`page-${p}`}
+                        type="button"
+                        variant={validCurrentPage === p ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(Number(p))}
+                        className={`h-8 w-8 p-0 rounded-lg text-xs ${
+                          validCurrentPage === p
+                            ? "bg-zinc-900 text-white hover:bg-zinc-800"
+                            : "border-zinc-200 text-zinc-700 hover:bg-zinc-100"
+                        }`}
+                      >
+                        {p}
+                      </Button>
+                    )
+                  )}
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={validCurrentPage >= totalPages}
+                  className="h-8 px-2.5 rounded-lg border-zinc-200 text-xs gap-1"
+                >
+                  <span>Sesudahnya</span>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right Column: Sticky Loan Detail Panel & Manual Payment */}
@@ -720,6 +850,20 @@ export default function LoansPage() {
                       </div>
                     </div>
 
+                    <div>
+                      <label className="text-[10px] font-semibold text-zinc-500 uppercase block mb-1">
+                        Keterangan (Opsional)
+                      </label>
+                      <Input
+                        type="text"
+                        placeholder="Contoh: Penyesuaian saldo kas keuangan per Nov 2026"
+                        maxLength={255}
+                        value={paymentData.keterangan}
+                        onChange={(e) => setPaymentData({ ...paymentData, keterangan: e.target.value })}
+                        className="h-9 px-3 py-1 text-sm rounded-xl"
+                      />
+                    </div>
+
                     <div className="flex items-center gap-2 pt-1">
                       <Checkbox
                         id="pakaiUangPribadi"
@@ -753,13 +897,14 @@ export default function LoansPage() {
                     Riwayat Pembayaran Cicilan
                   </h4>
 
-                  <div className="border border-zinc-100 rounded-xl overflow-hidden max-h-[300px] overflow-y-auto">
+                  <div className="border border-zinc-100 rounded-xl overflow-x-auto max-h-[350px] overflow-y-auto">
                     <Table>
                       <TableHeader className="bg-zinc-50">
                         <TableRow>
                           <TableHead className="text-xs py-2">Tanggal</TableHead>
                           <TableHead className="text-xs py-2">Nominal</TableHead>
                           <TableHead className="text-xs py-2">Metode</TableHead>
+                          <TableHead className="text-xs py-2">Keterangan</TableHead>
                           <TableHead className="text-xs py-2 text-right">Sisa</TableHead>
                           <TableHead className="text-xs py-2 text-center w-12">Aksi</TableHead>
                         </TableRow>
@@ -767,20 +912,20 @@ export default function LoansPage() {
                       <TableBody>
                         {loadingInstallments ? (
                           <TableRow>
-                            <TableCell colSpan={5} className="text-center py-6 text-zinc-400 text-xs">
+                            <TableCell colSpan={6} className="text-center py-6 text-zinc-400 text-xs">
                               Memuat riwayat...
                             </TableCell>
                           </TableRow>
                         ) : installments.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={5} className="text-center py-6 text-zinc-400 text-xs">
+                            <TableCell colSpan={6} className="text-center py-6 text-zinc-400 text-xs">
                               Belum ada pembayaran cicilan dicatat.
                             </TableCell>
                           </TableRow>
                         ) : (
                           installments.map((inst) => (
                             <TableRow key={inst.id} className="hover:bg-zinc-50/50">
-                              <TableCell className="text-xs py-2">
+                              <TableCell className="text-xs py-2 whitespace-nowrap">
                                 <span>
                                   {new Date(inst.tanggal).toLocaleDateString("id-ID", {
                                     day: "2-digit",
@@ -789,10 +934,10 @@ export default function LoansPage() {
                                   })}
                                 </span>
                               </TableCell>
-                              <TableCell className="text-xs font-medium py-2">
+                              <TableCell className="text-xs font-medium py-2 whitespace-nowrap">
                                 {formatCurrency(inst.jumlahDipotong)}
                               </TableCell>
-                              <TableCell className="text-xs py-2 text-zinc-500">
+                              <TableCell className="text-xs py-2 text-zinc-500 whitespace-nowrap">
                                 {inst.pakaiUangPribadi ? (
                                   <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[10px] font-semibold">
                                     Uang Pribadi
@@ -803,7 +948,14 @@ export default function LoansPage() {
                                   </span>
                                 )}
                               </TableCell>
-                              <TableCell className="text-xs text-right py-2 font-medium">
+                              <TableCell className="text-xs py-2 text-zinc-700 whitespace-normal break-words leading-relaxed min-w-[120px]">
+                                {inst.keterangan ? (
+                                  <span>{inst.keterangan}</span>
+                                ) : (
+                                  <span className="text-zinc-400">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-xs text-right py-2 font-medium whitespace-nowrap">
                                 {formatCurrency(inst.sisaSaldoSetelah)}
                               </TableCell>
                               <TableCell className="text-xs text-center py-2">
@@ -987,6 +1139,20 @@ export default function LoansPage() {
               <p className="text-[11px] text-zinc-500 mt-1">
                 Perubahan nominal akan menyesuaikan sisa saldo piutang secara otomatis.
               </p>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-zinc-600 block mb-1">
+                Keterangan (Opsional)
+              </label>
+              <Input
+                type="text"
+                placeholder="Contoh: Penyesuaian saldo kas keuangan per Nov 2026"
+                maxLength={255}
+                value={cicilanEditData.keterangan}
+                onChange={(e) => setCicilanEditData({ ...cicilanEditData, keterangan: e.target.value })}
+                className="rounded-xl h-10"
+              />
             </div>
 
             <DialogFooter className="pt-4 border-t flex justify-between items-center">
