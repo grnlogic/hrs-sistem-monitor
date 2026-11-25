@@ -26,6 +26,7 @@ import {
   type InputState,
   toNumber,
   CompanyBadge,
+  isPiutangCheckedInStep3,
 } from "./nonstaff-salary-shared";
 
 type NonStaffStep3Props = {
@@ -293,17 +294,22 @@ export function NonStaffStep3Export(props: NonStaffStep3Props) {
                           )}
                         </TableCell>
                         <TableCell className="text-center whitespace-nowrap">
-                          <label
-                            htmlFor={`piutang-check-${row.gajiId}`}
-                            className="inline-flex items-center gap-2 text-xs text-zinc-700 cursor-pointer select-none hover:text-zinc-950 font-normal"
-                          >
-                            <Checkbox
-                              id={`piutang-check-${row.gajiId}`}
-                              checked={!!showSisaPiutangMap[row.gajiId]}
-                              onCheckedChange={() => onToggleSisaPiutang(row.gajiId)}
-                            />
-                            <span>Tampilkan sisa piutang di slip</span>
-                          </label>
+                          {(() => {
+                            const isChecked = isPiutangCheckedInStep3(row.gajiId, input, showSisaPiutangMap);
+                            return (
+                              <label
+                                htmlFor={`piutang-check-${row.gajiId}`}
+                                className="inline-flex items-center gap-2 text-xs text-zinc-700 cursor-pointer select-none hover:text-zinc-950 font-normal"
+                              >
+                                <Checkbox
+                                  id={`piutang-check-${row.gajiId}`}
+                                  checked={isChecked}
+                                  onCheckedChange={() => onToggleSisaPiutang(row.gajiId)}
+                                />
+                                <span>Tampilkan sisa piutang di slip</span>
+                              </label>
+                            );
+                          })()}
                         </TableCell>
                       </TableRow>
                     );

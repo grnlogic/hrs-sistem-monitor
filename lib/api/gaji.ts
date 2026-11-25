@@ -34,16 +34,24 @@ const fetchWithConfig = async (url: string, options: RequestInit = {}) => {
 }
 
 export const salaryAPI = {
-  getSalaryItems: async (type?: "BONUS" | "POTONGAN") => {
+  getSalaryItems: async (type?: "BONUS" | "POTONGAN", includeInactive?: boolean) => {
     const params = new URLSearchParams()
     if (type) params.append("type", type)
+    if (includeInactive) params.append("includeInactive", "true")
     const query = params.toString()
     return apiRequest(`/gaji/items${query ? `?${query}` : ""}`)
   },
 
-  createSalaryItem: async (data: { type: "BONUS" | "POTONGAN", nama: string }) => {
+  createSalaryItem: async (data: { type: "BONUS" | "POTONGAN", nama: string, nominalDefault?: number | null }) => {
     return apiRequest("/gaji/items", {
       method: "POST",
+      body: JSON.stringify(data),
+    })
+  },
+
+  updateSalaryItem: async (data: { id: string | number, nama?: string, nominalDefault?: number | null, aktif?: boolean }) => {
+    return apiRequest("/gaji/items", {
+      method: "PUT",
       body: JSON.stringify(data),
     })
   },
@@ -349,6 +357,28 @@ export const salaryAPI = {
   getRekapSlipPayload: async (rekapId: string) => {
     return apiRequest(`/gaji/rekap-nonstaff/${rekapId}/slip-payload`);
   },
+
+  saveStaffRekap: async (data: {
+    periodeAwal: string;
+    periodeAkhir: string;
+    lokasi?: string;
+    diketahuiOleh: string;
+    dibuatOleh: string;
+    catatan?: string;
+    gajiIds: string[];
+  }) => {
+    return apiRequest(`/gaji/rekap-staff`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }) as Promise<{
+      successCount: number;
+      alreadyPaidCount: number;
+      skippedCount: number;
+      updatedIds: string[];
+      periodeAwal: string;
+      periodeAkhir: string;
+    }>;
+  },
 }
 
 // Salary Slip Editor API (Slate JSON -> Database)
@@ -402,9 +432,21 @@ export const getGajiByDateRangeDetailed = async (startDate: string, endDate: str
 
 // Generate Salary API
 export const generateSalaryAPI = {
-  generateStaffBulanan: async (periode: string, divisi?: string[], company: CompanyFilter = "") => {
+  generateStaffBulanan: async (
+    periodeOrRange: string | { periodeAwal: string; periodeAkhir: string; periode?: string },
+    divisi?: string[],
+    company: CompanyFilter = ""
+  ) => {
     const formData = new URLSearchParams()
-    formData.append('periode', periode)
+    if (typeof periodeOrRange === "string") {
+      formData.append('periode', periodeOrRange)
+    } else {
+      formData.append('periodeAwal', periodeOrRange.periodeAwal)
+      formData.append('periodeAkhir', periodeOrRange.periodeAkhir)
+      if (periodeOrRange.periode) {
+        formData.append('periode', periodeOrRange.periode)
+      }
+    }
     if (divisi && divisi.length > 0) {
       divisi.forEach((d) => formData.append('divisi', d))
     }
@@ -427,11 +469,23 @@ export const generateSalaryAPI = {
       clearTimeout(timeoutId)
 
       if (!response.ok) {
-        const errorData = await response.text()
-        throw new Error(errorData || `HTTP error! status: ${response.status}`)
+        const errorText = await response.text()
+        let parsedMessage = errorText
+        try {
+          const parsed = JSON.parse(errorText)
+          parsedMessage = parsed?.error || parsed?.message || errorText
+        } catch {
+          // Keep raw errorText when response is plain text
+        }
+        throw new Error(parsedMessage || `HTTP error! status: ${response.status}`)
       }
 
-      return response.text()
+      const rawText = await response.text()
+      try {
+        return JSON.parse(rawText)
+      } catch {
+        return rawText
+      }
     } catch (error) {
       clearTimeout(timeoutId)
       if (error instanceof Error && error.name === 'AbortError') {

@@ -13,6 +13,16 @@ export type MasterItemType = "BONUS" | "POTONGAN";
 export type MasterItemOption = {
   value: string;
   label: string;
+  nominalDefault?: number | null;
+  aktif?: boolean;
+};
+
+export type MasterItem = {
+  id?: string;
+  nama?: string;
+  tipe?: string;
+  nominalDefault?: number | null;
+  aktif?: boolean;
 };
 
 /**
@@ -24,17 +34,18 @@ const seedNames: Record<MasterItemType, string[]> = {
   POTONGAN: fixedPotonganTemplate.map((item) => item.judul).filter(Boolean),
 };
 
-type MasterItem = { id?: string; nama?: string; tipe?: string };
-
 const toOption = (item: MasterItem): MasterItemOption => ({
   value: String(item.id ?? item.nama ?? ""),
   label: String(item.nama ?? ""),
+  nominalDefault: item.nominalDefault != null ? Number(item.nominalDefault) : null,
+  aktif: item.aktif !== false,
 });
 
 /**
  * Memuat daftar nama bonus/potongan dari MasterItemGaji.
  * - Jika tabel kosong untuk suatu tipe, seed otomatis dari template fallback.
  * - ensureItemSaved mendaftarkan nama baru (idempotent, case-insensitive).
+ * - refresh() memuat ulang opsi terkini setelah dialog setting menyimpan data.
  */
 export function useMasterGajiItems() {
   const [bonusOptions, setBonusOptions] = useState<MasterItemOption[]>([]);
@@ -103,5 +114,12 @@ export function useMasterGajiItems() {
     [bonusOptions, potonganOptions]
   );
 
-  return { bonusOptions, potonganOptions, loading, load, ensureItemSaved };
+  return {
+    bonusOptions,
+    potonganOptions,
+    loading,
+    load,
+    refresh: load,
+    ensureItemSaved,
+  };
 }

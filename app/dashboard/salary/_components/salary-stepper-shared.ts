@@ -26,6 +26,7 @@ export type SalaryRow = {
   statusKaryawan: string;
   gajiPokok: number;
   lokasiKerja?: string;
+  statusPembayaran?: string;
 };
 
 export type AttendanceSummary = {
@@ -54,6 +55,7 @@ export type EstimatedRow = {
   nama: string;
   divisi: string;
   statusKaryawan?: string;
+  statusPembayaran?: string;
   gajiPokok: number;
   hadir?: number;
   setengahHari?: number;

@@ -30,8 +30,9 @@ import {
 import { Badge } from "@/components/ui/display/badge";
 import { formatCurrency } from "@/lib/utils";
 import { roundUpToHundred, calcGajiBersih } from "@/lib/salary-utils";
-import { Plus, Trash2, Save, RotateCcw } from "lucide-react";
+import { Plus, Trash2, Save, RotateCcw, Settings } from "lucide-react";
 import { useMasterGajiItems } from "./master-gaji-items";
+import { NonStaffMasterDataFixDialog } from "./nonstaff-master-datafix-dialog";
 import { salaryAPI } from "@/lib/api/gaji";
 import {
   type SnapshotRow,
@@ -83,6 +84,7 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
 
   // Local draft state — isolates edits so changes only persist when user clicks "Simpan Perubahan"
   const [draftState, setDraftState] = React.useState<InputState>(buildDefaultInputState());
+  const [isDataFixOpen, setIsDataFixOpen] = React.useState(false);
   const lastOpenedSalaryIdRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
@@ -129,7 +131,7 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
       const idx = prev.potonganItems.findIndex(
         (i) => i.judul.toLowerCase() === "pinjaman"
       );
-      const present = bayarMingguIni && nominalCicilanEfektif > 0;
+      const present = bayarMingguIni && !pakaiUangPribadi && nominalCicilanEfektif > 0;
       let list = [...prev.potonganItems];
       if (!present) {
         if (idx >= 0) list = list.filter((_, k) => k !== idx);
@@ -141,7 +143,7 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
       }
       return { ...prev, potonganItems: list };
     });
-  }, [selectedSnapshot, piutangInfo, bayarMingguIni, nominalCicilanEfektif]);
+  }, [selectedSnapshot, piutangInfo, bayarMingguIni, pakaiUangPribadi, nominalCicilanEfektif]);
 
   // Handlers for draftState
   const updateDraftItem = (
@@ -157,6 +159,27 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
         updated.judul = value;
       } else {
         updated.nominal = toNumber(value);
+      }
+      list[index] = updated;
+      return { ...prev, [key]: list };
+    });
+  };
+
+  const handleSelectComboboxItem = (
+    key: "bonusItems" | "potonganItems",
+    index: number,
+    opt: { label: string; nominalDefault?: number | null }
+  ) => {
+    setDraftState((prev) => {
+      const list = [...prev[key]];
+      if (!list[index]) return prev;
+      const updated = { ...list[index], judul: opt.label };
+      if (
+        typeof opt.nominalDefault === "number" &&
+        !isNaN(opt.nominalDefault) &&
+        opt.nominalDefault !== null
+      ) {
+        updated.nominal = opt.nominalDefault;
       }
       list[index] = updated;
       return { ...prev, [key]: list };
@@ -214,9 +237,10 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
       sisaPiutang: liveSisaPiutang,
       bayarMingguIni: draftState.bayarMingguIni !== false,
       nominalCicilan: draftState.bayarMingguIni !== false ? draftState.nominalCicilan : null,
-      potonganItems: draftState.bayarMingguIni !== false
-        ? draftState.potonganItems
-        : draftState.potonganItems.filter((i) => i.judul.toLowerCase() !== "pinjaman"),
+      potonganItems:
+        draftState.bayarMingguIni !== false && !draftState.pakaiUangPribadi
+          ? draftState.potonganItems
+          : draftState.potonganItems.filter((i) => i.judul.toLowerCase() !== "pinjaman"),
     };
 
     const persist = [
@@ -295,16 +319,27 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                 <CardTitle className="text-base">Bonus</CardTitle>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={!canEditSalary}
-                  className="h-8 text-xs gap-1.5 text-zinc-700 border-zinc-300 hover:bg-zinc-100"
-                  onClick={handleResetBonus}
-                >
-                  <RotateCcw className="w-3.5 h-3.5" /> Reset Bonus
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs gap-1.5 text-zinc-700 border-zinc-300 hover:bg-zinc-100"
+                    onClick={() => setIsDataFixOpen(true)}
+                  >
+                    <Settings className="w-3.5 h-3.5 text-zinc-500" /> Setting Data Fix
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!canEditSalary}
+                    className="h-8 text-xs gap-1.5 text-zinc-700 border-zinc-300 hover:bg-zinc-100"
+                    onClick={handleResetBonus}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> Reset Bonus
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-2">
                 <Table>
@@ -326,6 +361,9 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                             placeholder="Pilih atau ketik nama bonus..."
                             onChange={(judul) =>
                               updateDraftItem("bonusItems", index, "judul", judul)
+                            }
+                            onSelectOption={(opt) =>
+                              handleSelectComboboxItem("bonusItems", index, opt)
                             }
                           />
                         </TableCell>
@@ -416,7 +454,11 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                     {draftState.potonganItems
                       .filter(
                         (item) =>
-                          !(piutangInfo && !bayarMingguIni && item.judul.toLowerCase() === "pinjaman")
+                          !(
+                            piutangInfo &&
+                            (!bayarMingguIni || pakaiUangPribadi) &&
+                            item.judul.toLowerCase() === "pinjaman"
+                          )
                       )
                       .map((item, index) => {
                         const isPinjamanTerkelola = Boolean(
@@ -432,6 +474,9 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                                 placeholder="Pilih atau ketik nama potongan..."
                                 onChange={(judul) =>
                                   updateDraftItem("potonganItems", index, "judul", judul)
+                                }
+                                onSelectOption={(opt) =>
+                                  handleSelectComboboxItem("potonganItems", index, opt)
                                 }
                               />
                             </TableCell>
@@ -481,6 +526,16 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
                 >
                   <Plus className="w-3.5 h-3.5" /> Tambah Potongan
                 </Button>
+                {bayarMingguIni && pakaiUangPribadi && nominalCicilanEfektif > 0 && (
+                  <div className="rounded-md border border-emerald-300 bg-emerald-50/70 p-2.5 text-xs text-emerald-900 mt-3">
+                    <p className="font-semibold flex items-center gap-1.5">
+                      <span>💵</span> Cicilan Piutang Dibayar Tunai
+                    </p>
+                    <p className="text-[11px] text-emerald-800 mt-1">
+                      Cicilan sebesar <span className="font-bold">{formatCurrency(nominalCicilanEfektif)}</span> dibayar menggunakan uang pribadi (tunai). Tidak dipotong dari slip gaji dan tidak mengurangi take-home pay.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -778,6 +833,12 @@ export function NonStaffInputDialog(props: NonStaffInputDialogProps) {
             )}
           </Button>
         </DialogFooter>
+
+        <NonStaffMasterDataFixDialog
+          isOpen={isDataFixOpen}
+          onClose={() => setIsDataFixOpen(false)}
+          onDataUpdated={() => load()}
+        />
       </DialogContent>
     </Dialog>
   );

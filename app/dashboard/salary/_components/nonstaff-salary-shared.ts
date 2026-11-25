@@ -118,6 +118,66 @@ export type InputState = {
   } | null;
 };
 
+/**
+ * Menentukan apakah seorang karyawan memiliki piutang aktif, potongan pinjaman,
+ * atau sedang mencicil (termasuk via uang pribadi).
+ */
+export function hasActiveOrPresentPiutang(input?: InputState | null): boolean {
+  if (!input) return false;
+
+  // Jika sudah bayar di lokasi lain pada minggu ini, jangan centang di lokasi ini
+  if (input.sudahBayarDiLokasiLain) return false;
+
+  // Jika bayarMingguIni secara eksplisit diset false (skip cicilan minggu ini)
+  if (input.bayarMingguIni === false) return false;
+
+  // 1. Cek dari piutangInfo aktif dan sisaSaldo > 0
+  if (input.piutangInfo && input.piutangInfo.aktif !== false) {
+    const sisa = Number(input.piutangInfo.sisaSaldo || 0);
+    if (sisa > 0) return true;
+  }
+
+  // 2. Cek apakah ada potongan item bernama Pinjaman / Piutang dengan nominal > 0
+  if (Array.isArray(input.potonganItems)) {
+    const hasPinjaman = input.potonganItems.some(
+      (item) =>
+        (item.judul.toLowerCase() === "pinjaman" || item.judul.toLowerCase() === "piutang") &&
+        Number(item.nominal || 0) > 0
+    );
+    if (hasPinjaman) return true;
+  }
+
+  // 3. Cek jika pakai uang pribadi dan ada nominal cicilan > 0
+  if (input.pakaiUangPribadi) {
+    const cicilan =
+      input.nominalCicilan != null
+        ? Number(input.nominalCicilan)
+        : Number(input.piutangInfo?.jumlahCicilan || 0);
+    if (cicilan > 0) return true;
+  }
+
+  // 4. Cek sisaPiutang numeric > 0
+  if (input.sisaPiutang != null && Number(input.sisaPiutang) > 0) return true;
+
+  return false;
+}
+
+/**
+ * Menentukan nilai centang efektif di Fase 3:
+ * - Jika admin sudah pernah mengubahnya secara manual (ada di showSisaPiutangMap), pakai nilai admin.
+ * - Jika belum pernah diubah manual (undefined), default otomatis TRUE jika karyawan punya piutang aktif / cicilan.
+ */
+export function isPiutangCheckedInStep3(
+  gajiId: string,
+  input: InputState | undefined,
+  showSisaPiutangMap: Record<string, boolean>
+): boolean {
+  if (showSisaPiutangMap[gajiId] !== undefined) {
+    return showSisaPiutangMap[gajiId];
+  }
+  return hasActiveOrPresentPiutang(input);
+}
+
 export type RekapPopupState = {
   open: boolean;
   title: string;

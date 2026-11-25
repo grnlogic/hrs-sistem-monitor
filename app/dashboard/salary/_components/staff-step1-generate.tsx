@@ -4,6 +4,8 @@ import * as React from "react";
 import { Input } from "@/components/ui/form/input";
 import { Button } from "@/components/ui/form/button";
 import { Checkbox } from "@/components/ui/form/checkbox";
+import { Badge } from "@/components/ui/display/badge";
+import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
 import { CompanySwitcher } from "@/components/layout/company-switcher";
 import type { CompanyFilter } from "@/lib/api/core";
 import { employeeAPI } from "@/lib/api/karyawan";
@@ -15,28 +17,27 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/display/table";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
+import { getMaxOneMonthEndDate, parseDateOnlyUtc } from "@/lib/staff-salary-utils";
 import {
   type PageType,
   type WorkflowStatus,
   type EmployeeRow,
   type AttendanceSummary,
   type EstimatedRow,
-  monthOptions,
   toNumber,
 } from "./salary-stepper-shared";
 
 type StaffStep1Props = {
   pageType: PageType;
-  selectedMonth: number;
-  setSelectedMonth: (v: number) => void;
-  selectedYear: number;
-  setSelectedYear: (v: number) => void;
+  staffStartDate: string;
+  setStaffStartDate: (v: string) => void;
+  staffEndDate: string;
+  setStaffEndDate: (v: string) => void;
   nonStaffStartDate: string;
   setNonStaffStartDate: (v: string) => void;
   nonStaffEndDate: string;
   setNonStaffEndDate: (v: string) => void;
-  years: number[];
   loading: boolean;
   estimatedRows: EstimatedRow[];
   employees: EmployeeRow[];
@@ -50,20 +51,21 @@ type StaffStep1Props = {
   handleGenerate: (selectedDivisions?: string[]) => void;
   company: CompanyFilter;
   onCompanyChange: (value: CompanyFilter) => void;
+  hasGeneratedRows?: boolean;
+  onGoToStep2?: () => void;
 };
 
 export function StaffStep1Generate(props: StaffStep1Props) {
   const {
     pageType,
-    selectedMonth,
-    setSelectedMonth,
-    selectedYear,
-    setSelectedYear,
+    staffStartDate,
+    setStaffStartDate,
+    staffEndDate,
+    setStaffEndDate,
     nonStaffStartDate,
     setNonStaffStartDate,
     nonStaffEndDate,
     setNonStaffEndDate,
-    years,
     loading,
     estimatedRows,
     employees,
@@ -75,7 +77,29 @@ export function StaffStep1Generate(props: StaffStep1Props) {
     handleGenerate,
     company,
     onCompanyChange,
+    hasGeneratedRows = false,
+    onGoToStep2,
   } = props;
+
+  const staffRangeError = React.useMemo(() => {
+    if (pageType !== "staff") return "";
+    if (!staffStartDate || !staffEndDate) {
+      return "Tanggal mulai dan tanggal akhir wajib diisi.";
+    }
+    const start = parseDateOnlyUtc(staffStartDate);
+    const end = parseDateOnlyUtc(staffEndDate);
+    if (!start || !end) {
+      return "Format tanggal periode tidak valid.";
+    }
+    if (end.getTime() < start.getTime()) {
+      return "Tanggal akhir tidak boleh lebih kecil dari tanggal mulai.";
+    }
+    const maxEnd = getMaxOneMonthEndDate(start);
+    if (end.getTime() > maxEnd.getTime()) {
+      return "Rentang periode Staff maksimal 1 bulan.";
+    }
+    return "";
+  }, [pageType, staffStartDate, staffEndDate]);
 
   const [availableDivisions, setAvailableDivisions] = React.useState<string[]>([]);
   const [selectedDivisions, setSelectedDivisions] = React.useState<string[]>([]);
@@ -114,32 +138,26 @@ export function StaffStep1Generate(props: StaffStep1Props) {
         {pageType === "staff" ? (
           <>
             <div>
-              <label className="mb-1 block text-sm text-foreground">Bulan</label>
-              <select
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(Number(e.target.value))}
-              >
-                {monthOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              <label className="mb-1 block text-sm text-foreground">
+                Dari Tanggal
+              </label>
+              <Input
+                type="date"
+                value={staffStartDate}
+                onChange={(e) => setStaffStartDate(e.target.value)}
+                className={cn(staffRangeError && "border-destructive")}
+              />
             </div>
             <div>
-              <label className="mb-1 block text-sm text-foreground">Tahun</label>
-              <select
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-              >
-                {years.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
+              <label className="mb-1 block text-sm text-foreground">
+                Sampai Tanggal
+              </label>
+              <Input
+                type="date"
+                value={staffEndDate}
+                onChange={(e) => setStaffEndDate(e.target.value)}
+                className={cn(staffRangeError && "border-destructive")}
+              />
             </div>
           </>
         ) : (
@@ -168,6 +186,10 @@ export function StaffStep1Generate(props: StaffStep1Props) {
         )}
       </div>
 
+      {pageType === "staff" && staffRangeError && (
+        <p className="mt-2 text-xs text-destructive">{staffRangeError}</p>
+      )}
+
       {/* Division filter checkbox list */}
       <div className="mt-4 rounded-md border border-input p-3 bg-zinc-50/50">
         <p className="text-xs font-semibold text-zinc-500 mb-2">Filter Divisi (Kosongkan untuk Semua Divisi)</p>
@@ -195,6 +217,25 @@ export function StaffStep1Generate(props: StaffStep1Props) {
           </div>
         )}
       </div>
+
+      {pageType === "staff" &&
+        filteredRows.some(
+          (r) => (r.statusPembayaran || "").toLowerCase() === "dibayar"
+        ) && (
+          <Alert className="mt-4 bg-emerald-50/80 border-emerald-200 text-emerald-900">
+            <AlertDescription className="text-xs">
+              <strong>Info Gaji Dibayar:</strong> Terdapat{" "}
+              <strong>
+                {
+                  filteredRows.filter(
+                    (r) => (r.statusPembayaran || "").toLowerCase() === "dibayar"
+                  ).length
+                }
+              </strong>{" "}
+              karyawan yang gajinya sudah berstatus <strong>&quot;Sudah Dibayar&quot;</strong> untuk periode ini.
+            </AlertDescription>
+          </Alert>
+        )}
 
       <div className="mt-4 overflow-x-auto rounded-md border">
         <Table>
@@ -238,7 +279,16 @@ export function StaffStep1Generate(props: StaffStep1Props) {
                 if (pageType === "staff") {
                   return (
                     <TableRow key={row.karyawanId}>
-                      <TableCell>{row.nama}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium">{row.nama}</span>
+                          {(row.statusPembayaran || "").toLowerCase() === "dibayar" && (
+                            <Badge className="border-emerald-300 bg-emerald-100 text-emerald-800 text-[10px] py-0 px-1.5 font-normal">
+                              Sudah Dibayar
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>{row.divisi}</TableCell>
                       <TableCell>
                         {"statusKaryawan" in row ? row.statusKaryawan : "-"}
@@ -325,10 +375,21 @@ export function StaffStep1Generate(props: StaffStep1Props) {
         </Table>
       </div>
 
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2">
+        {hasGeneratedRows && onGoToStep2 && (
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            onClick={onGoToStep2}
+            className="w-full md:w-auto gap-2"
+          >
+            Buka Fase 2 (Data Periode Ini Sudah Ada)
+          </Button>
+        )}
         <Button
           onClick={() => handleGenerate(selectedDivisions)}
-          disabled={!canGenerate || submitting}
+          disabled={!canGenerate || submitting || Boolean(staffRangeError)}
           size="lg"
           className="w-full md:w-auto gap-2"
         >

@@ -1,5 +1,6 @@
 import { NAMA_PT } from "@/lib/constants/perusahaan";
 import { calcGajiBersih } from "@/lib/salary-utils";
+import { buildStaffSlipDetailBreakdown } from "@/lib/staff-salary-utils";
 
 type SlipItem = {
   label: string;
@@ -66,13 +67,6 @@ function truncateText(value: string, maxLength: number): string {
   const clean = String(value || "").trim();
   if (clean.length <= maxLength) return clean;
   return `${clean.slice(0, Math.max(0, maxLength - 1))}.`;
-}
-
-function getNominalByLabel(items: SlipItem[], targetLabel: string): number {
-  const found = items.find(
-    (item) => item.label.toLowerCase() === targetLabel.toLowerCase()
-  );
-  return Number(found?.nominal || 0);
 }
 
 function normalizeLokasi(value: unknown): LokasiCode {
@@ -221,19 +215,56 @@ const S_COLON_OFF = 30;   // mm dari contentX — posisi titik dua ":"
 const S_LOGO_BOX_W = 16;   // mm — lebar kotak logo (contain, tidak stretch)
 const S_LOGO_BOX_H = 7.0;  // mm — tinggi kotak logo
 
+function getStaffSlipBreakdown(payload: SalarySlipPayload) {
+  return buildStaffSlipDetailBreakdown(payload.bonusItems, payload.potonganItems);
+}
+
+function getStaffLabelCandidates(payload: SalarySlipPayload): string[] {
+  const { bonusDetails, potonganDetails } = getStaffSlipBreakdown(payload);
+  return [
+    "Nama",
+    "Absensi",
+    "Gaji Pokok",
+    "Bonus",
+    ...bonusDetails.map((item) => `_ ${truncateText(item.label, 22)}`),
+    "Potongan",
+    ...potonganDetails.map((item) => `_ ${truncateText(item.label, 22)}`),
+    "Jumlah",
+    "TOTAL",
+    "Sisa Piutang",
+  ];
+}
+
+function computeStaffColonOffset(doc: any, payload: SalarySlipPayload): number {
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  const labelCandidates = getStaffLabelCandidates(payload);
+  const maxLabelW = Math.max(...labelCandidates.map((l) => doc.getTextWidth(l)));
+  return Math.max(S_COLON_OFF, Math.min(44, Math.ceil(maxLabelW + 2)));
+}
+
 function calculateStaffSlipHeight(payload: SalarySlipPayload): number {
+  const { bonusDetails, potonganDetails } = getStaffSlipBreakdown(payload);
+  const { gajiBersih, gajiBersihSebelumBulat } = calculateSummary(payload);
+
   const baseHeight = S_BODY_START;
-  const bodyRows = 4; // Nama, Absensi, Gaji Pokok, Bonus
-  const sectionGap = S_SEC_GAP;
-  const potonganRows = 6; // Pinjaman, Sumbangan, BPJS, Undangan, Jumlah, Warung
+  const topRows = 3; // Nama, Absensi, Gaji Pokok
+  const bonusSectionGap = bonusDetails.length > 0 ? S_SEC_GAP : 0;
+  const bonusRows = bonusDetails.length > 0 ? bonusDetails.length + 1 : 1; // item rows + Jumlah (or single Bonus row)
+  const potonganSectionGap = S_SEC_GAP;
+  const potonganRows = potonganDetails.length + 1; // semua item potongan + Jumlah
   const totalRow = 1; // TOTAL
+  const roundingRow = gajiBersihSebelumBulat !== gajiBersih ? 1 : 0;
+  const sisaPiutangRow = payload.sisaPiutang && payload.sisaPiutang > 0 ? 1 : 0;
   const bottomPadding = 4.0;
-  const computed = baseHeight + (bodyRows + potonganRows + totalRow) * S_ROW_GAP + sectionGap + bottomPadding;
-  let finalHeight = computed;
-  if (payload.sisaPiutang && payload.sisaPiutang > 0) {
-    finalHeight += S_ROW_GAP;
-  }
-  return Math.max(50.0, finalHeight);
+
+  const computed =
+    baseHeight +
+    (topRows + bonusRows + potonganRows + totalRow + roundingRow + sisaPiutangRow) * S_ROW_GAP +
+    bonusSectionGap +
+    potonganSectionGap +
+    bottomPadding;
+  return Math.max(50.0, computed);
 }
 
 // ─── Draw single Staff slip ───────────────────────────────────────────────────
@@ -246,15 +277,11 @@ async function drawSingleSlip(
   slipWidth: number,
   slipHeight: number
 ) {
-  const { totalBonus, gajiBersih, gajiBersihSebelumBulat } = calculateSummary(payload);
+  const { bonusDetails, potonganDetails, totalBonus, totalPotongan } =
+    getStaffSlipBreakdown(payload);
+  const { gajiBersih, gajiBersihSebelumBulat } = calculateSummary(payload);
   const profile = companyProfileByLokasi(payload.location);
-
-  const pinjaman = getNominalByLabel(payload.potonganItems, "Pinjaman");
-  const sumbangan = getNominalByLabel(payload.potonganItems, "Sumbangan");
-  const bpjs = getNominalByLabel(payload.potonganItems, "BPJS");
-  const undangan = getNominalByLabel(payload.potonganItems, "Undangan");
-  const warung = getNominalByLabel(payload.potonganItems, "Warung");
-  const jumlahPotongan = pinjaman + sumbangan + bpjs + undangan;
+  const colonOff = computeStaffColonOffset(doc, payload);
 
   const contentX = originX + S_PAD;
   const rightX = originX + slipWidth - S_PAD;
@@ -283,7 +310,7 @@ async function drawSingleSlip(
   doc.setFontSize(8.0);
   doc.setTextColor(0, 0, 0);
   doc.text(
-    truncateText(payload.periodLabel.toUpperCase(), 36),
+    truncateText(payload.periodLabel.toUpperCase(), 42),
     contentX,
     originY + S_HDR_PER_Y
   );
@@ -312,7 +339,7 @@ async function drawSingleSlip(
     doc.setFont("helvetica", bold ? "bold" : "normal");
     doc.setFontSize(bold ? 9.0 : 8.5);
     doc.text(label, contentX, rowY);
-    doc.text(":", contentX + S_COLON_OFF, rowY);
+    doc.text(":", contentX + colonOff, rowY);
     doc.text(value, rightX, rowY, { align: "right" });
     rowY += S_ROW_GAP;
   };
@@ -320,9 +347,24 @@ async function drawSingleSlip(
   addRow("Nama", truncateText(payload.employeeName, 20));
   addRow("Absensi", typeof payload.hariEfektif === "number" ? String(payload.hariEfektif) : "-");
   addRow("Gaji Pokok", formatRupiah(payload.gajiPokok || 0));
-  addRow("Bonus", formatRupiah(totalBonus));
 
-  // Section label: Potongan
+  // Section Bonus dinamis
+  if (bonusDetails.length > 0) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.0);
+    doc.setTextColor(0, 0, 0);
+    doc.text("Bonus", contentX, rowY);
+    rowY += S_SEC_GAP;
+
+    for (const item of bonusDetails) {
+      addRow(`_ ${truncateText(item.label, 22)}`, formatRupiah(item.nominal));
+    }
+    addRow("Jumlah", formatRupiah(totalBonus));
+  } else {
+    addRow("Bonus", formatRupiah(0));
+  }
+
+  // Section label: Potongan dinamis
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.0);
   doc.setTextColor(0, 0, 0);
@@ -330,12 +372,10 @@ async function drawSingleSlip(
   rowY += S_SEC_GAP;
   doc.setTextColor(0, 0, 0);
 
-  addRow("_ Pinjaman", formatRupiah(pinjaman));
-  addRow("_ Sumbangan", formatRupiah(sumbangan));
-  addRow("_ BPJS", formatRupiah(bpjs));
-  addRow("_ Undangan", formatRupiah(undangan));
-  addRow("Jumlah", formatRupiah(jumlahPotongan));
-  addRow("_ Warung", formatRupiah(warung));
+  for (const item of potonganDetails) {
+    addRow(`_ ${truncateText(item.label, 22)}`, formatRupiah(item.nominal));
+  }
+  addRow("Jumlah", formatRupiah(totalPotongan));
 
   // Garis pemisah
   doc.setDrawColor(180, 188, 200);
@@ -370,28 +410,33 @@ async function drawSingleSlip(
 
 function measureStaffSlipWidth(doc: any, payload: SalarySlipPayload): number {
   const PAD = S_PAD * 2; // left + right inner padding
+  const { bonusDetails, potonganDetails, totalBonus, totalPotongan } =
+    getStaffSlipBreakdown(payload);
+  const colonOff = computeStaffColonOffset(doc, payload);
 
-  // Measure the widest possible label ("_ Sumbangan" is typically widest)
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  const labelCandidates = [
-    "_ Pinjaman", "_ Sumbangan", "_ Undangan", "Gaji Pokok", "TOTAL",
-    "Potongan",
-  ];
-  const maxLabelW = Math.max(...labelCandidates.map((l) => doc.getTextWidth(l)));
-
-  // Measure the widest value — formatRupiah of the largest plausible salary
-  // Use the actual payload values to get a realistic measurement
+  // Measure the widest value — formatRupiah of actual payload items & totals
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.0);
-  const { totalBonus, totalPotongan, gajiBersih } = calculateSummary(payload);
+  const { gajiBersih, gajiBersihSebelumBulat } = calculateSummary(payload);
   const valueCandidates = [
     formatRupiah(payload.gajiPokok || 0),
     formatRupiah(totalBonus),
     formatRupiah(totalPotongan),
     formatRupiah(gajiBersih),
+    ...bonusDetails.map((item) => formatRupiah(item.nominal)),
+    ...potonganDetails.map((item) => formatRupiah(item.nominal)),
   ];
+  if (payload.sisaPiutang && payload.sisaPiutang > 0) {
+    valueCandidates.push(formatRupiah(payload.sisaPiutang));
+  }
   const maxValueW = Math.max(...valueCandidates.map((v) => doc.getTextWidth(v)));
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.0);
+  const roundingNoteW =
+    gajiBersihSebelumBulat !== gajiBersih
+      ? doc.getTextWidth(`(dibulatkan dari ${formatRupiah(gajiBersihSebelumBulat)})`)
+      : 0;
 
   // Company name row (bold 10.5)
   const profile = companyProfileByLokasi(payload.location);
@@ -405,10 +450,9 @@ function measureStaffSlipWidth(doc: any, payload: SalarySlipPayload): number {
   const periodW = doc.getTextWidth(truncateText(payload.periodLabel.toUpperCase(), 64));
 
   // The slip must be wide enough for:
-  //   label column (S_COLON_OFF = 30mm fixed) + ":" gap (2mm) + value column (maxValueW)
-  //   OR company name row
-  //   OR period row
-  const bodyW = S_COLON_OFF + 2 + maxValueW;
+  //   label column (colonOff) + ":" gap (3mm) + value column (maxValueW)
+  //   OR rounding note / company name / period row
+  const bodyW = Math.max(colonOff + 3 + maxValueW, roundingNoteW);
   const contentW = Math.max(bodyW, companyNameW, periodW);
 
   // Logo box width — reserve space on right for logo (it sits on same row as company name)
@@ -494,12 +538,10 @@ function measureNonStaffSlipWidth(doc: any, payload: NonStaffSlipExportPayload):
 // ─── Export: Salary Slips PDF ─────────────────────────────────────────────────
 //   columns dynamic based on content width
 
-export async function exportSalarySlipsPdf(
-  payloads: SalarySlipPayload[],
-  fileName: string
-) {
+export async function buildStaffSlipDoc(payloads: SalarySlipPayload[]) {
   const jsPDF = await loadJsPdfCtor();
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  if (!Array.isArray(payloads) || payloads.length === 0) return doc;
 
   const gapX = 4.0;
   const gapY = 4.0;
@@ -565,7 +607,298 @@ export async function exportSalarySlipsPdf(
     cursorY += rowHeight + gapY;
   }
 
+  return doc;
+}
+
+export async function exportSalarySlipsPdf(
+  payloads: SalarySlipPayload[],
+  fileName: string
+) {
+  if (!Array.isArray(payloads) || payloads.length === 0) return;
+  const doc = await buildStaffSlipDoc(payloads);
   doc.save(fileName);
+}
+
+export async function getStaffSlipGabunganBlob(
+  payloads: SalarySlipPayload[]
+): Promise<Blob> {
+  const doc = await buildStaffSlipDoc(payloads);
+  return doc.output("blob");
+}
+
+// ─── Export: Staff Rekapitulasi PDF (disesuaikan khusus Staff) ────────────────
+
+export async function buildStaffRekapDoc(
+  rows: Array<{
+    nama: string;
+    divisi: string;
+    gajiPokok: number;
+    totalBonus: number;
+    totalPotongan: number;
+    gajiBersih: number;
+    bonusItems: Array<{ judul: string; nominal: number }>;
+    potonganItems: Array<{ judul: string; nominal: number }>;
+  }>,
+  meta: {
+    location: LokasiCode | string;
+    periodLabel: string;
+    bonusColumns: string[];
+    potonganColumns: string[];
+    diketahuiOleh: string;
+    dibuatOleh: string;
+    catatan?: string;
+  }
+) {
+  const jsPDF = await loadJsPdfCtor();
+  const autoTable = await loadAutoTableFn();
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+  const hasCompanyFilter = Boolean(String(meta.location || "").trim());
+  const headerTitle = hasCompanyFilter
+    ? `REKAP GAJI STAFF - ${companyProfileByLokasi(meta.location).companyName}`
+    : "REKAP GAJI STAFF - SEMUA PERUSAHAAN";
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(30, 35, 45);
+  doc.text(headerTitle, 14, 13);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(90, 95, 105);
+  doc.text(`Periode: ${meta.periodLabel}`, 14, 19);
+  doc.text(
+    `Lokasi: ${hasCompanyFilter ? normalizeLokasi(meta.location) : "Semua Lokasi"}`,
+    14,
+    24
+  );
+
+  const headers = [
+    "Nama",
+    "Divisi",
+    "Gaji Pokok",
+    ...meta.bonusColumns.map((col) => `${col} (Bonus)`),
+    "Total Bonus",
+    "Gaji Bruto",
+    ...meta.potonganColumns.map((col) => `${col} (Potongan)`),
+    "Total Potongan",
+    "Gaji Bersih (Diterima)",
+  ];
+
+  const bodyRows = rows.map((row) => {
+    const inputBonus = safeItems(row.bonusItems);
+    const inputPotongan = safeItems(row.potonganItems);
+
+    const bonusCells = meta.bonusColumns.map((col) => {
+      const item = inputBonus.find((b) => b.judul.trim() === col);
+      const val = item ? Number(item.nominal) : 0;
+      return val > 0 ? formatRupiah(val) : "-";
+    });
+
+    const potonganCells = meta.potonganColumns.map((col) => {
+      const item = inputPotongan.find((p) => p.judul.trim() === col);
+      const val = item ? Number(item.nominal) : 0;
+      return val > 0 ? formatRupiah(val) : "-";
+    });
+
+    const rowTotalBonus = Number(row.totalBonus || 0);
+    const rowGajiBruto = Number(row.gajiPokok || 0) + rowTotalBonus;
+    const rowTotalPotongan = Number(row.totalPotongan || 0);
+
+    return [
+      row.nama,
+      row.divisi,
+      formatRupiah(row.gajiPokok),
+      ...bonusCells,
+      formatRupiah(rowTotalBonus),
+      formatRupiah(rowGajiBruto),
+      ...potonganCells,
+      formatRupiah(rowTotalPotongan),
+      formatRupiah(row.gajiBersih),
+    ];
+  });
+
+  let totalGajiPokok = 0;
+  const totalBonusCols = new Array(meta.bonusColumns.length).fill(0);
+  const totalPotonganCols = new Array(meta.potonganColumns.length).fill(0);
+  let totalAllBonus = 0;
+  let totalAllPotongan = 0;
+  let totalGajiBersih = 0;
+
+  rows.forEach((row) => {
+    totalGajiPokok += Number(row.gajiPokok || 0);
+    totalAllBonus += Number(row.totalBonus || 0);
+    totalAllPotongan += Number(row.totalPotongan || 0);
+    totalGajiBersih += Number(row.gajiBersih || 0);
+
+    const inputBonus = safeItems(row.bonusItems);
+    const inputPotongan = safeItems(row.potonganItems);
+
+    meta.bonusColumns.forEach((col, idx) => {
+      const item = inputBonus.find((b) => b.judul.trim() === col);
+      totalBonusCols[idx] += item ? Number(item.nominal) : 0;
+    });
+
+    meta.potonganColumns.forEach((col, idx) => {
+      const item = inputPotongan.find((p) => p.judul.trim() === col);
+      totalPotonganCols[idx] += item ? Number(item.nominal) : 0;
+    });
+  });
+
+  const totalGajiBruto = totalGajiPokok + totalAllBonus;
+
+  const footRow = [
+    "Total Summary",
+    "",
+    formatRupiah(totalGajiPokok),
+    ...totalBonusCols.map((val) => (val > 0 ? formatRupiah(val) : "-")),
+    formatRupiah(totalAllBonus),
+    formatRupiah(totalGajiBruto),
+    ...totalPotonganCols.map((val) => (val > 0 ? formatRupiah(val) : "-")),
+    formatRupiah(totalAllPotongan),
+    formatRupiah(totalGajiBersih),
+  ];
+
+  autoTable(doc, {
+    startY: 28,
+    head: [headers],
+    body: bodyRows,
+    foot: [footRow],
+    styles: {
+      fontSize: 7.5,
+      cellPadding: 1.4,
+      valign: "top",
+      overflow: "linebreak",
+      textColor: [35, 40, 48],
+    },
+    headStyles: {
+      fillColor: [240, 243, 248],
+      textColor: [50, 60, 75],
+      fontStyle: "bold",
+    },
+    footStyles: {
+      fillColor: [232, 237, 245],
+      textColor: [25, 30, 40],
+      fontStyle: "bold",
+    },
+    alternateRowStyles: {
+      fillColor: [250, 252, 254],
+    },
+    theme: "grid",
+  });
+
+  const byDivision = new Map<string, number>();
+  for (const row of rows) {
+    byDivision.set(row.divisi, (byDivision.get(row.divisi) || 0) + Number(row.gajiBersih || 0));
+  }
+
+  const finSummaryStartY = (doc as any).lastAutoTable.finalY + 6;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.0);
+  doc.setTextColor(30, 35, 45);
+  doc.text("REKAPAN FINANCIAL & TOTAL SUMMARY", 14, finSummaryStartY);
+
+  autoTable(doc, {
+    startY: finSummaryStartY + 2,
+    head: [["Kategori Summary", "Total Nominal"]],
+    body: [
+      ["JUMLAH GAJI POKOK", formatRupiah(totalGajiPokok)],
+      ["TOTAL SEMUA BONUS", formatRupiah(totalAllBonus)],
+      ["TOTAL GAJI BRUTO (GAJI POKOK + BONUS)", formatRupiah(totalGajiBruto)],
+      ["TOTAL SEMUA POTONGAN", formatRupiah(totalAllPotongan)],
+      ["TOTAL GAJI DITERIMA (GAJI BERSIH)", formatRupiah(totalGajiBersih)],
+    ],
+    styles: { fontSize: 8.0, cellPadding: 1.4, textColor: [35, 40, 48] },
+    headStyles: { fillColor: [225, 233, 245], textColor: [35, 50, 75], fontStyle: "bold" },
+    columnStyles: {
+      0: { fontStyle: "bold", cellWidth: 110 },
+      1: { fontStyle: "bold", halign: "right", cellWidth: 50, textColor: [20, 25, 35] },
+    },
+    theme: "grid",
+    tableWidth: 160,
+  });
+
+  const summaryStartY = (doc as any).lastAutoTable.finalY + 6;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.0);
+  doc.setTextColor(30, 35, 45);
+  doc.text("Summary Total per Divisi", 14, summaryStartY);
+
+  autoTable(doc, {
+    startY: summaryStartY + 2,
+    head: [["Divisi", "Total"]],
+    body: Array.from(byDivision.entries()).map(([divisi, total]) => [
+      divisi,
+      formatRupiah(total),
+    ]),
+    styles: { fontSize: 8.0, cellPadding: 1.5, textColor: [35, 40, 48] },
+    headStyles: { fillColor: [242, 245, 250], textColor: [60, 70, 85], fontStyle: "bold" },
+    columnStyles: {
+      1: { halign: "right", fontStyle: "bold", textColor: [20, 25, 35] },
+    },
+    theme: "grid",
+    tableWidth: 120,
+  });
+
+  const finalY = (doc as any).lastAutoTable.finalY;
+
+  let noteHeight = 0;
+  if (meta.catatan) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(80, 85, 95);
+    doc.text("Catatan:", 14, finalY + 8);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(90, 95, 105);
+    const splitNotes = doc.splitTextToSize(`"${meta.catatan}"`, 260);
+    doc.text(splitNotes, 14, finalY + 12);
+    noteHeight = splitNotes.length * 4.2 + 8;
+  }
+
+  const signY = finalY + 10 + noteHeight;
+  const drawSignatures = (baseY: number) => {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(90, 95, 105);
+    doc.text("Dibuat oleh,", 30, baseY);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(25, 30, 40);
+    doc.text(meta.dibuatOleh, 30, baseY + 20);
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(90, 95, 105);
+    doc.text("Diketahui oleh,", 210, baseY);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(25, 30, 40);
+    doc.text(meta.diketahuiOleh, 210, baseY + 20);
+  };
+
+  if (signY > 185) {
+    doc.addPage();
+    drawSignatures(20);
+  } else {
+    drawSignatures(signY);
+  }
+
+  return doc;
+}
+
+export async function exportStaffRekapPdf(
+  rows: Parameters<typeof buildStaffRekapDoc>[0],
+  meta: Parameters<typeof buildStaffRekapDoc>[1],
+  fileName: string
+) {
+  const doc = await buildStaffRekapDoc(rows, meta);
+  doc.save(fileName);
+}
+
+export async function getStaffRekapBlob(
+  rows: Parameters<typeof buildStaffRekapDoc>[0],
+  meta: Parameters<typeof buildStaffRekapDoc>[1]
+): Promise<Blob> {
+  const doc = await buildStaffRekapDoc(rows, meta);
+  return doc.output("blob");
 }
 
 // ─── Export: Salary Recap PDF ─────────────────────────────────────────────────

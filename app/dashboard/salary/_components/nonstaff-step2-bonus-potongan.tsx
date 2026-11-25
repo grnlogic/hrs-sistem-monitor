@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Badge } from "@/components/ui/display/badge";
 import { Button } from "@/components/ui/form/button";
 import {
@@ -17,7 +18,8 @@ import {
   TableRow,
 } from "@/components/ui/display/table";
 import { formatCurrency } from "@/lib/utils";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Settings } from "lucide-react";
+import { NonStaffMasterDataFixDialog } from "./nonstaff-master-datafix-dialog";
 import {
   type SnapshotRow,
   type InputState,
@@ -53,11 +55,26 @@ export function NonStaffStep2BonusPotongan(props: NonStaffStep2Props) {
     paidSkippedEmployees,
   } = props;
 
+  const [isDataFixDialogOpen, setIsDataFixDialogOpen] = useState(false);
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Fase 2. Input Bonus &amp; Potongan</CardTitle>
-      </CardHeader>
+    <>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <div>
+            <CardTitle>Fase 2. Input Bonus &amp; Potongan</CardTitle>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setIsDataFixDialogOpen(true)}
+            className="rounded-xl border-zinc-200 text-xs h-9 gap-1.5 font-medium hover:bg-zinc-100 text-zinc-700 shrink-0"
+          >
+            <Settings className="w-3.5 h-3.5 text-zinc-500" />
+            Setting Data Fix
+          </Button>
+        </CardHeader>
       <CardContent className="space-y-4">
         {/* Panel: daftar karyawan yang di-skip karena statusnya sudah Dibayar */}
         {paidSkippedEmployees.length > 0 && (
@@ -268,5 +285,11 @@ export function NonStaffStep2BonusPotongan(props: NonStaffStep2Props) {
         )}
       </CardContent>
     </Card>
+
+    <NonStaffMasterDataFixDialog
+      isOpen={isDataFixDialogOpen}
+      onClose={() => setIsDataFixDialogOpen(false)}
+    />
+  </>
   );
 }

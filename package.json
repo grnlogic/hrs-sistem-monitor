@@ -6,7 +6,8 @@
     "dev": "next dev -p 3998",
     "build": "next build",
     "start": "next start -p 3998",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest run"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.14",
@@ -54,6 +55,7 @@
     "eslint-config-next": "14.0.4",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.3.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }

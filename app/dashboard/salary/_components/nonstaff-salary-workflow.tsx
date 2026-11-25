@@ -45,6 +45,7 @@ import {
   DEFAULT_POTONGAN,
   toNumber,
   buildDefaultInputState,
+  isPiutangCheckedInStep3,
 } from "./nonstaff-salary-shared";
 import { calcGajiBersih } from "@/lib/salary-utils";
 
@@ -239,6 +240,23 @@ function buildAttendanceSummary(
 
 /* ---------- Main component ---------- */
 
+function shouldAutoCheckSisaPiutang(params: {
+  piutangInfo?: { sisaSaldo?: number | string; jumlahCicilan?: number | string; aktif?: boolean } | null;
+  bayarMingguIni?: boolean;
+  nominalCicilan?: number | null;
+  sudahBayarDiLokasiLain?: boolean;
+}): boolean {
+  if (!params.piutangInfo || params.piutangInfo.aktif === false) return false;
+  if (Number(params.piutangInfo.sisaSaldo || 0) <= 0) return false;
+  if (params.sudahBayarDiLokasiLain) return false;
+  if (params.bayarMingguIni === false) return false;
+  const nominal =
+    params.nominalCicilan != null
+      ? Number(params.nominalCicilan)
+      : Number(params.piutangInfo.jumlahCicilan || 0);
+  return nominal > 0;
+}
+
 export function NonStaffSalaryWorkflow() {
   const { data: session, status } = useSession();
 
@@ -345,12 +363,10 @@ export function NonStaffSalaryWorkflow() {
     setSelectedDivisions([]);
   }, [step, setSelectedKaryawanIds, setSelectedDivisions]);
 
-  // Reset pilihan tampilan sisa piutang di slip saat keluar dari Fase 3 atau ganti periode/entitas
+  // Reset pilihan tampilan sisa piutang di slip HANYA saat ganti periode/entitas
   useEffect(() => {
-    if (step !== 3) {
-      setShowSisaPiutangMap({});
-    }
-  }, [step, company, startDate, endDate]);
+    setShowSisaPiutangMap({});
+  }, [company, startDate, endDate]);
 
   const canEditSalary = true;
 
@@ -390,7 +406,11 @@ export function NonStaffSalaryWorkflow() {
   function calculatedForSnapshot(row: SnapshotRow): CalculatedSnapshot {
     const input = inputsBySalaryId[row.gajiId] || buildDefaultInputState();
     const totalBonus = input.bonusItems.reduce((sum, item) => sum + toNumber(item.nominal), 0);
-    const totalPotongan = input.potonganItems.reduce((sum, item) => sum + toNumber(item.nominal), 0);
+    const effectivePotonganItems =
+      input.bayarMingguIni === false || input.pakaiUangPribadi
+        ? input.potonganItems.filter((item) => item.judul.toLowerCase() !== "pinjaman")
+        : input.potonganItems;
+    const totalPotongan = effectivePotonganItems.reduce((sum, item) => sum + toNumber(item.nominal), 0);
     const { gajiBersih, gajiBersihSebelumBulat } = calcGajiBersih(
       row.gajiPokok + totalBonus,
       totalPotongan,
@@ -980,6 +1000,15 @@ export function NonStaffSalaryWorkflow() {
             const bayarMingguIni = detail?.piutangPlan?.bayarMingguIni ?? defaultBayarMingguIni;
             const infoCicilanLain = detail?.infoCicilanLain || null;
 
+            const effectiveNominalCicilan =
+              detail?.cicilanNominal != null
+                ? Number(detail.cicilanNominal)
+                : detail?.piutangPlan?.nominalCicilan != null
+                  ? Number(detail.piutangPlan.nominalCicilan)
+                  : detail?.piutang?.jumlahCicilan != null
+                    ? Number(detail.piutang.jumlahCicilan)
+                    : null;
+
             setInputsBySalaryId((prev) => ({
               ...prev,
               [row.gajiId]: {
@@ -987,14 +1016,7 @@ export function NonStaffSalaryWorkflow() {
                 potonganItems: normalizedPotongan,
                 sisaPiutang: detail?.sisaPiutang !== undefined ? detail.sisaPiutang : null,
                 bayarMingguIni,
-                nominalCicilan:
-                  detail?.cicilanNominal != null
-                    ? Number(detail.cicilanNominal)
-                    : detail?.piutangPlan?.nominalCicilan != null
-                      ? Number(detail.piutangPlan.nominalCicilan)
-                      : detail?.piutang?.jumlahCicilan != null
-                        ? Number(detail.piutang.jumlahCicilan)
-                        : null,
+                nominalCicilan: effectiveNominalCicilan,
                 pakaiUangPribadi,
                 piutangInfo: detail?.piutang || null,
                 piutangKonflik: Boolean(detail?.piutangKonflik),
@@ -1005,6 +1027,18 @@ export function NonStaffSalaryWorkflow() {
                 infoCicilanLain,
               },
             }));
+
+            // Inisialisasi auto-centang sisa piutang di Fase 3 jika belum pernah diset secara manual
+            const autoCheckSisaPiutang = shouldAutoCheckSisaPiutang({
+              piutangInfo: detail?.piutang || null,
+              bayarMingguIni,
+              nominalCicilan: effectiveNominalCicilan,
+              sudahBayarDiLokasiLain,
+            });
+            setShowSisaPiutangMap((prev) => {
+              if (prev[row.gajiId] !== undefined) return prev;
+              return { ...prev, [row.gajiId]: autoCheckSisaPiutang };
+            });
 
             // Jika data bonus/potongan sudah pernah disimpan sebelumnya, otomatis tandai Selesai
             if (isDraftSaved) {
@@ -1101,6 +1135,15 @@ export function NonStaffSalaryWorkflow() {
       const bayarMingguIni = detail?.piutangPlan?.bayarMingguIni ?? defaultBayarMingguIni;
       const infoCicilanLain = detail?.infoCicilanLain || null;
 
+      const effectiveNominalCicilan =
+        detail?.cicilanNominal != null
+          ? Number(detail.cicilanNominal)
+          : detail?.piutangPlan?.nominalCicilan != null
+            ? Number(detail.piutangPlan.nominalCicilan)
+            : detail?.piutang?.jumlahCicilan != null
+              ? Number(detail.piutang.jumlahCicilan)
+              : null;
+
       setInputsBySalaryId((prev) => ({
         ...prev,
         [row.gajiId]: {
@@ -1108,14 +1151,7 @@ export function NonStaffSalaryWorkflow() {
           potonganItems: normalizedPotongan,
           sisaPiutang: detail?.sisaPiutang !== undefined ? detail.sisaPiutang : null,
           bayarMingguIni,
-          nominalCicilan:
-            detail?.cicilanNominal != null
-              ? Number(detail.cicilanNominal)
-              : detail?.piutangPlan?.nominalCicilan != null
-                ? Number(detail.piutangPlan.nominalCicilan)
-                : detail?.piutang?.jumlahCicilan != null
-                  ? Number(detail.piutang.jumlahCicilan)
-                  : null,
+          nominalCicilan: effectiveNominalCicilan,
           pakaiUangPribadi,
           piutangInfo: detail?.piutang || null,
           piutangKonflik: Boolean(detail?.piutangKonflik),
@@ -1126,6 +1162,18 @@ export function NonStaffSalaryWorkflow() {
           infoCicilanLain,
         },
       }));
+
+      // Inisialisasi auto-centang sisa piutang di Fase 3 jika belum pernah diset secara manual
+      const autoCheckSisaPiutang = shouldAutoCheckSisaPiutang({
+        piutangInfo: detail?.piutang || null,
+        bayarMingguIni,
+        nominalCicilan: effectiveNominalCicilan,
+        sudahBayarDiLokasiLain,
+      });
+      setShowSisaPiutangMap((prev) => {
+        if (prev[row.gajiId] !== undefined) return prev;
+        return { ...prev, [row.gajiId]: autoCheckSisaPiutang };
+      });
 
       if (isDraftSaved) {
         setDoneBySalaryId((prev) => ({ ...prev, [row.gajiId]: true }));
@@ -1297,6 +1345,18 @@ export function NonStaffSalaryWorkflow() {
         },
       }));
 
+      // Sinkronkan auto-centang sisa piutang untuk karyawan yang baru disimpan
+      const autoCheckSisaPiutang = shouldAutoCheckSisaPiutang({
+        piutangInfo: finalState.piutangInfo,
+        bayarMingguIni: finalState.bayarMingguIni !== false,
+        nominalCicilan: finalState.nominalCicilan,
+        sudahBayarDiLokasiLain: finalState.sudahBayarDiLokasiLain,
+      });
+      setShowSisaPiutangMap((prev) => ({
+        ...prev,
+        [salaryId]: autoCheckSisaPiutang,
+      }));
+
       setDoneBySalaryId((prev) => ({ ...prev, [salaryId]: true }));
       setDialogOpen(false);
       setMessage(`Input ${selectedSnapshot.nama} berhasil disimpan.`);
@@ -1317,26 +1377,27 @@ export function NonStaffSalaryWorkflow() {
   }
 
   function handleToggleSisaPiutang(gajiId: string) {
+    const input = inputsBySalaryId[gajiId];
+    const currentlyChecked = isPiutangCheckedInStep3(gajiId, input, showSisaPiutangMap);
     setShowSisaPiutangMap((prev) => ({
       ...prev,
-      [gajiId]: !prev[gajiId],
+      [gajiId]: !currentlyChecked,
     }));
   }
 
   function handleToggleAllSisaPiutang() {
     const allChecked =
       snapshotRows.length > 0 &&
-      snapshotRows.every((r) => !!showSisaPiutangMap[r.gajiId]);
+      snapshotRows.every((r) =>
+        isPiutangCheckedInStep3(r.gajiId, inputsBySalaryId[r.gajiId], showSisaPiutangMap)
+      );
 
-    if (allChecked) {
-      setShowSisaPiutangMap({});
-    } else {
-      const nextMap: Record<string, boolean> = {};
-      snapshotRows.forEach((r) => {
-        nextMap[r.gajiId] = true;
-      });
-      setShowSisaPiutangMap(nextMap);
-    }
+    const nextMap: Record<string, boolean> = {};
+    const nextVal = !allChecked;
+    snapshotRows.forEach((r) => {
+      nextMap[r.gajiId] = nextVal;
+    });
+    setShowSisaPiutangMap(nextMap);
   }
 
   const prepareSlipExportPayload = useCallback((): NonStaffSlipExportPayload[] => {
@@ -1345,28 +1406,42 @@ export function NonStaffSalaryWorkflow() {
     snapshotRows.forEach((row) => {
       const input = inputsBySalaryId[row.gajiId] || buildDefaultInputState();
       const calc = calculatedForSnapshot(row);
-      const effectivePotonganItems = input.bayarMingguIni === false
-        ? input.potonganItems.filter((item) => item.judul.toLowerCase() !== "pinjaman")
-        : input.potonganItems;
+      const effectivePotonganItems =
+        input.bayarMingguIni === false || input.pakaiUangPribadi
+          ? input.potonganItems.filter((item) => item.judul.toLowerCase() !== "pinjaman")
+          : input.potonganItems;
 
       const pinjamanItem = effectivePotonganItems.find(
         (item) => item.judul.toLowerCase() === "pinjaman" && Number(item.nominal) > 0
       );
       const pinjamanDeducted = pinjamanItem ? Number(pinjamanItem.nominal) : 0;
 
+      // Hitung cicilan tunai jika bayar pakai uang pribadi
+      const cicilanTunai =
+        input.pakaiUangPribadi && input.bayarMingguIni !== false
+          ? input.nominalCicilan != null
+            ? Number(input.nominalCicilan)
+            : Number(input.piutangInfo?.jumlahCicilan || 0)
+          : 0;
+      const totalCicilanDibayar = pinjamanDeducted + cicilanTunai;
+
       let exportSisaPiutang: number | null = null;
       if (input.piutangInfo && Number(input.piutangInfo.sisaSaldo) > 0) {
         const currentSaldo = Number(input.piutangInfo.sisaSaldo);
-        exportSisaPiutang = pinjamanDeducted > 0
-          ? Math.max(0, currentSaldo - pinjamanDeducted)
-          : currentSaldo;
+        exportSisaPiutang =
+          totalCicilanDibayar > 0
+            ? Math.max(0, currentSaldo - totalCicilanDibayar)
+            : currentSaldo;
       } else if (input.sisaPiutang != null) {
-        exportSisaPiutang = pinjamanDeducted > 0
-          ? input.sisaPiutang
-          : (input.piutangInfo ? Number(input.piutangInfo.sisaSaldo) : input.sisaPiutang);
+        exportSisaPiutang =
+          totalCicilanDibayar > 0
+            ? input.sisaPiutang
+            : input.piutangInfo
+              ? Number(input.piutangInfo.sisaSaldo)
+              : input.sisaPiutang;
       }
 
-      const isChecked = !!showSisaPiutangMap[row.gajiId];
+      const isChecked = isPiutangCheckedInStep3(row.gajiId, input, showSisaPiutangMap);
       const finalSisaPiutang = isChecked ? exportSisaPiutang : null;
 
       const breakdown = (row.lokasiBreakdown || []).filter((item) => item.hariEfektif > 0);
@@ -1432,9 +1507,10 @@ export function NonStaffSalaryWorkflow() {
     const rows = snapshotRows.map((row) => {
       const input = inputsBySalaryId[row.gajiId] || buildDefaultInputState();
       const calc = calculatedForSnapshot(row);
-      const effectivePotonganItems = input.bayarMingguIni === false
-        ? input.potonganItems.filter((item) => item.judul.toLowerCase() !== "pinjaman")
-        : input.potonganItems;
+      const effectivePotonganItems =
+        input.bayarMingguIni === false || input.pakaiUangPribadi
+          ? input.potonganItems.filter((item) => item.judul.toLowerCase() !== "pinjaman")
+          : input.potonganItems;
       return {
         nama: row.nama,
         divisi: row.divisi,
