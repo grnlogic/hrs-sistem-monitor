@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/overlay/dialog";
 import { Button } from "@/components/ui/form/button";
 import { Input } from "@/components/ui/form/input";
-import { Badge } from "@/components/ui/display/badge";
 import {
   Table,
   TableBody,
@@ -25,11 +24,12 @@ import {
   Plus,
   Save,
   Settings,
-  Power,
+  Pencil,
+  Trash2,
   Loader2,
   Check,
   AlertCircle,
-  RefreshCw,
+  X,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -38,7 +38,7 @@ type MasterItemData = {
   tipe: "BONUS" | "POTONGAN";
   nama: string;
   nominalDefault: number | null;
-  aktif: boolean;
+  aktif?: boolean;
 };
 
 type NonStaffMasterDataFixDialogProps = {
@@ -63,32 +63,18 @@ export function NonStaffMasterDataFixDialog({
   const [newNama, setNewNama] = useState("");
   const [newNominal, setNewNominal] = useState("");
 
-  // Edit draft per row: id -> { nama: string, nominalDefault: string }
-  const [editDrafts, setEditDrafts] = useState<
-    Record<string, { nama: string; nominalDefault: string }>
-  >({});
+  // State edit inline per row
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editNama, setEditNama] = useState("");
+  const [editNominal, setEditNominal] = useState("");
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
     setErrorMsg("");
     try {
-      const res = await salaryAPI.getSalaryItems(undefined, true);
+      const res = await salaryAPI.getSalaryItems();
       const list = Array.isArray(res) ? (res as MasterItemData[]) : [];
       setItems(list);
-
-      // Initialize edit drafts
-      const initialDrafts: Record<
-        string,
-        { nama: string; nominalDefault: string }
-      > = {};
-      list.forEach((item) => {
-        initialDrafts[item.id] = {
-          nama: item.nama,
-          nominalDefault:
-            item.nominalDefault != null ? String(item.nominalDefault) : "",
-        };
-      });
-      setEditDrafts(initialDrafts);
     } catch (err: any) {
       console.error(err);
       setErrorMsg("Gagal memuat daftar Data Fix.");
@@ -104,6 +90,7 @@ export function NonStaffMasterDataFixDialog({
       setSuccessMsg("");
       setNewNama("");
       setNewNominal("");
+      setEditingId(null);
     }
   }, [isOpen, fetchItems]);
 
@@ -149,19 +136,32 @@ export function NonStaffMasterDataFixDialog({
     }
   };
 
-  const handleSaveItem = async (item: MasterItemData) => {
-    const draft = editDrafts[item.id];
-    if (!draft) return;
+  const handleStartEdit = (item: MasterItemData) => {
+    setEditingId(item.id);
+    setEditNama(item.nama);
+    setEditNominal(
+      item.nominalDefault != null ? String(item.nominalDefault) : ""
+    );
+    setErrorMsg("");
+    setSuccessMsg("");
+  };
 
-    const cleanNama = draft.nama.trim();
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditNama("");
+    setEditNominal("");
+  };
+
+  const handleSaveEdit = async (item: MasterItemData) => {
+    const cleanNama = editNama.trim();
     if (!cleanNama) {
       setErrorMsg("Nama komponen tidak boleh kosong.");
       return;
     }
 
     let parsedNominal: number | null = null;
-    if (draft.nominalDefault.trim()) {
-      const n = Number(draft.nominalDefault);
+    if (editNominal.trim()) {
+      const n = Number(editNominal);
       if (isNaN(n) || n < 0) {
         setErrorMsg("Nominal default harus angka positif atau nol.");
         return;
@@ -181,6 +181,7 @@ export function NonStaffMasterDataFixDialog({
       });
 
       setSuccessMsg(`Perubahan "${cleanNama}" berhasil disimpan.`);
+      setEditingId(null);
       await fetchItems();
       onDataUpdated?.();
     } catch (err: any) {
@@ -191,28 +192,27 @@ export function NonStaffMasterDataFixDialog({
     }
   };
 
-  const handleToggleAktif = async (item: MasterItemData) => {
+  const handleDeleteItem = async (item: MasterItemData) => {
+    const confirmed = window.confirm(
+      `Apakah Anda yakin ingin menghapus komponen "${item.nama}"? Tindakan ini tidak dapat dibatalkan.`
+    );
+    if (!confirmed) return;
+
     setSubmitting(true);
     setErrorMsg("");
     setSuccessMsg("");
 
-    const targetAktif = !item.aktif;
     try {
-      await salaryAPI.updateSalaryItem({
-        id: item.id,
-        aktif: targetAktif,
-      });
-
-      setSuccessMsg(
-        `Komponen "${item.nama}" ${
-          targetAktif ? "diaktifkan kembali" : "dinonaktifkan"
-        }.`
-      );
+      await salaryAPI.deleteSalaryItem(item.id);
+      setSuccessMsg(`Komponen "${item.nama}" berhasil dihapus.`);
+      if (editingId === item.id) {
+        setEditingId(null);
+      }
       await fetchItems();
       onDataUpdated?.();
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || "Gagal mengubah status komponen.");
+      setErrorMsg(err.message || "Gagal menghapus komponen.");
     } finally {
       setSubmitting(false);
     }
@@ -222,7 +222,7 @@ export function NonStaffMasterDataFixDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90vh] sm:max-w-3xl overflow-y-auto rounded-2xl">
+      <DialogContent className="max-h-[90vh] sm:max-w-2xl overflow-y-auto rounded-2xl">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -247,6 +247,7 @@ export function NonStaffMasterDataFixDialog({
               setActiveTab("BONUS");
               setErrorMsg("");
               setSuccessMsg("");
+              setEditingId(null);
             }}
             className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all ${
               activeTab === "BONUS"
@@ -262,6 +263,7 @@ export function NonStaffMasterDataFixDialog({
               setActiveTab("POTONGAN");
               setErrorMsg("");
               setSuccessMsg("");
+              setEditingId(null);
             }}
             className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all ${
               activeTab === "POTONGAN"
@@ -349,10 +351,7 @@ export function NonStaffMasterDataFixDialog({
                 <TableHead className="text-xs font-bold text-foreground min-w-[150px]">
                   Nominal Default
                 </TableHead>
-                <TableHead className="text-xs font-bold text-foreground text-center w-[100px]">
-                  Status
-                </TableHead>
-                <TableHead className="text-xs font-bold text-foreground text-right w-[140px]">
+                <TableHead className="text-xs font-bold text-foreground text-right w-[150px]">
                   Aksi
                 </TableHead>
               </TableRow>
@@ -360,7 +359,7 @@ export function NonStaffMasterDataFixDialog({
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-28 text-center text-xs">
+                  <TableCell colSpan={3} className="h-28 text-center text-xs">
                     <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground mb-1" />
                     Memuat data komponen...
                   </TableCell>
@@ -368,7 +367,7 @@ export function NonStaffMasterDataFixDialog({
               ) : currentTabItems.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={4}
+                    colSpan={3}
                     className="h-20 text-center text-xs text-muted-foreground"
                   >
                     Belum ada data komponen untuk {activeTab.toLowerCase()}.
@@ -376,110 +375,102 @@ export function NonStaffMasterDataFixDialog({
                 </TableRow>
               ) : (
                 currentTabItems.map((item) => {
-                  const draft = editDrafts[item.id] || {
-                    nama: item.nama,
-                    nominalDefault:
-                      item.nominalDefault != null
-                        ? String(item.nominalDefault)
-                        : "",
-                  };
-                  const isDirty =
-                    draft.nama !== item.nama ||
-                    draft.nominalDefault !==
-                      (item.nominalDefault != null
-                        ? String(item.nominalDefault)
-                        : "");
+                  const isEditing = editingId === item.id;
 
                   return (
-                    <TableRow
-                      key={item.id}
-                      className={!item.aktif ? "opacity-60 bg-muted/20" : ""}
-                    >
+                    <TableRow key={item.id}>
                       <TableCell>
-                        <Input
-                          type="text"
-                          value={draft.nama}
-                          onChange={(e) =>
-                            setEditDrafts((prev) => ({
-                              ...prev,
-                              [item.id]: {
-                                ...prev[item.id],
-                                nama: e.target.value,
-                              },
-                            }))
-                          }
-                          disabled={submitting || !item.aktif}
-                          className="h-8 text-xs font-medium"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          min={0}
-                          placeholder="Tanpa default"
-                          value={draft.nominalDefault}
-                          onChange={(e) =>
-                            setEditDrafts((prev) => ({
-                              ...prev,
-                              [item.id]: {
-                                ...prev[item.id],
-                                nominalDefault: e.target.value,
-                              },
-                            }))
-                          }
-                          disabled={submitting || !item.aktif}
-                          className="h-8 text-xs"
-                        />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {item.aktif ? (
-                          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100 text-[10px]">
-                            Aktif
-                          </Badge>
+                        {isEditing ? (
+                          <Input
+                            type="text"
+                            value={editNama}
+                            onChange={(e) => setEditNama(e.target.value)}
+                            disabled={submitting}
+                            className="h-8 text-xs font-medium"
+                            autoFocus
+                          />
                         ) : (
-                          <Badge
-                            variant="secondary"
-                            className="text-[10px] text-muted-foreground"
-                          >
-                            Nonaktif
-                          </Badge>
+                          <span className="text-xs font-medium text-foreground">
+                            {item.nama}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {isEditing ? (
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder="Tanpa default"
+                            value={editNominal}
+                            onChange={(e) => setEditNominal(e.target.value)}
+                            disabled={submitting}
+                            className="h-8 text-xs"
+                          />
+                        ) : (
+                          <span className="text-xs">
+                            {item.nominalDefault != null && item.nominalDefault > 0 ? (
+                              formatCurrency(item.nominalDefault)
+                            ) : (
+                              <span className="text-muted-foreground italic">
+                                Tanpa default
+                              </span>
+                            )}
+                          </span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={isDirty ? "default" : "outline"}
-                            disabled={submitting || !isDirty || !item.aktif}
-                            onClick={() => handleSaveItem(item)}
-                            title="Simpan Perubahan"
-                            className="h-7 px-2 text-[11px] gap-1"
-                          >
-                            <Save className="h-3 w-3" />
-                            Simpan
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={item.aktif ? "ghost" : "secondary"}
-                            disabled={submitting}
-                            onClick={() => handleToggleAktif(item)}
-                            title={
-                              item.aktif
-                                ? "Nonaktifkan komponen ini"
-                                : "Aktifkan kembali komponen ini"
-                            }
-                            className={`h-7 px-2 text-[11px] gap-1 ${
-                              item.aktif
-                                ? "text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                                : "text-emerald-700 hover:bg-emerald-50"
-                            }`}
-                          >
-                            <Power className="h-3 w-3" />
-                            {item.aktif ? "Nonaktifkan" : "Aktifkan"}
-                          </Button>
-                        </div>
+                        {isEditing ? (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={submitting}
+                              onClick={() => handleSaveEdit(item)}
+                              className="h-7 px-2.5 text-[11px] gap-1"
+                            >
+                              <Save className="h-3 w-3" />
+                              Simpan
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled={submitting}
+                              onClick={handleCancelEdit}
+                              className="h-7 px-2 text-[11px] gap-1 text-muted-foreground hover:text-foreground"
+                            >
+                              <X className="h-3 w-3" />
+                              Batal
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={submitting}
+                              onClick={() => handleStartEdit(item)}
+                              title="Edit komponen ini"
+                              className="h-7 px-2.5 text-[11px] gap-1"
+                            >
+                              <Pencil className="h-3 w-3" />
+                              Edit
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled={submitting}
+                              onClick={() => handleDeleteItem(item)}
+                              title="Hapus komponen ini"
+                              className="h-7 px-2.5 text-[11px] gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Hapus
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

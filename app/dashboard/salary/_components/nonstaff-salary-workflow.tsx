@@ -48,6 +48,7 @@ import {
   isPiutangCheckedInStep3,
 } from "./nonstaff-salary-shared";
 import { calcGajiBersih } from "@/lib/salary-utils";
+import { getDefaultCurrentWeekRange } from "@/lib/staff-salary-utils";
 
 // Extracted step / dialog / popup components
 import { NonStaffStep1Review } from "./nonstaff-step1-review";
@@ -260,9 +261,9 @@ function shouldAutoCheckSisaPiutang(params: {
 export function NonStaffSalaryWorkflow() {
   const { data: session, status } = useSession();
 
-  const now = new Date();
-  const [startDate, setStartDate] = useState(normalizeDate(new Date(now.getFullYear(), now.getMonth(), 1)));
-  const [endDate, setEndDate] = useState(normalizeDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
+  const defaultWeekRange = useMemo(() => getDefaultCurrentWeekRange(), []);
+  const [startDate, setStartDate] = useState(defaultWeekRange.startDate);
+  const [endDate, setEndDate] = useState(defaultWeekRange.endDate);
   const [selectedDivisions, setSelectedDivisions] = useState<string[]>([]);
   const [company, setCompany] = useState<CompanyFilter>("");
 

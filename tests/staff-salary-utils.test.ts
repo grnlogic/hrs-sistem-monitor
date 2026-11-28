@@ -3,6 +3,7 @@ import {
   buildStaffSlipDetailBreakdown,
   calculateStaffWorkDaysDivisor,
   getDefaultCurrentMonthRange,
+  getDefaultCurrentWeekRange,
   parseDateOnlyUtc,
 } from "@/lib/staff-salary-utils";
 
@@ -20,6 +21,31 @@ describe("staff-salary-utils (frontend)", () => {
       expect(getDefaultCurrentMonthRange(new Date(2026, 1, 10))).toEqual({
         startDate: "2026-02-01",
         endDate: "2026-02-28",
+      });
+    });
+  });
+
+  describe("getDefaultCurrentWeekRange", () => {
+    it("returns Monday of current week up to reference date (today/yesterday)", () => {
+      // Saturday Nov 28, 2026 (today) -> 23 Nov 2026 s/d 28 Nov 2026
+      expect(getDefaultCurrentWeekRange(new Date(2026, 10, 28))).toEqual({
+        startDate: "2026-11-23",
+        endDate: "2026-11-28",
+      });
+      // Friday Nov 27, 2026 (yesterday) -> 23 Nov 2026 s/d 27 Nov 2026
+      expect(getDefaultCurrentWeekRange(new Date(2026, 10, 27))).toEqual({
+        startDate: "2026-11-23",
+        endDate: "2026-11-27",
+      });
+      // Monday Nov 23, 2026 -> 23 Nov 2026 s/d 23 Nov 2026
+      expect(getDefaultCurrentWeekRange(new Date(2026, 10, 23))).toEqual({
+        startDate: "2026-11-23",
+        endDate: "2026-11-23",
+      });
+      // Sunday Nov 29, 2026 -> 23 Nov 2026 s/d 29 Nov 2026
+      expect(getDefaultCurrentWeekRange(new Date(2026, 10, 29))).toEqual({
+        startDate: "2026-11-23",
+        endDate: "2026-11-29",
       });
     });
   });

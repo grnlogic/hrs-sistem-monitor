@@ -61,6 +61,30 @@ export function getDefaultCurrentMonthRange(referenceDate: Date = new Date()): {
 }
 
 /**
+ * Mengembalikan rentang default mingguan Non-Staff:
+ * - startDate: Senin pada minggu berjalan (misal: 23 Nov 2026)
+ * - endDate: Hari ini / referenceDate (misal: 28 Nov 2026 jika dibuka hari ini, atau 27 Nov jika kemarin)
+ * dalam format date-only YYYY-MM-DD berdasarkan waktu lokal.
+ */
+export function getDefaultCurrentWeekRange(referenceDate: Date = new Date()): {
+  startDate: string;
+  endDate: string;
+} {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const formatDate = (d: Date) =>
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  const day = referenceDate.getDay(); // 0 = Minggu, 1 = Senin, ..., 6 = Sabtu
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const monday = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate() + diffToMonday);
+
+  return {
+    startDate: formatDate(monday),
+    endDate: formatDate(referenceDate),
+  };
+}
+
+/**
  * Fungsi util murni penghitung pembagi hari kerja Staff:
  * jumlah hari kalender pada rentang inklusif [startDate..endDate] dikurangi hari Minggu.
  */

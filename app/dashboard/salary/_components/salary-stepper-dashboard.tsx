@@ -17,6 +17,7 @@ import {
 import { calcGajiBersih } from "@/lib/salary-utils";
 import {
   getDefaultCurrentMonthRange,
+  getDefaultCurrentWeekRange,
   getMaxOneMonthEndDate,
   parseDateOnlyUtc,
 } from "@/lib/staff-salary-utils";
@@ -114,10 +115,11 @@ export function SalaryStepperDashboard({ pageType }: { pageType: PageType }) {
   }, [session?.accessToken, status]);
 
   const defaultMonthRange = useMemo(() => getDefaultCurrentMonthRange(), []);
+  const defaultWeekRange = useMemo(() => getDefaultCurrentWeekRange(), []);
   const [staffStartDate, setStaffStartDate] = useState(defaultMonthRange.startDate);
   const [staffEndDate, setStaffEndDate] = useState(defaultMonthRange.endDate);
-  const [nonStaffStartDate, setNonStaffStartDate] = useState(defaultMonthRange.startDate);
-  const [nonStaffEndDate, setNonStaffEndDate] = useState(defaultMonthRange.endDate);
+  const [nonStaffStartDate, setNonStaffStartDate] = useState(defaultWeekRange.startDate);
+  const [nonStaffEndDate, setNonStaffEndDate] = useState(defaultWeekRange.endDate);
   const [company, setCompany] = useState<CompanyFilter>("");
 
   const periodRange = useMemo(() => {
