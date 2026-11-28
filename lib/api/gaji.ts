@@ -56,6 +56,12 @@ export const salaryAPI = {
     })
   },
 
+  deleteSalaryItem: async (id: string | number) => {
+    return apiRequest(`/gaji/items?id=${id}`, {
+      method: "DELETE",
+    })
+  },
+
   getAll: async (karyawanId: string) => {
     return apiRequest(`/gaji/rekap?karyawanId=${karyawanId}`)
   },
